@@ -46,10 +46,16 @@
             android:orientation="vertical">
 
             <Button
+                android:id="@+id/help_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Help" android:onClick="showHelpDialog"/>
+
+            <Button
                 android:id="@+id/calibration_button"
                 android:layout_width="140dp"
                 android:layout_height="wrap_content"
-                android:text="Calibrate" android:onClick="calibrateCamera" />
+                android:text="On Chip Calibration"/>
 
             <androidx.appcompat.widget.LinearLayoutCompat
                 android:layout_width="wrap_content"

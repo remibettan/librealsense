@@ -1,20 +1,23 @@
 package com.intel.realsense.auto_calibration;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
@@ -40,11 +43,12 @@ import org.json.JSONObject;
 
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
+import java.util.Arrays;
 import java.util.HashMap;
 
 public class MainActivity extends AppCompatActivity {
 
-
+    private static final String TAG = "librs camera calibration";
     private static final int MY_PERMISSIONS_REQUEST_CAMERA = 0;
 
     static {
@@ -64,6 +68,8 @@ public class MainActivity extends AppCompatActivity {
     private MainActivity mActivity;
     private PipelineProfile mProfile;
 
+    private int mCalibrationSpeedValue = 2; //medium speed as default
+
     private void getPrefInt(HashMap<String, Object> settingMap, String key,boolean fromString) {
         int pref_value;
         if(fromString){
@@ -77,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
 
     String getSelfCalibrationJson() {
         HashMap<String, Object> settingMap = new HashMap<>();
-        getPrefInt(settingMap,"speed",true);
+        settingMap.put("speed", mCalibrationSpeedValue);
         settingMap.put("scan parameter", 0);
         settingMap.put("data sampling", 0);
         JSONObject json = new JSONObject(settingMap);
@@ -96,8 +102,6 @@ public class MainActivity extends AppCompatActivity {
         return json.toString();
 
     }
-
-
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
@@ -185,6 +189,22 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(intent);
             }
         });
+
+        button = findViewById(R.id.help_button);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showHelpDialog(v);
+            }
+        });
+
+        button = findViewById(R.id.calibration_button);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showOnChipCalibrationDialog(v);
+            }
+        });
     }
 
     public void tareCamera(View view) {
@@ -194,15 +214,82 @@ public class MainActivity extends AppCompatActivity {
             if (ground_truth > 0) {
                 nTare(mPipeline.getHandle(), mCalibrationTableNew, ground_truth, getTareJson());
                 setTable(false);
+            } else {
+                String formattedString = String.format("Distance to wall cannot be 0 mm");
+                Toast.makeText(this, formattedString, Toast.LENGTH_LONG).show();
             }
         } catch (RuntimeException e) {
             handleException(e);
         }
     }
 
-    public void calibrateCamera(View view) {
+    private String getCalibrationSpeedString() {
+        String[] speedValues = getResources().getStringArray(R.array.calibration_speed_values);
+        String currentSpeedValueString = Integer.toString(mCalibrationSpeedValue);
+        int speedValuePosition = Arrays.asList(speedValues).indexOf(currentSpeedValueString);
+
+        String[] speedEntries = getResources().getStringArray(R.array.calibration_speed_entries);
+        String currentSpeed = speedEntries[speedValuePosition];
+
+        return currentSpeed;
+    }
+
+    public void showOnChipCalibrationDialog(View view)
+    {
+        final ArrayAdapter<String> adapter = new ArrayAdapter<>(MainActivity.this, android.R.layout.simple_spinner_item,
+                getResources().getStringArray(R.array.calibration_speed_entries));
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+
+        View dialogView = getLayoutInflater().inflate(R.layout.spinner_dialog, null);
+        final Spinner speedSpinner = dialogView.findViewById(R.id.calib_speed_spinner);
+        speedSpinner.setAdapter(adapter);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        builder.setTitle("On Chip Calibration")
+                .setPositiveButton("ok", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        if (!speedSpinner.getSelectedItem().toString().equalsIgnoreCase("Choose calibration speed")){
+                            //setting calibration speed
+                            int selectedEntryPosition = adapter.getPosition(speedSpinner.getSelectedItem().toString());
+                            setCalibrationSpeed(selectedEntryPosition);
+                        } else {
+                            String currentSpeed = getCalibrationSpeedString();
+                            String str = "Speed not changed - previous set speed is: " + currentSpeed;
+                            String formattedString = String.format(str);
+                            Toast.makeText(MainActivity.this, formattedString, Toast.LENGTH_LONG).show();
+                        }
+                        dialog.dismiss();
+                        //calibration
+                        calibrateCamera();
+                    }
+                })
+                .setNegativeButton("cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.dismiss();
+                    }
+                })
+                .setView(dialogView);
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+    public void setCalibrationSpeed(int selectedEntryPosition) {
+        String[] speedValues = getResources().getStringArray(R.array.calibration_speed_values);
+        mCalibrationSpeedValue = Integer.parseInt(speedValues[selectedEntryPosition]);
+    }
+
+    public void showHelpDialog(View view)
+    {
+        CalibrationHelpDialog helpDialog = new CalibrationHelpDialog();
+        helpDialog.show(getSupportFragmentManager(), TAG);
+    }
+
+    public void calibrateCamera() {
         try {
-            float health = nRunSelfCal(mPipeline.getHandle(), mCalibrationTableNew, getSelfCalibrationJson());
+            String jsonString = getSelfCalibrationJson();
+            float health = nRunSelfCal(mPipeline.getHandle(), mCalibrationTableNew, jsonString);
             health = Math.abs(health);
             health *= 100;
             String formattedString = String.format("Calibration completed with health: %.02f", health);
@@ -302,6 +389,5 @@ public class MainActivity extends AppCompatActivity {
     private void setTable(boolean write){
         nSetTable(mPipeline.getHandle(), bShowCalibrated ? mCalibrationTableNew : mCalibrationTableOriginal, write);
     }
-
 
 }

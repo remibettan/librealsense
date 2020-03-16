@@ -21,7 +21,7 @@
     <PreferenceCategory app:title="Self-Calibration Options">
         <ListPreference
             android:defaultValue="3"
-            app:entries="@array/calibration_speed_enteries"
+            app:entries="@array/calibration_speed_entries"
             app:entryValues="@array/calibration_speed_values"
             app:key="speed"
             app:summary="Configure the speed of on-chip calibration"
