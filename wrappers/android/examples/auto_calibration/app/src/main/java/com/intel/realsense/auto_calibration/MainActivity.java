@@ -8,15 +8,17 @@ import androidx.core.content.ContextCompat;
 import android.Manifest;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.util.Log;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -65,21 +67,10 @@ public class MainActivity extends AppCompatActivity {
     private ByteBuffer mCalibrationTableOriginal;
     private SharedPreferences mSharedPreferences;
     private Context mContext;
-    private MainActivity mActivity;
     private PipelineProfile mProfile;
 
     private int mCalibrationSpeedValue = 2; //medium speed as default
-
-    private void getPrefInt(HashMap<String, Object> settingMap, String key,boolean fromString) {
-        int pref_value;
-        if(fromString){
-            String str=mSharedPreferences.getString(key,"-1");
-            pref_value = Integer.parseInt(str);
-        } else {
-            pref_value=mSharedPreferences.getInt(key,-1);
-        }
-        settingMap.put(key,pref_value);
-    }
+    private int mTareDistance = 0; //0mm as default
 
     String getSelfCalibrationJson() {
         HashMap<String, Object> settingMap = new HashMap<>();
@@ -93,9 +84,10 @@ public class MainActivity extends AppCompatActivity {
 
     String getTareJson() {
         HashMap<String, Object> settingMap = new HashMap<>();
-        getPrefInt(settingMap,"average step count",false);
-        getPrefInt(settingMap,"step count",false);
-        getPrefInt(settingMap,"accuracy",true);
+        SharedPreferences sharedPref = getSharedPreferences("tare_settings", Context.MODE_PRIVATE);
+        settingMap.put("average step count", sharedPref.getInt("tare_avg_step_count", -1));
+        settingMap.put("step count", sharedPref.getInt("tare_step_count", -1));
+        settingMap.put("accuracy", sharedPref.getInt("tare_accuracy", -1));
         settingMap.put("scan parameter", 0);
         settingMap.put("data sampling", 0);
         JSONObject json = new JSONObject(settingMap);
@@ -131,9 +123,6 @@ public class MainActivity extends AppCompatActivity {
 
         // Get the application context
         mContext = getApplicationContext();
-
-        // Get the activity
-        mActivity = MainActivity.this;
 
         // Get the instance of SharedPreferences object
         mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(mContext);
@@ -181,15 +170,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        button = (findViewById(R.id.settings_button));
-        button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(mContext, SettingsActivity.class);
-                startActivity(intent);
-            }
-        });
-
         button = findViewById(R.id.help_button);
         button.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -198,21 +178,148 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        button = findViewById(R.id.calibration_button);
-        button.setOnClickListener(new View.OnClickListener() {
+        TextView calibrationButton = findViewById(R.id.calibration_button);
+        calibrationButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 showOnChipCalibrationDialog(v);
             }
         });
+
+        TextView tareButton = findViewById(R.id.tare_button);
+        tareButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showTareDialog(v);
+            }
+        });
     }
 
-    public void tareCamera(View view) {
+    private void setTareAverageStepCountValue(View dialogView) {
+        final TextView avgStepCountValueString = dialogView.findViewById(R.id.tare_avg_step_count_current_value);
+        final SeekBar avgStepCountSeekBar = dialogView.findViewById(R.id.tare_avg_step_count_seekBar);
+        avgStepCountSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                avgStepCountValueString.setText(Integer.toString(progress));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                //saving in shared preferences
+                SharedPreferences sharedPref = getSharedPreferences("tare_settings", Context.MODE_PRIVATE);
+                SharedPreferences.Editor editor = sharedPref.edit();
+                editor.putInt("tare_avg_step_count", seekBar.getProgress());
+                editor.commit();
+            }
+        });
+    }
+
+    private void setTareStepCountValue(View dialogView) {
+        final TextView stepCountValueString = dialogView.findViewById(R.id.tare_step_count_current_value);
+        final SeekBar stepCountSeekBar = dialogView.findViewById(R.id.tare_step_count_seekBar);
+        stepCountSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                stepCountValueString.setText(Integer.toString(progress));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                //saving in shared preferences
+                SharedPreferences sharedPref = getSharedPreferences("tare_settings", Context.MODE_PRIVATE);
+                SharedPreferences.Editor editor = sharedPref.edit();
+                editor.putInt("tare_step_count", seekBar.getProgress());
+                editor.commit();
+            }
+        });
+    }
+
+    private void setTareAccuracy(View dialogView) {
+        final ArrayAdapter<String> adapter = new ArrayAdapter<>(MainActivity.this, android.R.layout.simple_spinner_item,
+                getResources().getStringArray(R.array.accuracy_entries));
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+
+        final Spinner accuracySpinner = dialogView.findViewById(R.id.tare_accuracy_spinner);
+        accuracySpinner.setAdapter(adapter);
+
+        accuracySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                //getting value from input position
+                String[] accuracyValues = getResources().getStringArray(R.array.accuracy_values);
+                int accuracyValue = Integer.parseInt(accuracyValues[position]);
+                //saving in shared preferences
+                SharedPreferences sharedPref = getSharedPreferences("tare_settings", Context.MODE_PRIVATE);
+                SharedPreferences.Editor editor = sharedPref.edit();
+                editor.putInt("tare_accuracy", accuracyValue);
+                editor.commit();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+
+            }
+        });
+    }
+
+    public void showTareDialog(View view) {
+        View dialogView = getLayoutInflater().inflate(R.layout.tare_dialog, null);
+
+        setTareAverageStepCountValue(dialogView);
+        setTareStepCountValue(dialogView);
+        setTareAccuracy(dialogView);
+
+        final EditText distanceText = dialogView.findViewById(R.id.tare_distance_text);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        builder.setTitle("Tare Depth Distance")
+                .setPositiveButton("ok", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+
+                        try {
+                            int distance = Integer.parseInt(distanceText.getText().toString());
+                            setTareDistance(distance);
+                            dialog.dismiss();
+                            //tare action
+                            tareCamera();
+                        } catch (NumberFormatException e) {
+                            Log.e(TAG, "Distance not entered");
+                            String formattedString = String.format("Enter distance to flat surface");
+                            Toast.makeText(MainActivity.this, formattedString, Toast.LENGTH_LONG).show();
+                        }
+                    }
+                })
+                .setNegativeButton("cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.dismiss();
+                    }
+                })
+                .setView(dialogView);
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+    private void setTareDistance(int distance) {
+        mTareDistance = distance;
+    }
+
+    public void tareCamera() {
         try {
-            EditText editText = (EditText) (findViewById(R.id.ground_truth_text));
-            int ground_truth = Integer.parseInt(editText.getText().toString());
-            if (ground_truth > 0) {
-                nTare(mPipeline.getHandle(), mCalibrationTableNew, ground_truth, getTareJson());
+            if (mTareDistance > 0) {
+                nTare(mPipeline.getHandle(), mCalibrationTableNew, mTareDistance, getTareJson());
                 setTable(false);
             } else {
                 String formattedString = String.format("Distance to wall cannot be 0 mm");
@@ -240,7 +347,7 @@ public class MainActivity extends AppCompatActivity {
                 getResources().getStringArray(R.array.calibration_speed_entries));
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
 
-        View dialogView = getLayoutInflater().inflate(R.layout.spinner_dialog, null);
+        View dialogView = getLayoutInflater().inflate(R.layout.calibration_dialog, null);
         final Spinner speedSpinner = dialogView.findViewById(R.id.calib_speed_spinner);
         speedSpinner.setAdapter(adapter);
 
@@ -278,10 +385,15 @@ public class MainActivity extends AppCompatActivity {
     public void setCalibrationSpeed(int selectedEntryPosition) {
         String[] speedValues = getResources().getStringArray(R.array.calibration_speed_values);
         mCalibrationSpeedValue = Integer.parseInt(speedValues[selectedEntryPosition]);
+
+        //saving in shared preferences
+        SharedPreferences sharedPref = getSharedPreferences("calibration_settings", Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPref.edit();
+        editor.putInt("calibration_speed", mCalibrationSpeedValue);
+        editor.commit();
     }
 
-    public void showHelpDialog(View view)
-    {
+    public void showHelpDialog(View view) {
         CalibrationHelpDialog helpDialog = new CalibrationHelpDialog();
         helpDialog.show(getSupportFragmentManager(), TAG);
     }
@@ -329,7 +441,6 @@ public class MainActivity extends AppCompatActivity {
         nGetTable(mPipeline.getHandle(), mCalibrationTableNew);
         final DecimalFormat df = new DecimalFormat("#.##");
         mGLSurfaceView.clear();
-
 
         while (!mStreamingThread.isInterrupted()) {
             try (FrameReleaser fr = new FrameReleaser()) {
@@ -384,8 +495,8 @@ public class MainActivity extends AppCompatActivity {
             bShowCalibrated = false;
         }
         setTable(false);
-
     }
+
     private void setTable(boolean write){
         nSetTable(mPipeline.getHandle(), bShowCalibrated ? mCalibrationTableNew : mCalibrationTableOriginal, write);
     }

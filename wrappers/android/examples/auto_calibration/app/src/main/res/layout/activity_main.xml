@@ -1,114 +1,142 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    android:background="@color/black"
+    android:padding="10dp">
 
+
+    <!-- Streaming in background -->
+    <com.intel.realsense.librealsense.GLRsSurfaceView
+        android:id="@+id/glSurfaceView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
         tools:layout_editor_absoluteX="1dp">
 
-
-
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-
-
-            <Button
-                android:id="@+id/settings_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Settings"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
-
-            <Button
-                android:id="@+id/write_table_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Write to camera"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
-
-        </androidx.constraintlayout.widget.ConstraintLayout>
-
-        <androidx.appcompat.widget.LinearLayoutCompat
+        <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="horizontal">
+
+            <ToggleButton
+                android:id="@+id/projector_toggle"
+                android:layout_width="140dp"
+                android:layout_height="wrap_content"
+                android:onClick="projectorToggle"
+                android:clickable="true"
+                android:textSize="14dp"
+                android:textColor="#ffffff"
+                android:backgroundTint="#000000"
+                android:textOff="@string/projector_off"
+                android:textOn="@string/projector_on" />
 
             <Button
                 android:id="@+id/help_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Help" android:onClick="showHelpDialog"/>
+                android:layout_alignParentRight="true"
+                android:clickable="true"
+                android:textSize="14dp"
+                android:textColor="#ffffff"
+                android:backgroundTint="#000000"
+                android:text="Help"
+                android:onClick="showHelpDialog"/>
+        </RelativeLayout>
 
-            <Button
-                android:id="@+id/calibration_button"
-                android:layout_width="140dp"
-                android:layout_height="wrap_content"
-                android:text="On Chip Calibration"/>
-
-            <androidx.appcompat.widget.LinearLayoutCompat
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/tare_button"
-                    android:layout_width="140dp"
-                    android:layout_height="wrap_content"
-                    android:text="Tare" android:onClick="tareCamera"/>
-                <EditText
-                    android:id="@+id/ground_truth_text"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ems="10"
-                    android:inputType="number"
-                    android:text="0" />
-            </androidx.appcompat.widget.LinearLayoutCompat>
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
-        <com.intel.realsense.librealsense.GLRsSurfaceView
-            android:id="@+id/glSurfaceView"
-            android:layout_width="256dp"
-
-            android:layout_height="144dp" />
+        <Button
+            android:id="@+id/write_table_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:clickable="true"
+            android:textSize="14dp"
+            android:textColor="#ffffff"
+            android:backgroundTint="#000000"
+            android:text="@string/write_to_camera"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <ToggleButton
             android:id="@+id/original_calibrated_toggle"
             android:layout_width="140dp"
             android:layout_height="wrap_content"
-            android:textOff="Original"
-            android:textOn="Calibrated"
+            android:backgroundTint="@color/black"
+            android:clickable="true"
             android:onClick="originalCalibratedToggle"
-            />
-        <ToggleButton
-            android:id="@+id/projector_toggle"
-            android:layout_width="140dp"
-            android:layout_height="wrap_content"
-            android:textOff="Projector off"
-            android:textOn="Projector on"
-            android:onClick="projectorToggle"
-            />
+            android:textColor="#ffffff"
+            android:textOff="@string/original"
+            android:textOn="@string/calibrated"
+            android:textSize="14dp" />
+
+
         <TextView
             android:id="@+id/distanceTextView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textSize="18dp"
             android:text="Wait for camera..."
 
             />
+
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_marginBottom="100dp">
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/calibration_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:clickable="true"
+                android:textSize="18dp"
+                android:textColor="#ffffff"
+                android:backgroundTint="#000000"
+                android:text="@string/on_chip_calibration"/>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"
+                android:layout_alignParentRight="true"/>
+
+            <TextView
+                android:id="@+id/tare_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:clickable="true"
+                android:textSize="18dp"
+                android:textColor="#ffffff"
+                android:backgroundTint="#000000"
+                android:text="@string/tare"/>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+        </LinearLayout>
+
     </LinearLayout>
 
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+</RelativeLayout>
 

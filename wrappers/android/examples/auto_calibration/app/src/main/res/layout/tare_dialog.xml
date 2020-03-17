@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="10dp">
+
+
+    <TextView
+        android:id="@+id/tare_instructions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/tare_instructions_string" />
+
+    <TextView
+        android:id="@+id/tare_distance_label_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/tare_distance_label_string" />
+
+    <EditText
+        android:id="@+id/tare_distance_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:ems="10"
+        android:inputType="number"
+        android:hint="Distance [mm]" />
+
+    <!-- Advanced options -->
+    <TextView
+        android:id="@+id/tare_advanced_options_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/tare_advanced_options_string" />
+
+    <!-- Average Step Count -->
+    <TextView
+        android:id="@+id/tare_avg_step_count_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/average_step_count" />
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <SeekBar
+            android:id="@+id/tare_avg_step_count_seekBar"
+            android:layout_width="300dp"
+            android:layout_height="wrap_content"
+            android:max="31"
+            android:min="1" />
+
+        <TextView
+            android:id="@+id/tare_avg_step_count_current_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="22"/>
+    </LinearLayout>
+
+    <!-- Step Count -->
+    <TextView
+        android:id="@+id/tare_step_count_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/step_count" />
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <SeekBar
+        android:id="@+id/tare_step_count_seekBar"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:max="30"
+        android:min="5" />
+
+    <TextView
+        android:id="@+id/tare_step_count_current_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="33"/>
+    </LinearLayout>
+
+    <!-- Accuracy -->
+    <TextView
+        android:id="@+id/tare_accuracy_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/tare_accuracy_string" />
+    <Spinner
+        android:id="@+id/tare_accuracy_spinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+
+
+</LinearLayout>
