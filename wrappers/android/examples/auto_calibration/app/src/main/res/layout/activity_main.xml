@@ -68,7 +68,6 @@
             android:layout_height="wrap_content"
             android:backgroundTint="@color/black"
             android:clickable="true"
-            android:onClick="originalCalibratedToggle"
             android:textColor="#ffffff"
             android:textOff="@string/original"
             android:textOn="@string/calibrated"
@@ -79,10 +78,10 @@
             android:id="@+id/distanceTextView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:textColor="#ffffff"
             android:gravity="center"
-            android:textSize="18dp"
+            android:textSize="14dp"
             android:text="Wait for camera..."
-
             />
 
 

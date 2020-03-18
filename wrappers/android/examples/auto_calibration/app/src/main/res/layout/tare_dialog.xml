@@ -98,6 +98,19 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"/>
 
+    <!-- Progress Bar -->
+    <TextView
+        android:id="@+id/tare_progress_bar_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Tare process in progress..."
+        android:visibility="invisible"/>
+    <ProgressBar
+        android:id="@+id/tare_progress_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        style="@style/Widget.AppCompat.ProgressBar.Horizontal"
+        android:visibility="invisible"/>
 
 
 </LinearLayout>

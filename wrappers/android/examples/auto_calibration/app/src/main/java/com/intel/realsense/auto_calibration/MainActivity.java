@@ -12,13 +12,9 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
-import android.util.Log;
 import android.view.View;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.EditText;
-import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -62,15 +58,14 @@ public class MainActivity extends AppCompatActivity {
     private GLRsSurfaceView mGLSurfaceView;
 
     private Colorizer mColorize;
-    private boolean bShowCalibrated = false;
-    private ByteBuffer mCalibrationTableNew;
-    private ByteBuffer mCalibrationTableOriginal;
+    private CalibrationTablesHandler mCalibrationTablesHandler;
     private SharedPreferences mSharedPreferences;
     private Context mContext;
     private PipelineProfile mProfile;
 
+    private TareProcessor mTareProcessor;
+
     private int mCalibrationSpeedValue = 2; //medium speed as default
-    private int mTareDistance = 0; //0mm as default
 
     String getSelfCalibrationJson() {
         HashMap<String, Object> settingMap = new HashMap<>();
@@ -79,20 +74,6 @@ public class MainActivity extends AppCompatActivity {
         settingMap.put("data sampling", 0);
         JSONObject json = new JSONObject(settingMap);
         return json.toString();
-    }
-
-
-    String getTareJson() {
-        HashMap<String, Object> settingMap = new HashMap<>();
-        SharedPreferences sharedPref = getSharedPreferences("tare_settings", Context.MODE_PRIVATE);
-        settingMap.put("average step count", sharedPref.getInt("tare_avg_step_count", -1));
-        settingMap.put("step count", sharedPref.getInt("tare_step_count", -1));
-        settingMap.put("accuracy", sharedPref.getInt("tare_accuracy", -1));
-        settingMap.put("scan parameter", 0);
-        settingMap.put("data sampling", 0);
-        JSONObject json = new JSONObject(settingMap);
-        return json.toString();
-
     }
 
     @Override
@@ -155,8 +136,8 @@ public class MainActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, MY_PERMISSIONS_REQUEST_CAMERA);
         }
         mColorize = new Colorizer();
-        mCalibrationTableNew = ByteBuffer.allocateDirect(512);
-        mCalibrationTableOriginal = ByteBuffer.allocateDirect(512);
+
+        mCalibrationTablesHandler = new CalibrationTablesHandler();
     }
 
     private void setupUi() {
@@ -166,7 +147,7 @@ public class MainActivity extends AppCompatActivity {
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                setTable(true);
+                mCalibrationTablesHandler.setTable(true);
             }
         });
 
@@ -175,6 +156,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 showHelpDialog(v);
+            }
+        });
+
+        button = findViewById(R.id.original_calibrated_toggle);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mCalibrationTablesHandler.originalCalibratedToggle(v);
             }
         });
 
@@ -187,147 +176,14 @@ public class MainActivity extends AppCompatActivity {
         });
 
         TextView tareButton = findViewById(R.id.tare_button);
+        SharedPreferences sharedPref = getSharedPreferences("tare_settings", Context.MODE_PRIVATE);
+        mTareProcessor = new TareProcessor(this, sharedPref);
         tareButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                showTareDialog(v);
+                mTareProcessor.showTareDialog(v);
             }
         });
-    }
-
-    private void setTareAverageStepCountValue(View dialogView) {
-        final TextView avgStepCountValueString = dialogView.findViewById(R.id.tare_avg_step_count_current_value);
-        final SeekBar avgStepCountSeekBar = dialogView.findViewById(R.id.tare_avg_step_count_seekBar);
-        avgStepCountSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                avgStepCountValueString.setText(Integer.toString(progress));
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                //saving in shared preferences
-                SharedPreferences sharedPref = getSharedPreferences("tare_settings", Context.MODE_PRIVATE);
-                SharedPreferences.Editor editor = sharedPref.edit();
-                editor.putInt("tare_avg_step_count", seekBar.getProgress());
-                editor.commit();
-            }
-        });
-    }
-
-    private void setTareStepCountValue(View dialogView) {
-        final TextView stepCountValueString = dialogView.findViewById(R.id.tare_step_count_current_value);
-        final SeekBar stepCountSeekBar = dialogView.findViewById(R.id.tare_step_count_seekBar);
-        stepCountSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                stepCountValueString.setText(Integer.toString(progress));
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                //saving in shared preferences
-                SharedPreferences sharedPref = getSharedPreferences("tare_settings", Context.MODE_PRIVATE);
-                SharedPreferences.Editor editor = sharedPref.edit();
-                editor.putInt("tare_step_count", seekBar.getProgress());
-                editor.commit();
-            }
-        });
-    }
-
-    private void setTareAccuracy(View dialogView) {
-        final ArrayAdapter<String> adapter = new ArrayAdapter<>(MainActivity.this, android.R.layout.simple_spinner_item,
-                getResources().getStringArray(R.array.accuracy_entries));
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-
-        final Spinner accuracySpinner = dialogView.findViewById(R.id.tare_accuracy_spinner);
-        accuracySpinner.setAdapter(adapter);
-
-        accuracySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                //getting value from input position
-                String[] accuracyValues = getResources().getStringArray(R.array.accuracy_values);
-                int accuracyValue = Integer.parseInt(accuracyValues[position]);
-                //saving in shared preferences
-                SharedPreferences sharedPref = getSharedPreferences("tare_settings", Context.MODE_PRIVATE);
-                SharedPreferences.Editor editor = sharedPref.edit();
-                editor.putInt("tare_accuracy", accuracyValue);
-                editor.commit();
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-
-            }
-        });
-    }
-
-    public void showTareDialog(View view) {
-        View dialogView = getLayoutInflater().inflate(R.layout.tare_dialog, null);
-
-        setTareAverageStepCountValue(dialogView);
-        setTareStepCountValue(dialogView);
-        setTareAccuracy(dialogView);
-
-        final EditText distanceText = dialogView.findViewById(R.id.tare_distance_text);
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-        builder.setTitle("Tare Depth Distance")
-                .setPositiveButton("ok", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-
-                        try {
-                            int distance = Integer.parseInt(distanceText.getText().toString());
-                            setTareDistance(distance);
-                            dialog.dismiss();
-                            //tare action
-                            tareCamera();
-                        } catch (NumberFormatException e) {
-                            Log.e(TAG, "Distance not entered");
-                            String formattedString = String.format("Enter distance to flat surface");
-                            Toast.makeText(MainActivity.this, formattedString, Toast.LENGTH_LONG).show();
-                        }
-                    }
-                })
-                .setNegativeButton("cancel", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                })
-                .setView(dialogView);
-        AlertDialog dialog = builder.create();
-        dialog.show();
-    }
-
-    private void setTareDistance(int distance) {
-        mTareDistance = distance;
-    }
-
-    public void tareCamera() {
-        try {
-            if (mTareDistance > 0) {
-                nTare(mPipeline.getHandle(), mCalibrationTableNew, mTareDistance, getTareJson());
-                setTable(false);
-            } else {
-                String formattedString = String.format("Distance to wall cannot be 0 mm");
-                Toast.makeText(this, formattedString, Toast.LENGTH_LONG).show();
-            }
-        } catch (RuntimeException e) {
-            handleException(e);
-        }
     }
 
     private String getCalibrationSpeedString() {
@@ -367,6 +223,7 @@ public class MainActivity extends AppCompatActivity {
                             Toast.makeText(MainActivity.this, formattedString, Toast.LENGTH_LONG).show();
                         }
                         dialog.dismiss();
+
                         //calibration
                         calibrateCamera();
                     }
@@ -401,12 +258,12 @@ public class MainActivity extends AppCompatActivity {
     public void calibrateCamera() {
         try {
             String jsonString = getSelfCalibrationJson();
-            float health = nRunSelfCal(mPipeline.getHandle(), mCalibrationTableNew, jsonString);
+            float health = nRunSelfCal(mPipeline.getHandle(), mCalibrationTablesHandler.getCalibrationTableNew(), jsonString);
             health = Math.abs(health);
             health *= 100;
             String formattedString = String.format("Calibration completed with health: %.02f", health);
             Toast.makeText(this, formattedString, Toast.LENGTH_LONG).show();
-            setTable(false);
+            mCalibrationTablesHandler.setTable(false);
         } catch (RuntimeException e) {
             handleException(e);
         }
@@ -437,8 +294,11 @@ public class MainActivity extends AppCompatActivity {
         mProfile = pipe.start(cfg);
         setProjectorState(false);
         mPipeline = pipe;
-        nGetTable(mPipeline.getHandle(), mCalibrationTableOriginal);
-        nGetTable(mPipeline.getHandle(), mCalibrationTableNew);
+
+        // init CalibrationTablesHandler and TareProcessor once the pipeline is ready
+        mCalibrationTablesHandler.init(mPipeline);
+        mTareProcessor.init(mPipeline, mCalibrationTablesHandler);
+
         final DecimalFormat df = new DecimalFormat("#.##");
         mGLSurfaceView.clear();
 
@@ -465,13 +325,7 @@ public class MainActivity extends AppCompatActivity {
         pipe.stop();
     }
 
-    static native float nRunSelfCal(long pipeline_handle, ByteBuffer new_table, String json_cont);
-
-    static native void nSetTable(long pipeline_handle, ByteBuffer table, boolean write_table);
-
-    static native void nGetTable(long pipeline_handle, ByteBuffer table);
-
-    static native void nTare(long pipeline_handle, ByteBuffer table, int ground_truth, String json_cont);
+    private native float nRunSelfCal(long pipeline_handle, ByteBuffer new_table, String json_cont);
 
     public void projectorToggle(View view) {
         ToggleButton b=(ToggleButton)view;
@@ -485,20 +339,6 @@ public class MainActivity extends AppCompatActivity {
             float value = projectorOn ? sensor.getMaxRange(Option.LASER_POWER) : 0.0f;
             sensor.setValue(Option.LASER_POWER, value);
         }
-    }
-
-    public void originalCalibratedToggle(View view) {
-        ToggleButton toggleButton=(ToggleButton) view;
-        if (toggleButton.isChecked()) {
-            bShowCalibrated = true;
-        } else {
-            bShowCalibrated = false;
-        }
-        setTable(false);
-    }
-
-    private void setTable(boolean write){
-        nSetTable(mPipeline.getHandle(), bShowCalibrated ? mCalibrationTableNew : mCalibrationTableOriginal, write);
     }
 
 }

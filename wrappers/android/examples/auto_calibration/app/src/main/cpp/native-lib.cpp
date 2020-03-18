@@ -42,7 +42,7 @@ copy_vector_to_jbytebuffer(JNIEnv *env, rs2::calibration_table vector, jobject t
 
 extern "C"
 JNIEXPORT jint JNICALL
-Java_com_intel_realsense_auto_1calibration_MainActivity_nGetTable(JNIEnv *env, jclass clazz,
+Java_com_intel_realsense_auto_1calibration_CalibrationTablesHandler_nGetTable(JNIEnv *env, jobject instance,
                                                                        jlong pipeline_handle,
                                                                        jobject table) {
     try {
@@ -59,7 +59,7 @@ Java_com_intel_realsense_auto_1calibration_MainActivity_nGetTable(JNIEnv *env, j
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_intel_realsense_auto_1calibration_MainActivity_nSetTable(JNIEnv *env, jclass clazz,
+Java_com_intel_realsense_auto_1calibration_CalibrationTablesHandler_nSetTable(JNIEnv *env, jobject instance,
                                                                        jlong pipeline_handle,
                                                                        jobject table,
                                                                        jboolean write) {
@@ -82,7 +82,7 @@ Java_com_intel_realsense_auto_1calibration_MainActivity_nSetTable(JNIEnv *env, j
 
 extern "C"
 JNIEXPORT jfloat JNICALL
-Java_com_intel_realsense_auto_1calibration_MainActivity_nRunSelfCal(JNIEnv *env, jclass clazz,
+Java_com_intel_realsense_auto_1calibration_MainActivity_nRunSelfCal(JNIEnv *env, jobject instance,
                                                                          jlong pipeline_handle,
                                                                          jobject target_buffer,
                                                                          jstring json_cont) {
@@ -106,7 +106,7 @@ Java_com_intel_realsense_auto_1calibration_MainActivity_nRunSelfCal(JNIEnv *env,
 }
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_intel_realsense_auto_1calibration_MainActivity_nTare(JNIEnv *env, jclass clazz,
+Java_com_intel_realsense_auto_1calibration_TareProcessor_nTare(JNIEnv *env, jobject instance,
                                                                    jlong pipeline_handle,
                                                                    jobject target_buffer,
                                                                    jint ground_truth,
@@ -117,7 +117,15 @@ Java_com_intel_realsense_auto_1calibration_MainActivity_nTare(JNIEnv *env, jclas
         sensor.set_option(RS2_OPTION_VISUAL_PRESET, RS2_RS400_VISUAL_PRESET_HIGH_ACCURACY);
         auto calib_dev = rs2::auto_calibrated_device(profile.get_device());
         auto json_ptr = (*env).GetStringUTFChars(json_cont, NULL);
+
+        //preparing progress callback method
+        jclass cls = env->GetObjectClass(instance);
+        jmethodID id = env->GetMethodID(cls, "tareOnProgress", "(F)V");
+        auto cb = [&](float progress){ env->CallVoidMethod(cls, id, progress); };
+
+        //auto new_table = calib_dev.run_tare_calibration(ground_truth, std::string(json_ptr), cb);
         auto new_table = calib_dev.run_tare_calibration(ground_truth, std::string(json_ptr));
+
         copy_vector_to_jbytebuffer(env, new_table, target_buffer);
     } catch (const rs2::error &e) {
         handle_error(env, e);
