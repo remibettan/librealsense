@@ -33,12 +33,14 @@ public class TareProcessor {
 
     private int mTareDistance = 0; //0mm as default
 
-    ProgressBar mTareProgressBar;
+    private View mTareDialogView;
+
     private ProgressListener mTareListener;
+    ProgressBar mTareProgressBar;
     private int mTareProgress = 0;
+
     private Pipeline mPipeline;
     private CalibrationTablesHandler mCalibrationTablesHandler;
-
 
     TareProcessor(AppCompatActivity mainActivity, SharedPreferences sharedPref) {
         mMainActivity = mainActivity;
@@ -49,6 +51,81 @@ public class TareProcessor {
     public void init(Pipeline pipeline, CalibrationTablesHandler calibrationTablesHandler) {
         mPipeline = pipeline;
         mCalibrationTablesHandler = calibrationTablesHandler;
+    }
+
+    public void showTareDialog() {
+        View dialogView = mMainActivity.getLayoutInflater().inflate(R.layout.tare_dialog, null);
+
+        //setting advanced preferences
+        setTareAverageStepCountValue(dialogView);
+        setTareStepCountValue(dialogView);
+        setTareAccuracy(dialogView);
+
+        final EditText distanceText = dialogView.findViewById(R.id.tare_distance_text);
+
+        mTareProgressBar = dialogView.findViewById(R.id.tare_progress_bar);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(mMainActivity);
+        builder.setTitle("Tare Depth Distance")
+                .setPositiveButton("ok", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        try {
+                            int distance = Integer.parseInt(distanceText.getText().toString());
+                            setTareDistance(distance);
+                            //defining tare listener for progress bar update and perform tare operation
+                            tareCamera(new ProgressListener() {
+                                @Override
+                                public void onProgress(final float progress) {
+                                    Log.d("remi", "onProgress - TARE progress = " + progress);
+                                    mMainActivity.runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            Log.d("remi", "run - TARE progress = " + progress);
+                                            TextView progressBarText = mTareDialogView.findViewById(R.id.tare_progress_bar_text);
+                                            //progressBarText.setVisibility(View.VISIBLE);
+                                            //mTareProgressBar.setVisibility(View.VISIBLE);
+                                            mTareProgress = (int) (progress * 100);
+                                            mTareProgressBar.setProgress(mTareProgress);
+                                        }
+                                    });
+                                }
+                            });
+                        } catch (NumberFormatException e) {
+                            Log.e(TAG, "Distance not entered");
+                            String formattedString = String.format("Enter distance to flat surface");
+                            Toast.makeText(mMainActivity, formattedString, Toast.LENGTH_LONG).show();
+                        }
+                    }
+                })
+                .setNegativeButton("cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.dismiss();
+                    }
+                })
+                .setView(dialogView);
+        AlertDialog dialog = builder.create();
+        dialog.show();
+        mTareDialogView = dialogView;
+    }
+
+    private synchronized void tareCamera(ProgressListener progressListener) {
+        try {
+            mTareListener = progressListener;
+            if (mTareDistance > 0) {
+                ByteBuffer calibNew = mCalibrationTablesHandler.getCalibrationTableNew();
+                nTare(mPipeline.getHandle(), calibNew, mTareDistance, getTareJson());
+                mCalibrationTablesHandler.setTable(false);
+                String formattedString = String.format("Tare operation successfully completed");
+                Toast.makeText(mMainActivity, formattedString, Toast.LENGTH_LONG).show();
+            } else {
+                String formattedString = String.format("Distance to wall cannot be 0 mm");
+                Toast.makeText(mMainActivity, formattedString, Toast.LENGTH_LONG).show();
+            }
+        } catch (RuntimeException e) {
+            handleException(e);
+        }
     }
 
     private void setTareAverageStepCountValue(View dialogView) {
@@ -106,6 +183,7 @@ public class TareProcessor {
 
         final Spinner accuracySpinner = dialogView.findViewById(R.id.tare_accuracy_spinner);
         accuracySpinner.setAdapter(adapter);
+        accuracySpinner.setSelection(2); //Medium accuracy as default
 
         accuracySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
@@ -126,46 +204,6 @@ public class TareProcessor {
         });
     }
 
-    public void showTareDialog(View view) {
-        View dialogView = mMainActivity.getLayoutInflater().inflate(R.layout.tare_dialog, null);
-
-        //setting advanced preferences
-        setTareAverageStepCountValue(dialogView);
-        setTareStepCountValue(dialogView);
-        setTareAccuracy(dialogView);
-
-        final EditText distanceText = dialogView.findViewById(R.id.tare_distance_text);
-
-        mTareProgressBar = dialogView.findViewById(R.id.tare_progress_bar);
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(mMainActivity);
-        builder.setTitle("Tare Depth Distance")
-                .setPositiveButton("ok", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        try {
-                            int distance = Integer.parseInt(distanceText.getText().toString());
-                            setTareDistance(distance);
-                            //tare action
-                            tareCamera(dialog);
-                        } catch (NumberFormatException e) {
-                            Log.e(TAG, "Distance not entered");
-                            String formattedString = String.format("Enter distance to flat surface");
-                            Toast.makeText(mMainActivity, formattedString, Toast.LENGTH_LONG).show();
-                        }
-                    }
-                })
-                .setNegativeButton("cancel", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                })
-                .setView(dialogView);
-        AlertDialog dialog = builder.create();
-        dialog.show();
-    }
-
     private void setTareDistance(int distance) {
         mTareDistance = distance;
     }
@@ -180,44 +218,6 @@ public class TareProcessor {
         JSONObject json = new JSONObject(settingMap);
         return json.toString();
 
-    }
-
-    public void tareCamera(DialogInterface dialog) {
-        try {
-            if (mTareDistance > 0) {
-
-                mTareListener = new ProgressListener() {
-                    @Override
-                    public void onProgress(float progress) {
-                        mTareProgress = (int) (progress * 100);
-                        if (mTareProgress < 100) {
-                            mMainActivity.runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    View dialogView = mMainActivity.getLayoutInflater().inflate(R.layout.tare_dialog, null);
-                                    TextView progressBarText = dialogView.findViewById(R.id.tare_progress_bar_text);
-                                    progressBarText.setVisibility(View.VISIBLE);
-                                    mTareProgressBar.setVisibility(View.VISIBLE);
-                                    int percentage = mTareProgress;
-                                    mTareProgressBar.setProgress(percentage);
-                                }
-                            });
-                        } else {
-                            View dialogView = mMainActivity.getLayoutInflater().inflate(R.layout.tare_dialog, null);
-                            ((DialogInterface)dialogView).dismiss();
-                        }
-                    }
-                };
-                ByteBuffer calibNew = mCalibrationTablesHandler.getCalibrationTableNew();
-                nTare(mPipeline.getHandle(), calibNew, mTareDistance, getTareJson());
-                mCalibrationTablesHandler.setTable(false);
-            } else {
-                String formattedString = String.format("Distance to wall cannot be 0 mm");
-                Toast.makeText(mMainActivity, formattedString, Toast.LENGTH_LONG).show();
-            }
-        } catch (RuntimeException e) {
-            handleException(e);
-        }
     }
 
     private void handleException(RuntimeException e) {

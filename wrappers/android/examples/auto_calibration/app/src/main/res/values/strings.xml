@@ -17,7 +17,7 @@
     </string>
     <string name="attachment_summary_off">Only download attachments when manually requested</string>
     <string name="write_to_camera">Write to camera</string>
-    <string name="on_chip_calibration">On Chip Calibration</string>
+    <string name="calibration">Calibration</string>
     <string name="tare">Tare</string>
     <string name="projector_off">Projector off</string>
     <string name="projector_on">Projector on</string>

@@ -82,7 +82,7 @@ Java_com_intel_realsense_auto_1calibration_CalibrationTablesHandler_nSetTable(JN
 
 extern "C"
 JNIEXPORT jfloat JNICALL
-Java_com_intel_realsense_auto_1calibration_MainActivity_nRunSelfCal(JNIEnv *env, jobject instance,
+Java_com_intel_realsense_auto_1calibration_CalibrationProcessor_nRunSelfCal(JNIEnv *env, jobject instance,
                                                                          jlong pipeline_handle,
                                                                          jobject target_buffer,
                                                                          jstring json_cont) {
@@ -95,7 +95,14 @@ Java_com_intel_realsense_auto_1calibration_MainActivity_nRunSelfCal(JNIEnv *env,
         sensor.set_option(RS2_OPTION_VISUAL_PRESET, RS2_RS400_VISUAL_PRESET_HIGH_ACCURACY);
         auto calib_dev = rs2::auto_calibrated_device(profile.get_device());
         auto json_ptr = (*env).GetStringUTFChars(json_cont, NULL);
-        auto new_table_vector = calib_dev.run_on_chip_calibration(std::string(json_ptr), &health);
+
+        //preparing progress callback method
+        jclass cls = env->GetObjectClass(instance);
+        jmethodID id = env->GetMethodID(cls, "calibrationOnProgress", "(F)V");
+        auto cb = [&](float progress){ env->CallVoidMethod(instance, id, progress); };
+
+        auto new_table_vector = calib_dev.run_on_chip_calibration(std::string(json_ptr), &health, cb);
+
         copy_vector_to_jbytebuffer(env, new_table_vector, target_buffer);
         return health;
     } catch (const rs2::error &e) {
@@ -121,10 +128,9 @@ Java_com_intel_realsense_auto_1calibration_TareProcessor_nTare(JNIEnv *env, jobj
         //preparing progress callback method
         jclass cls = env->GetObjectClass(instance);
         jmethodID id = env->GetMethodID(cls, "tareOnProgress", "(F)V");
-        auto cb = [&](float progress){ env->CallVoidMethod(cls, id, progress); };
+        auto cb = [&](float progress){ env->CallVoidMethod(instance, id, progress); };
 
-        //auto new_table = calib_dev.run_tare_calibration(ground_truth, std::string(json_ptr), cb);
-        auto new_table = calib_dev.run_tare_calibration(ground_truth, std::string(json_ptr));
+        auto new_table = calib_dev.run_tare_calibration(ground_truth, std::string(json_ptr), cb);
 
         copy_vector_to_jbytebuffer(env, new_table, target_buffer);
     } catch (const rs2::error &e) {

@@ -109,7 +109,7 @@
                 android:textSize="18dp"
                 android:textColor="#ffffff"
                 android:backgroundTint="#000000"
-                android:text="@string/on_chip_calibration"/>
+                android:text="@string/calibration"/>
 
             <Space
                 android:layout_width="0dp"

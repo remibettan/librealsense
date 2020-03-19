@@ -8,4 +8,22 @@
         android:id="@+id/calib_speed_spinner"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
+
+    <!-- Progress Bar -->
+    <TextView
+        android:id="@+id/calibration_progress_bar_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        style="@android:style/TextAppearance.Medium"
+        android:text="Calibration process in progress..."
+        android:visibility="invisible"/>
+    <!---->
+    <ProgressBar
+        android:id="@+id/calibration_progress_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        style="@style/Widget.AppCompat.ProgressBar.Horizontal"
+        android:max="100"
+        android:visibility="invisible"/>
+    <!---->
 </LinearLayout>
