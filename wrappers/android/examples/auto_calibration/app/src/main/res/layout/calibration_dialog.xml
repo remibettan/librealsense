@@ -15,7 +15,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         style="@android:style/TextAppearance.Medium"
-        android:text="Calibration process in progress..."
+        android:text="Calibration is in progress..."
         android:visibility="invisible"/>
     <!---->
     <ProgressBar
@@ -23,7 +23,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         style="@style/Widget.AppCompat.ProgressBar.Horizontal"
-        android:max="100"
+        android:max="48"
         android:visibility="invisible"/>
     <!---->
 </LinearLayout>

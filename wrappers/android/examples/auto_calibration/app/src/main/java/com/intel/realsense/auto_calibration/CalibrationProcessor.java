@@ -1,5 +1,6 @@
 package com.intel.realsense.auto_calibration;
 
+import android.app.Dialog;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.util.Log;
@@ -39,6 +40,9 @@ public class CalibrationProcessor {
     private CalibrationTablesHandler mCalibrationTablesHandler;
 
     private int mCalibrationSpeedValue = 2; //medium speed as default
+    private float mCalibrationHealth;
+
+    private AlertDialog mCalibrationAlertDialog;
 
     CalibrationProcessor(AppCompatActivity mainActivity, SharedPreferences sharedPref) {
         mMainActivity = mainActivity;
@@ -68,36 +72,7 @@ public class CalibrationProcessor {
                 .setPositiveButton("ok", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        if (!speedSpinner.getSelectedItem().toString().equalsIgnoreCase("Choose calibration speed")){
-                            //setting calibration speed
-                            int selectedEntryPosition = adapter.getPosition(speedSpinner.getSelectedItem().toString());
-                            setCalibrationSpeed(selectedEntryPosition);
-                        } else {
-                            String currentSpeed = getCalibrationSpeedString();
-                            String str = "Speed not changed - previous set speed is: " + currentSpeed;
-                            String formattedString = String.format(str);
-                            Toast.makeText(mMainActivity, formattedString, Toast.LENGTH_LONG).show();
-                        }
 
-                        //calibration
-                        calibrateCamera(new ProgressListener() {
-                            @Override
-                            public void onProgress(final float progress) {
-                                Log.d("remi", "onProgress - CALIBRATION progress = " + progress);
-                                mMainActivity.runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        Log.d("remi", "run - CALIBRATION progress = " + progress);
-                                        TextView progressBarText = mCalibrationDialogView.findViewById(R.id.calibration_progress_bar_text);
-                                        progressBarText.setVisibility(View.VISIBLE);
-                                        mCalibrationProgressBar.setVisibility(View.VISIBLE);
-                                        mCalibrationProgress = (int) (progress);
-                                        mCalibrationProgressBar.setProgress(mCalibrationProgress);
-                                    }
-                                });
-                            }
-                        });
-                        dialog.dismiss();
                     }
                 })
                 .setNegativeButton("cancel", new DialogInterface.OnClickListener() {
@@ -109,8 +84,49 @@ public class CalibrationProcessor {
                 .setView(dialogView);
         AlertDialog dialog = builder.create();
         dialog.show();
+        mCalibrationAlertDialog = dialog;
         mCalibrationDialogView = dialogView;
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!speedSpinner.getSelectedItem().toString().equalsIgnoreCase("Choose calibration speed")){
+                    //setting calibration speed
+                    int selectedEntryPosition = adapter.getPosition(speedSpinner.getSelectedItem().toString());
+                    setCalibrationSpeed(selectedEntryPosition);
+                } else {
+                    String currentSpeed = getCalibrationSpeedString();
+                    String str = "Speed not changed - previous set speed is: " + currentSpeed;
+                    String formattedString = String.format(str);
+                    Toast.makeText(mMainActivity, formattedString, Toast.LENGTH_LONG).show();
+                }
+                //calibration
+                Thread t = new Thread(mCalibrateCamera);
+                t.start();
+            }
+        });
     }
+
+    private Runnable mCalibrateCamera = new Runnable() {
+        @Override
+        public void run() {
+            calibrateCamera(new ProgressListener() {
+                @Override
+                public void onProgress(final float progress) {
+                    mMainActivity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            TextView progressBarText = mCalibrationDialogView.findViewById(R.id.calibration_progress_bar_text);
+                            progressBarText.setVisibility(View.VISIBLE);
+                            mCalibrationProgressBar.setVisibility(View.VISIBLE);
+                            mCalibrationProgress = (int) (progress);
+                            mCalibrationProgressBar.setProgress(mCalibrationProgress);
+                        }
+                    });
+                }
+            });
+        }
+    };
+
 
     public synchronized void calibrateCamera(ProgressListener progressListener) {
         try {
@@ -119,9 +135,9 @@ public class CalibrationProcessor {
             float health = nRunSelfCal(mPipeline.getHandle(), mCalibrationTablesHandler.getCalibrationTableNew(), jsonString);
             health = Math.abs(health);
             health *= 100;
-            String formattedString = String.format("Calibration completed with health: %.02f", health);
-            Toast.makeText(mMainActivity, formattedString, Toast.LENGTH_LONG).show();
+            mCalibrationHealth = health;
             mCalibrationTablesHandler.setTable(false);
+            mCalibrationAlertDialog.dismiss();
         } catch (RuntimeException e) {
             handleException(e);
         }

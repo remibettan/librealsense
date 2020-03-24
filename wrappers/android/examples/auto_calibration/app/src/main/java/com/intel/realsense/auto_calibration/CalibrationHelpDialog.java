@@ -25,7 +25,10 @@ public class CalibrationHelpDialog extends AppCompatDialogFragment {
                                 "\n" +
                                 "Tare calibration: \n" +
                                 "It is used to adjust camera absolute distance to flat target.\n" +
-                                "User needs to enter the distance to the flat object in mm.")
+                                "User needs to enter the distance to the flat object in mm.\n" +
+                        "\n" +
+                        "Full documentation for self calibration can be found at:" +
+                        "https://dev.intelrealsense.com/docs/self-calibration-for-depth-cameras")
                 .setPositiveButton("OK", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
