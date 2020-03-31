@@ -125,12 +125,8 @@ Java_com_intel_realsense_auto_1calibration_TareProcessor_nTare(JNIEnv *env, jobj
         auto calib_dev = rs2::auto_calibrated_device(profile.get_device());
         auto json_ptr = (*env).GetStringUTFChars(json_cont, NULL);
 
-        //preparing progress callback method
-        jclass cls = env->GetObjectClass(instance);
-        jmethodID id = env->GetMethodID(cls, "tareOnProgress", "(F)V");
-        auto cb = [&](float progress){ env->CallVoidMethod(instance, id, progress); };
-
-        auto new_table = calib_dev.run_tare_calibration(ground_truth, std::string(json_ptr), cb);
+        //no callback for process because it is not available in FW
+        auto new_table = calib_dev.run_tare_calibration(ground_truth, std::string(json_ptr));
 
         copy_vector_to_jbytebuffer(env, new_table, target_buffer);
     } catch (const rs2::error &e) {

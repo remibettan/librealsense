@@ -2,7 +2,6 @@ package com.intel.realsense.auto_calibration;
 
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
-import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -37,7 +36,6 @@ public class TareProcessor {
 
     private ProgressListener mTareListener;
     ProgressBar mTareProgressBar;
-    private int mTareProgress = 0;
 
     private AlertDialog mTareAlertDialog;
 
@@ -95,6 +93,21 @@ public class TareProcessor {
                 //tare operation
                 Thread t = new Thread(mTareCamera);
                 t.start();
+
+                //update progress
+                mMainActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        //make progress bar visible
+                        TextView progressBarText = mTareDialogView.findViewById(R.id.tare_progress_bar_text);
+                        progressBarText.setVisibility(View.VISIBLE);
+                        mTareProgressBar.setVisibility(View.VISIBLE);
+                        mTareProgressBar.setProgress(50);
+                        int progress = 0;
+                        //update progress
+                        setProgressValue(progress);
+                    }
+                });
             }
         });
     }
@@ -102,29 +115,25 @@ public class TareProcessor {
     private Runnable mTareCamera = new Runnable() {
         @Override
         public void run() {
-            tareCamera(new ProgressListener() {
-                @Override
-                public void onProgress(final float progress) {
-                    Log.d("remi", "onProgress - TARE progress = " + progress);
-                    mMainActivity.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            Log.d("remi", "run - TARE progress = " + progress);
-                            TextView progressBarText = mTareDialogView.findViewById(R.id.tare_progress_bar_text);
-                            //progressBarText.setVisibility(View.VISIBLE);
-                            //mTareProgressBar.setVisibility(View.VISIBLE);
-                            mTareProgress = (int) (progress);
-                            mTareProgressBar.setProgress(mTareProgress);
-                        }
-                    });
-                }
-            });
+            tareCamera();
         }
     };
 
-    private synchronized void tareCamera(ProgressListener progressListener) {
+    private void setProgressValue(final int progress)
+    {
         try {
-            mTareListener = progressListener;
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        mTareProgressBar.setProgress(progress);
+        if (progress + 10 > 100)
+            return;
+        setProgressValue(progress + 10);
+    }
+
+    private synchronized void tareCamera() {
+        try {
             if (mTareDistance > 0) {
                 ByteBuffer calibNew = mCalibrationTablesHandler.getCalibrationTableNew();
                 nTare(mPipeline.getHandle(), calibNew, mTareDistance, getTareJson());
