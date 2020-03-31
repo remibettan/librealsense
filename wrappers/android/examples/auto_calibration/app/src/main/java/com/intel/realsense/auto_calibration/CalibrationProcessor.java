@@ -1,9 +1,8 @@
 package com.intel.realsense.auto_calibration;
 
-import android.app.Dialog;
+
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
-import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.ProgressBar;
@@ -19,6 +18,9 @@ import com.intel.realsense.librealsense.ProgressListener;
 
 import org.json.JSONObject;
 
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -40,7 +42,13 @@ public class CalibrationProcessor {
     private CalibrationTablesHandler mCalibrationTablesHandler;
 
     private int mCalibrationSpeedValue = 2; //medium speed as default
+
+    private enum CalibrationResult {CALIB_RESULT_IN_PROCESS, CALIB_RESULT_SUCCESS, CALIB_RESULT_FAILURE}
     private float mCalibrationHealth;
+
+    private CalibrationResult mCalibrationResult = CalibrationResult.CALIB_RESULT_IN_PROCESS;
+    private PropertyChangeListener mCalibResultListener;
+    private PropertyChangeSupport mCalibResultPcs;
 
     private AlertDialog mCalibrationAlertDialog;
 
@@ -50,9 +58,43 @@ public class CalibrationProcessor {
         mPipeline = null;
         mCalibrationTablesHandler = null;
     }
+
     public void init(Pipeline pipeline, CalibrationTablesHandler calibrationTablesHandler) {
         mPipeline = pipeline;
         mCalibrationTablesHandler = calibrationTablesHandler;
+
+        mCalibResultPcs = new PropertyChangeSupport(mCalibrationResult);
+        mCalibResultListener = new PropertyChangeListener() {
+            @Override
+            public void propertyChange(PropertyChangeEvent evt) {
+                String message = "Calibration process has ";
+                if (evt.getNewValue() == CalibrationResult.CALIB_RESULT_SUCCESS) {
+                    message += "succeeded with health factor of " + mCalibrationHealth;
+                } else {
+                    message += "failed";
+                }
+                final View calibrationResultView = mMainActivity.getLayoutInflater().inflate(R.layout.calibraton_result_dialog, null);
+                TextView msg = calibrationResultView.findViewById(R.id.calibration_result_text);
+                msg.setText(message);
+                mMainActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        AlertDialog.Builder builder = new AlertDialog.Builder(mMainActivity);
+                        builder.setTitle("Calibration Result")
+                                .setPositiveButton("ok", new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+
+                                    }
+                                })
+                                .setView(calibrationResultView);
+                        AlertDialog dialog = builder.create();
+                        dialog.show();
+                    }
+                });
+            }
+        };
+        mCalibResultPcs.addPropertyChangeListener(mCalibResultListener);
     }
 
     public void showCalibrationDialog(View view)
@@ -102,9 +144,12 @@ public class CalibrationProcessor {
                 //calibration
                 Thread t = new Thread(mCalibrateCamera);
                 t.start();
+                //resetting calibration result
+                mCalibrationResult = CalibrationResult.CALIB_RESULT_IN_PROCESS;
             }
         });
     }
+
 
     private Runnable mCalibrateCamera = new Runnable() {
         @Override
@@ -130,6 +175,7 @@ public class CalibrationProcessor {
 
     public synchronized void calibrateCamera(ProgressListener progressListener) {
         try {
+            //calibration operation
             mCalibrationListener = progressListener;
             String jsonString = getSelfCalibrationJson();
             float health = nRunSelfCal(mPipeline.getHandle(), mCalibrationTablesHandler.getCalibrationTableNew(), jsonString);
@@ -137,9 +183,21 @@ public class CalibrationProcessor {
             health *= 100;
             mCalibrationHealth = health;
             mCalibrationTablesHandler.setTable(false);
+            //sending calibration result changed event
+            PropertyChangeEvent event = new PropertyChangeEvent(mCalibrationResult, "result",
+                    CalibrationResult.CALIB_RESULT_IN_PROCESS, CalibrationResult.CALIB_RESULT_SUCCESS);
+            mCalibrationResult = CalibrationResult.CALIB_RESULT_SUCCESS;
+            mCalibResultPcs.firePropertyChange(event);
+            //closing dialog
             mCalibrationAlertDialog.dismiss();
         } catch (RuntimeException e) {
-            handleException(e);
+            //sending calibration result changed event
+            PropertyChangeEvent event = new PropertyChangeEvent(mCalibrationResult, "result",
+                    CalibrationResult.CALIB_RESULT_IN_PROCESS, CalibrationResult.CALIB_RESULT_FAILURE);
+            mCalibrationResult = CalibrationResult.CALIB_RESULT_FAILURE;
+            mCalibResultPcs.firePropertyChange(event);
+            //closing dialog
+            mCalibrationAlertDialog.dismiss();
         }
     }
 
