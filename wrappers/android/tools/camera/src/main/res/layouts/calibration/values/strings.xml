@@ -1,0 +1,31 @@
+<resources>
+    <string name="title_activity_settings">Settings</string>
+
+    <!-- Preference Titles -->
+    <string name="messages_header">Messages</string>
+    <string name="sync_header">Sync</string>
+
+    <!-- Messages Preferences -->
+    <string name="signature_title">Your signature</string>
+    <string name="reply_title">Default reply action</string>
+
+    <!-- Sync Preferences -->
+    <string name="sync_title">Sync email periodically</string>
+    <string name="attachment_title">Download incoming attachments</string>
+    <string name="attachment_summary_on">Automatically download attachments for incoming emails
+    </string>
+    <string name="attachment_summary_off">Only download attachments when manually requested</string>
+    <string name="write_to_camera">Write to camera</string>
+    <string name="calibration">Calibration</string>
+    <string name="tare">Tare</string>
+    <string name="projector_off">Projector off</string>
+    <string name="projector_on">Projector on</string>
+    <string name="original">Original</string>
+    <string name="calibrated">Calibrated</string>
+    <string name="tare_instructions_string">Remember to locate the camera in front of a flat surface. Distance from camera to flat surface should be entered below.</string>
+    <string name="tare_distance_label_string">Distance to flat surface in mm :</string>
+    <string name="tare_advanced_options_string">Advanced Options:</string>
+    <string name="average_step_count">Average Step Count (1-30)</string>
+    <string name="step_count">Step Count (5-30)</string>
+    <string name="tare_accuracy_string">Accuracy</string>
+</resources>

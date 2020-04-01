@@ -1,16 +1,12 @@
 package com.intel.realsense.camera;
 
-import android.Manifest;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -21,6 +17,7 @@ import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.Toast;
 
+import com.intel.realsense.camera.calibration_package.CalibrationActivity;
 import com.intel.realsense.librealsense.CameraInfo;
 import com.intel.realsense.librealsense.Device;
 import com.intel.realsense.librealsense.DeviceList;
@@ -56,6 +53,7 @@ public class SettingsActivity extends AppCompatActivity {
     private static final int INDEX_TERMINAL = 5;
     private static final int INDEX_FW_LOG = 6;
     private static final int INDEX_CREATE_FLASH_BACKUP = 7;
+    private static final int INDEX_CALIBRATE = 8;
 
     private Device _device;
 
@@ -151,6 +149,8 @@ public class SettingsActivity extends AppCompatActivity {
 
         settingsMap.put(INDEX_CREATE_FLASH_BACKUP, "Create FW backup");
 
+        settingsMap.put(INDEX_CALIBRATE, "Calibrate Camera");
+
         final String[] settings = new String[settingsMap.values().size()];
         settingsMap.values().toArray(settings);
         final ArrayAdapter adapter = new ArrayAdapter<>(this, R.layout.files_list_view, settings);
@@ -202,6 +202,11 @@ public class SettingsActivity extends AppCompatActivity {
                     }
                     case INDEX_CREATE_FLASH_BACKUP: {
                         new FlashBackupTask(device).execute();
+                        break;
+                    }
+                    case INDEX_CALIBRATE: {
+                        Intent intent = new Intent(SettingsActivity.this, CalibrationActivity.class);
+                        startActivity(intent);
                         break;
                     }
                     default:
