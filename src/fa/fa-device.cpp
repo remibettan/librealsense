@@ -285,13 +285,12 @@ namespace librealsense
             this);
         
         auto ir_ep = std::make_shared<fa_ir_sensor>(this, raw_ir_ep);
-        ir_ep->register_processing_block(processing_block_factory::create_pbf_vector<uyvy_converter>
+        ir_ep->register_processing_block(processing_block_factory::create_pbf_vector<yuy2_converter>
             (RS2_FORMAT_YUYV, map_supported_color_formats(RS2_FORMAT_YUYV), RS2_STREAM_INFRARED, 1));
         // Second Infrared is marked as UYVY so that the streams will have different profiles - needed because of design of mf-uvc class 
         // It is then converted back to YUYV for streaming
-        ir_ep->register_processing_block(processing_block_factory::create_pbf_vector<uyvy_to_yuyv_converter>
+        ir_ep->register_processing_block(processing_block_factory::create_pbf_vector<yuy2_converter>
             (RS2_FORMAT_UYVY, map_supported_color_formats(RS2_FORMAT_YUYV), RS2_STREAM_INFRARED, 2));
-        
 
         add_sensor(ir_ep);
 
