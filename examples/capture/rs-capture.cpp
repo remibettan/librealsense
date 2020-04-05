@@ -23,7 +23,13 @@ int main(int argc, char * argv[]) try
     // Start streaming with default recommended configuration
     // The default video configuration contains Depth and Color streams
     // If a device is capable to stream IMU data, both Gyro and Accelerometer are enabled by default
-    pipe.start();
+
+    // Create a configuration for configuring the pipeline with a non default profile
+    rs2::config cfg;
+    cfg.enable_stream(RS2_STREAM_INFRARED, 1, 1920, 1088, RS2_FORMAT_RGB8, 5);
+    cfg.enable_stream(RS2_STREAM_INFRARED, 2, 1920, 1088, RS2_FORMAT_RGB8, 5);
+
+    pipe.start(cfg);
 
     while (app) // Application still alive?
     {

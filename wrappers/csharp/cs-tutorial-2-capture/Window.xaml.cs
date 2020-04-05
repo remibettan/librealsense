@@ -73,18 +73,11 @@ namespace Intel.RealSense
                             var irFirstFrame = frames.InfraredFrame.DisposeWith(frames);
                             var irSecondFrame = frames.InfraredFrame.DisposeWith(frames);
 
-                            // We colorize the ir frames for visualization purposes
-                            var colorizedIrFirstFrame = colorizer.Process<VideoFrame>(irFirstFrame).DisposeWith(frames);
-                            var colorizedIrSecondFrame = colorizer.Process<VideoFrame>(irSecondFrame).DisposeWith(frames);
-
                             // Render the frames.
-                            //Dispatcher.Invoke(DispatcherPriority.Render, updateInfraredFirst, colorizedDepth);
-                            //Dispatcher.Invoke(DispatcherPriority.Render, updateInfraredFirst, irFirstFrame);
-                            //Dispatcher.Invoke(DispatcherPriority.Render, updateInfraredSecond, irSecondFrame);
-                            Dispatcher.Invoke(DispatcherPriority.Render, updateInfraredFirst, colorizedIrFirstFrame);
-                            Dispatcher.Invoke(DispatcherPriority.Render, updateInfraredSecond, colorizedIrSecondFrame);
+                            Dispatcher.Invoke(DispatcherPriority.Render, updateInfraredFirst, irFirstFrame);
+                            Dispatcher.Invoke(DispatcherPriority.Render, updateInfraredSecond, irSecondFrame);
 
-                            /*Dispatcher.Invoke(new Action(() =>
+                            Dispatcher.Invoke(new Action(() =>
                             {
                                 String irFirst_dev_sn = irFirstFrame.Sensor.Info[CameraInfo.SerialNumber];
                                 txtTimeStamp.Text = irFirst_dev_sn + " : " + String.Format("{0,-20:0.00}", 
@@ -95,7 +88,7 @@ namespace Intel.RealSense
                                 String irSecond_dev_sn = irSecondFrame.Sensor.Info[CameraInfo.SerialNumber];
                                 txtTimeStamp.Text = irSecond_dev_sn + " : " + String.Format("{0,-20:0.00}",
                                     irSecondFrame.Timestamp) + "(" + irSecondFrame.TimestampDomain.ToString() + ")";
-                            }));*/
+                            }));
                         }
                     }
                 }, tokenSource.Token);
@@ -114,12 +107,12 @@ namespace Intel.RealSense
 
         private void SetupWindow(PipelineProfile pipelineProfile, out Action<VideoFrame> irFirst, out Action<VideoFrame> irSecond)
         {
-            using (var p = pipelineProfile.GetStream(Stream.Infrared).As<VideoStreamProfile>())
-                imgIrFirst.Source = new WriteableBitmap(p.Width, p.Height, 96d, 96d, PixelFormats.Rgb24, null);
+            using (var p1 = pipelineProfile.GetStream(Stream.Infrared, 1).As<VideoStreamProfile>())
+                imgIrFirst.Source = new WriteableBitmap(p1.Width, p1.Height, 96d, 96d, PixelFormats.Rgb24, null);
             irFirst = UpdateImage(imgIrFirst);
 
-            using (var p = pipelineProfile.GetStream(Stream.Infrared).As<VideoStreamProfile>())
-                imgIrSecond.Source = new WriteableBitmap(p.Width, p.Height, 96d, 96d, PixelFormats.Rgb24, null);
+            using (var p2 = pipelineProfile.GetStream(Stream.Infrared, 2).As<VideoStreamProfile>())
+                imgIrSecond.Source = new WriteableBitmap(p2.Width, p2.Height, 96d, 96d, PixelFormats.Rgb24, null);
             irSecond = UpdateImage(imgIrSecond);
         }
     }
