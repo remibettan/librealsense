@@ -54,8 +54,8 @@ namespace Intel.RealSense
                 pipeline = new Pipeline();
 
                 var cfg = new Config();
+                cfg.EnableStream(Stream.Infrared, 0, f450_width, f450_height, Format.Rgb8, 5);
                 cfg.EnableStream(Stream.Infrared, 1, f450_width, f450_height, Format.Rgb8, 5);
-                cfg.EnableStream(Stream.Infrared, 2, f450_width, f450_height, Format.Rgb8, 5);
 
                 var pp = pipeline.Start(cfg);
 
@@ -107,12 +107,12 @@ namespace Intel.RealSense
 
         private void SetupWindow(PipelineProfile pipelineProfile, out Action<VideoFrame> irFirst, out Action<VideoFrame> irSecond)
         {
-            using (var p1 = pipelineProfile.GetStream(Stream.Infrared, 1).As<VideoStreamProfile>())
-                imgIrFirst.Source = new WriteableBitmap(p1.Width, p1.Height, 96d, 96d, PixelFormats.Rgb24, null);
+            using (var p0 = pipelineProfile.GetStream(Stream.Infrared, 0).As<VideoStreamProfile>())
+                imgIrFirst.Source = new WriteableBitmap(p0.Width, p0.Height, 96d, 96d, PixelFormats.Rgb24, null);
             irFirst = UpdateImage(imgIrFirst);
 
-            using (var p2 = pipelineProfile.GetStream(Stream.Infrared, 2).As<VideoStreamProfile>())
-                imgIrSecond.Source = new WriteableBitmap(p2.Width, p2.Height, 96d, 96d, PixelFormats.Rgb24, null);
+            using (var p1 = pipelineProfile.GetStream(Stream.Infrared, 1).As<VideoStreamProfile>())
+                imgIrSecond.Source = new WriteableBitmap(p1.Width, p1.Height, 96d, 96d, PixelFormats.Rgb24, null);
             irSecond = UpdateImage(imgIrSecond);
         }
     }
