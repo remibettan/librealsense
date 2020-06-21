@@ -89,4 +89,3 @@ librealsense-log.txt
 *.cxx
 
 .vscode/*
-/wrappers/android/examples/auto_calibration/app/src/main/cpp/include
