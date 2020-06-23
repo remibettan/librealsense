@@ -56,6 +56,7 @@ public class SettingsActivity extends AppCompatActivity {
     private static final int INDEX_TERMINAL = 5;
     private static final int INDEX_FW_LOG = 6;
     private static final int INDEX_CREATE_FLASH_BACKUP = 7;
+    private static final int INDEX_CALIBRATE = 8;
 
     private Device _device;
 
@@ -151,6 +152,8 @@ public class SettingsActivity extends AppCompatActivity {
 
         settingsMap.put(INDEX_CREATE_FLASH_BACKUP, "Create FW backup");
 
+        settingsMap.put(INDEX_CALIBRATE, "Calibrate Camera");
+
         final String[] settings = new String[settingsMap.values().size()];
         settingsMap.values().toArray(settings);
         final ArrayAdapter adapter = new ArrayAdapter<>(this, R.layout.files_list_view, settings);
@@ -202,6 +205,11 @@ public class SettingsActivity extends AppCompatActivity {
                     }
                     case INDEX_CREATE_FLASH_BACKUP: {
                         new FlashBackupTask(device).execute();
+                        break;
+                    }
+                    case INDEX_CALIBRATE: {
+                        Intent intent = new Intent(SettingsActivity.this, CalibrationActivity.class);
+                        startActivity(intent);
                         break;
                     }
                     default:

@@ -8,6 +8,7 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/device_watcher.h"
         "${CMAKE_CURRENT_LIST_DIR}/device_watcher.cpp"
         
+        "${CMAKE_CURRENT_LIST_DIR}/jni/calibration.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/jni/error.h"
         "${CMAKE_CURRENT_LIST_DIR}/jni/error.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/jni/context.cpp"
