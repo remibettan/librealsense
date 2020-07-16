@@ -47,6 +47,9 @@
         <activity
             android:name=".TerminalActivity"
             android:theme="@style/AppTheme.NoActionBar" />
+        <activity
+            android:name=".CalibrationActivity"
+            android:theme="@style/AppTheme.NoActionBar" />
     </application>
 
 </manifest>
