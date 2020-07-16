@@ -9,6 +9,7 @@
 #include "../../../include/librealsense2/rs.h"
 #include "../../../include/librealsense2/hpp/rs_device.hpp"
 #include "../../api.h"
+#include "../../../include/librealsense2/hpp/rs_pipeline.hpp"
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_intel_realsense_librealsense_Device_nSupportsInfo(JNIEnv *env, jclass type, jlong handle,
@@ -150,3 +151,179 @@ Java_com_intel_realsense_librealsense_Device_nIsDeviceExtendableTo(JNIEnv *env, 
     handle_error(env, e);
     return rv > 0;
 }
+
+//-----------------------------------------------------------------------------
+//AutoCalibDevice jni functions
+//-----------------------------------------------------------------------------
+void handle_error(JNIEnv *env, rs2::error error) {
+
+    const char *message = error.what();
+    env->ThrowNew(env->FindClass("java/lang/RuntimeException"), message);
+}
+
+rs2::pipeline_profile get_profile(JNIEnv *env, jlong handle) {
+    auto _pipeline = reinterpret_cast<rs2_pipeline *>((long) handle);
+    rs2_error *e = nullptr;
+    auto p = std::shared_ptr<rs2_pipeline_profile>(
+            rs2_pipeline_get_active_profile(_pipeline, &e),
+            rs2_delete_pipeline_profile);
+    handle_error(env, e);
+    return p;
+}
+
+void
+copy_vector_to_jbytebuffer(JNIEnv *env, rs2::calibration_table vector, jobject target_jbuffer) {
+    auto new_table_buffer = (uint8_t *) (*env).GetDirectBufferAddress(target_jbuffer);
+    auto new_table_buffer_size = (size_t) (*env).GetDirectBufferCapacity(target_jbuffer);
+    if (vector.size() <= new_table_buffer_size)
+        std::copy(vector.begin(), vector.end(), new_table_buffer);
+}
+
+
+
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_intel_realsense_librealsense_AutoCalibDevice_nGetTable(JNIEnv *env, jobject instance,
+                                                                                        jlong device_handle,
+                                                                                        jobject table) {
+    try {
+        rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
+
+        rs2_error* e = nullptr;
+        std::shared_ptr<const rs2_raw_data_buffer> list(
+                rs2_get_calibration_table(device, &e),
+                rs2_delete_raw_data);
+        handle_error(env, e);
+
+        auto size = rs2_get_raw_data_size(list.get(), &e);
+        handle_error(env, e);
+        auto start = rs2_get_raw_data(list.get(), &e);
+        handle_error(env, e);
+        std::vector<uint8_t> current_table;
+        current_table.insert(current_table.begin(), start, start + size);
+
+        copy_vector_to_jbytebuffer(env, current_table, table);
+        return current_table.size();
+    } catch (const rs2::error &e) {
+        handle_error(env, e);
+        return -1;
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_intel_realsense_librealsense_AutoCalibDevice_nSetTable(JNIEnv *env, jobject instance,
+                                                                                        jlong device_handle,
+                                                                                        jobject table,
+                                                                                        jboolean write) {
+    rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
+
+    uint8_t *new_table_buffer = (uint8_t *) (*env).GetDirectBufferAddress(table);
+    size_t new_table_buffer_size = (*env).GetDirectBufferCapacity(table);
+
+    if (new_table_buffer != NULL) {
+        rs2_error* e = nullptr;
+        rs2_set_calibration_table(device, new_table_buffer,
+                                  new_table_buffer_size, &e);
+        handle_error(env, e);
+        if (write) {
+            rs2_write_calibration(device, &e);
+        }
+    }
+}
+
+extern "C"
+JNIEXPORT jfloat JNICALL
+Java_com_intel_realsense_librealsense_AutoCalibDevice_nRunAutoCalib(JNIEnv *env, jobject instance,
+                                                                                      jlong device_handle,
+                                                                                      jobject target_buffer,
+                                                                                      jstring json_cont) {
+    try {
+        rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
+        float health = MAXFLOAT;
+
+        auto json_ptr = (*env).GetStringUTFChars(json_cont, NULL);
+        int json_length = strlen(json_ptr);
+
+        //preparing progress callback method
+        jclass cls = env->GetObjectClass(instance);
+        jmethodID id = env->GetMethodID(cls, "calibrationOnProgress", "(F)V");
+        auto cb = [&](float progress){ env->CallVoidMethod(instance, id, progress); };
+
+        //TODO Remi - find out how to use C API instead of C++ AI with the callback function
+        //std::shared_ptr<rs2_update_progress_callback> callback_function = std::make_shared<rs2_update_progress_callback>(cb);
+
+        /*rs2_error* e = nullptr;
+        int timeout_ms = 5000; //default as defined in CPP API
+        std::shared_ptr<const rs2_raw_data_buffer> list(
+                rs2_run_on_chip_calibration_cpp(device, json_ptr, json_length, &health,
+                                                new update_progress_callback<void(*)(float)>(std::move(cb)), timeout_ms, &e),
+                rs2_delete_raw_data);
+        handle_error(env, e);
+
+        auto size = rs2_get_raw_data_size(list.get(), &e);
+        handle_error(env, e);
+        auto start = rs2_get_raw_data(list.get(), &e);
+        handle_error(env, e);
+
+        std::vector<uint8_t> new_table;
+        new_table.insert(new_table.begin(), start, start + size);*/
+        std::shared_ptr<rs2::device> dev = std::make_shared<rs2::device>();
+
+        std::shared_ptr<rs2_device> shared_ptr_device(device);
+        (*dev) = shared_ptr_device;
+        auto new_table_vector = (*dev).as<rs2::auto_calibrated_device>().run_on_chip_calibration(std::string(json_ptr), &health, cb);
+
+        copy_vector_to_jbytebuffer(env, new_table_vector, target_buffer);
+        return health;
+    } catch (const rs2::error &e) {
+        handle_error(env, e);
+        return -1;
+    }
+
+}
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_intel_realsense_librealsense_AutoCalibDevice_nTare(JNIEnv *env, jobject instance,
+                                                                         jlong device_handle,
+                                                                         jobject target_buffer,
+                                                                         jint ground_truth,
+                                                                         jstring json_cont) {
+    rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
+    auto json_ptr = (*env).GetStringUTFChars(json_cont, NULL);
+    int json_length = strlen(json_ptr);
+
+    rs2_error* e = nullptr;
+    int timeout_ms = 5000; //default as defined in CPP API
+    std::shared_ptr<const rs2_raw_data_buffer> new_table_buffer(
+            //no callback for progress because it is not available in FW
+            rs2_run_tare_calibration_cpp(device, ground_truth, json_ptr, json_length,
+                    nullptr, timeout_ms, &e),
+            rs2_delete_raw_data);
+    handle_error(env, e);
+
+    if (new_table_buffer != nullptr) {
+        auto size = rs2_get_raw_data_size(new_table_buffer.get(), &e);
+        handle_error(env, e);
+        auto start = rs2_get_raw_data(new_table_buffer.get(), &e);
+        handle_error(env, e);
+
+        std::vector<uint8_t> new_table;
+        new_table.insert(new_table.begin(), start, start + size);
+
+
+        copy_vector_to_jbytebuffer(env, new_table, target_buffer);
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_intel_realsense_librealsense_AutoCalibDevice_nResetToFactoryCalibration(JNIEnv *env, jobject instance,
+                                                            jlong device_handle) {
+    rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
+    rs2_error* e = nullptr;
+    rs2_reset_to_factory_calibration(device, &e);
+    handle_error(env, e);
+}
+
+

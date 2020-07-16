@@ -1,6 +1,9 @@
 package com.intel.realsense.librealsense;
 
 import android.content.SharedPreferences;
+import android.view.View;
+import android.widget.Toast;
+import android.widget.ToggleButton;
 
 import org.json.JSONObject;
 
@@ -9,55 +12,56 @@ import java.util.HashMap;
 
 public class AutoCalibDevice extends Device
 {
-    SharedPreferences mSharePreferences;
+    private boolean bShowCalibrated = false;
     private ByteBuffer mCalibrationTableNew;
     private ByteBuffer mCalibrationTableOriginal;
-    private boolean bShowCalibrated = false;
 
     AutoCalibDevice(long handle){
         super(handle);
         mOwner = false;
+
         mCalibrationTableNew = ByteBuffer.allocateDirect(512);
         mCalibrationTableOriginal = ByteBuffer.allocateDirect(512);
+        nGetTable(mHandle, mCalibrationTableOriginal);
+        nGetTable(mHandle, mCalibrationTableNew);
     }
 
-    private void setSharedPreferences(SharedPreferences sharedPref) {
-        mSharePreferences = sharedPref;
-    }
-
-    private String getAutoCalibJson(float calibrationSpeed) {
-        HashMap<String, Object> settingMap = new HashMap<>();
-        settingMap.put("speed", calibrationSpeed);
-        settingMap.put("scan parameter", 0);
-        settingMap.put("data sampling", 0);
-        JSONObject json = new JSONObject(settingMap);
-        return json.toString();
-    }
-
-    float runAutoCalib(float calibrationSpeed) {
-        float health = nRunAutoCalib(mHandle, mCalibrationTableNew, getAutoCalibJson(calibrationSpeed));
+    public float runAutoCalib(String jsonString) {
+        float health = nRunAutoCalib(mHandle, mCalibrationTableNew, jsonString);
+        setTable(false);
         return health;
     }
 
-    String getTareJson() {
-        HashMap<String, Object> settingMap = new HashMap<>();
-        settingMap.put("average step count", mSharePreferences.getInt("tare_avg_step_count", 20));
-        settingMap.put("step count", mSharePreferences.getInt("tare_step_count", 20));
-        settingMap.put("accuracy", mSharePreferences.getInt("tare_accuracy", 2));
-        settingMap.put("scan parameter", 0);
-        settingMap.put("data sampling", 0);
-        JSONObject json = new JSONObject(settingMap);
-        return json.toString();
+    public void runTare(int tareDistance_mm, String tareJson) throws RuntimeException {
+        nTare(mHandle, mCalibrationTableNew, tareDistance_mm, tareJson);
+        setTable(false);
     }
 
-    void runTare(int tareDistance_mm) {
-        nTare(mHandle, mCalibrationTableNew, tareDistance_mm, getTareJson());
+    public void originalCalibratedToggle(View view) {
+        ToggleButton toggleButton = (ToggleButton) view;
+        if (toggleButton.isChecked()) {
+            bShowCalibrated = true;
+        } else {
+            bShowCalibrated = false;
+        }
+        setTable(false);
+    }
+
+    public void setTable(boolean write){
+        nSetTable(mHandle, bShowCalibrated ? mCalibrationTableNew : mCalibrationTableOriginal, write);
+    }
+
+    public void resetFactoryCalibration(){
+        nResetToFactoryCalibration(mHandle);
     }
 
     void calibrationOnProgress(float progress){}
 
 
-
     private native float nRunAutoCalib(long handle, ByteBuffer new_table, String json_content);
     private native void nTare(long handle, ByteBuffer table, int tare_distance, String json_cont);
+    private native void nResetToFactoryCalibration(long handle);
+
+    private native void nSetTable(long device_handle, ByteBuffer table, boolean write_table);
+    private native void nGetTable(long pipeline_handle, ByteBuffer table);
 }
