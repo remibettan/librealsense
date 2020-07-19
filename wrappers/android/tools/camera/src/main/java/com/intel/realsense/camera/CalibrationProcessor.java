@@ -2,11 +2,15 @@ package com.intel.realsense.camera;
 
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -69,7 +73,7 @@ public class CalibrationProcessor {
 
     public void showCalibrationDialog(View view)
     {
-        final ArrayAdapter<String> adapter = new ArrayAdapter<>(mMainActivity, android.R.layout.simple_spinner_item,
+        final ArrayAdapter<String> adapter = new ArrayAdapter<>(mMainActivity, R.layout.spinner_item,
                 mMainActivity.getResources().getStringArray(R.array.calibration_speed_entries));
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
 
@@ -80,25 +84,15 @@ public class CalibrationProcessor {
         mCalibrationProgressBar = dialogView.findViewById(R.id.calibration_progress_bar);
 
         AlertDialog.Builder builder = new AlertDialog.Builder(mMainActivity);
-        builder.setTitle("On Chip Calibration")
-                .setPositiveButton("ok", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-
-                    }
-                })
-                .setNegativeButton("cancel", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                })
-                .setView(dialogView);
+        builder.setView(dialogView);
         AlertDialog dialog = builder.create();
         dialog.show();
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dialog.getWindow().setGravity(Gravity.CENTER_HORIZONTAL | Gravity.TOP);
         mCalibrationAlertDialog = dialog;
         mCalibrationDialogView = dialogView;
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
+        Button positiveButton = dialogView.findViewById(R.id.calib_ok_button);
+        positiveButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (!speedSpinner.getSelectedItem().toString().equalsIgnoreCase("Choose calibration speed")){
@@ -116,6 +110,14 @@ public class CalibrationProcessor {
                 t.start();
                 //resetting calibration result
                 mCalibrationResult = CalibrationResult.CALIB_RESULT_IN_PROCESS;
+            }
+        });
+
+        View negativeButton = dialogView.findViewById(R.id.calib_cancel_button);
+        negativeButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mCalibrationAlertDialog.dismiss();
             }
         });
     }

@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical" android:layout_width="match_parent"
+    android:background="@drawable/fragment_template"
     android:layout_height="match_parent"
     android:padding="10dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="On Chip Calibration"
+        android:textColor="#ffffff"
+        android:textSize="20dp"/>
 
     <Spinner
         android:id="@+id/calib_speed_spinner"
@@ -26,4 +34,27 @@
         android:max="48"
         android:visibility="invisible"/>
     <!---->
+
+    <RelativeLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <Button android:id="@+id/calib_cancel_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14dp"
+            android:text="CANCEL"
+            android:layout_alignParentEnd="false"
+            android:textAllCaps="false"
+            android:textStyle="bold"/>
+
+        <Button android:id="@+id/calib_ok_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14dp"
+            android:text="OK"
+            android:layout_alignParentEnd="true"
+            android:textAllCaps="false"
+            android:textStyle="bold"/>
+    </RelativeLayout>
 </LinearLayout>

@@ -2,12 +2,16 @@ package com.intel.realsense.camera;
 
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
@@ -57,25 +61,23 @@ public class CalibTareProcessor {
         mTareProgressBar = dialogView.findViewById(R.id.tare_progress_bar);
 
         AlertDialog.Builder builder = new AlertDialog.Builder(mMainActivity);
-        builder.setTitle("Tare Depth Distance")
-                .setPositiveButton("ok", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-
-                    }
-                })
-                .setNegativeButton("cancel", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                })
-                .setView(dialogView);
-        AlertDialog dialog = builder.create();
+        builder.setView(dialogView);
+        final AlertDialog dialog = builder.create();
         dialog.show();
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dialog.getWindow().setGravity(Gravity.CENTER_HORIZONTAL | Gravity.TOP);
         mTareAlertDialog = dialog;
         mTareDialogView = dialogView;
-        dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
+
+        View negativeButton = dialogView.findViewById(R.id.calib_tare_cancel_button);
+        negativeButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mTareAlertDialog.dismiss();
+            }
+        });
+        Button positiveButton = dialogView.findViewById(R.id.calib_tare_ok_button);
+        positiveButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 int distance = Integer.parseInt(distanceText.getText().toString());
@@ -202,7 +204,7 @@ public class CalibTareProcessor {
     }
 
     private void setTareAccuracy(View dialogView) {
-        final ArrayAdapter<String> adapter = new ArrayAdapter<>(mMainActivity, android.R.layout.simple_spinner_item,
+        final ArrayAdapter<String> adapter = new ArrayAdapter<>(mMainActivity, R.layout.spinner_item,
                 mMainActivity.getResources().getStringArray(R.array.accuracy_entries));
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
 
