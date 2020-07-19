@@ -37,8 +37,9 @@ public class AutoCalibDevice extends Device
         setTable(false);
     }
 
-    public void originalCalibratedToggle(View view) {
-        ToggleButton toggleButton = (ToggleButton) view;
+    public void toggleOrigCalibTables(View view) {
+        ToggleButton toggleButton =
+                (ToggleButton) view;
         if (toggleButton.isChecked()) {
             bShowCalibrated = true;
         } else {

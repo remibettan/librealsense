@@ -1,15 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
+    android:background="@drawable/fragment_template"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="10dp">
 
 
     <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Tare Depth Distance"
+        android:textColor="#ffffff"
+        android:textSize="20dp"/>
+
+    <TextView
         android:id="@+id/tare_instructions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:textColor="#ffffff"
         style="@android:style/TextAppearance.Small"
         android:text="@string/tare_instructions_string" />
 
@@ -21,6 +30,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         style="@android:style/TextAppearance.Medium"
+        android:textColor="#ffffff"
         android:text="@string/tare_distance_label_string" />
 
     <EditText
@@ -28,8 +38,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:ems="10"
+        android:textColor="#ffffff"
         android:inputType="number"
-        android:hint="Distance [mm]" />
+        android:hint="Distance [mm]"
+        android:textCursorDrawable="@null"/>
 
     <Space
         android:layout_width="match_parent"
@@ -40,6 +52,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         style="@android:style/TextAppearance.Large"
+        android:textColor="#ffffff"
         android:text="@string/tare_advanced_options_string" />
 
     <Space
@@ -54,6 +67,7 @@
         android:layout_height="wrap_content"
         style="@android:style/TextAppearance.Medium"
         android:paddingLeft="15dp"
+        android:textColor="#ffffff"
         android:text="@string/average_step_count" />
 
     <RelativeLayout
@@ -74,6 +88,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentRight="true"
+            android:textColor="#ffffff"
             android:gravity="center"
             android:text="20"/>
     </RelativeLayout>
@@ -84,6 +99,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingLeft="15dp"
+        android:textColor="#ffffff"
         style="@android:style/TextAppearance.Medium"
         android:text="@string/step_count" />
 
@@ -98,6 +114,7 @@
         android:layout_height="wrap_content"
         android:max="30"
         android:min="5"
+            android:textColor="#ffffff"
         android:progress="20" />
 
     <TextView
@@ -106,6 +123,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:layout_alignParentRight="true"
+        android:textColor="#ffffff"
         android:text="20"/>
     </RelativeLayout>
 
@@ -115,6 +133,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingLeft="15dp"
+        android:textColor="#ffffff"
         style="@android:style/TextAppearance.Medium"
         android:text="@string/tare_accuracy_string" />
     <Spinner
@@ -130,6 +149,7 @@
         android:id="@+id/tare_progress_bar_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:textColor="#ffffff"
         style="@android:style/TextAppearance.Medium"
         android:text="Tare process in progress..."
         android:visibility="invisible"/>
@@ -142,6 +162,30 @@
         android:max="100"
         android:visibility="invisible"/>
         <!---->
+
+    <RelativeLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <Button android:id="@+id/calib_tare_cancel_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14dp"
+            android:text="CANCEL"
+            android:layout_alignParentEnd="false"
+            android:textAllCaps="false"
+            android:textStyle="bold"/>
+
+        <Button android:id="@+id/calib_tare_ok_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14dp"
+            android:text="OK"
+            android:layout_alignParentEnd="true"
+            android:textAllCaps="false"
+            android:textStyle="bold"/>
+    </RelativeLayout>
+
 
 
 </LinearLayout>
