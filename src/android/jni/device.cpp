@@ -179,38 +179,33 @@ copy_vector_to_jbytebuffer(JNIEnv *env, rs2::calibration_table vector, jobject t
 extern "C"
 JNIEXPORT jint JNICALL
 Java_com_intel_realsense_librealsense_AutoCalibDevice_nGetTable(JNIEnv *env, jobject instance,
-                                                                                        jlong device_handle,
-                                                                                        jobject table) {
-    try {
-        rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
+                                                                jlong device_handle,
+                                                                jobject table) {
+    rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
 
-        rs2_error* e = nullptr;
-        std::shared_ptr<const rs2_raw_data_buffer> list(
-                rs2_get_calibration_table(device, &e),
-                rs2_delete_raw_data);
-        handle_error(env, e);
+    rs2_error* e = nullptr;
+    std::shared_ptr<const rs2_raw_data_buffer> calibration_table(
+            rs2_get_calibration_table(device, &e),
+            rs2_delete_raw_data);
+    handle_error(env, e);
 
-        auto size = rs2_get_raw_data_size(list.get(), &e);
-        handle_error(env, e);
-        auto start = rs2_get_raw_data(list.get(), &e);
-        handle_error(env, e);
-        std::vector<uint8_t> current_table;
-        current_table.insert(current_table.begin(), start, start + size);
+    std::vector<uint8_t> current_table;
 
-        copy_vector_to_jbytebuffer(env, current_table, table);
-        return current_table.size();
-    } catch (const rs2::error &e) {
-        handle_error(env, e);
-        return -1;
-    }
+    auto size = rs2_get_raw_data_size(calibration_table.get(), &e);
+    handle_error(env, e);
+    auto start = rs2_get_raw_data(calibration_table.get(), &e);
+    handle_error(env, e);
+    current_table.insert(current_table.begin(), start, start + size);
+    copy_vector_to_jbytebuffer(env, current_table, table);
+
+    return current_table.size();
 }
 
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_intel_realsense_librealsense_AutoCalibDevice_nSetTable(JNIEnv *env, jobject instance,
-                                                                                        jlong device_handle,
-                                                                                        jobject table,
-                                                                                        jboolean write) {
+                                                                 jlong device_handle,
+                                                                 jobject table) {
     rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
 
     uint8_t *new_table_buffer = (uint8_t *) (*env).GetDirectBufferAddress(table);
@@ -221,10 +216,17 @@ Java_com_intel_realsense_librealsense_AutoCalibDevice_nSetTable(JNIEnv *env, job
         rs2_set_calibration_table(device, new_table_buffer,
                                   new_table_buffer_size, &e);
         handle_error(env, e);
-        if (write) {
-            rs2_write_calibration(device, &e);
-        }
     }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_intel_realsense_librealsense_AutoCalibDevice_nWriteToCamera(JNIEnv *env, jobject instance,
+                                                                jlong device_handle) {
+    rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
+    rs2_error* e = nullptr;
+    rs2_write_calibration(device, &e);
+    handle_error(env, e);
 }
 
 extern "C"
