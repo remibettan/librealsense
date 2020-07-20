@@ -1,6 +1,7 @@
 package com.intel.realsense.librealsense;
 
 import android.content.SharedPreferences;
+import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
 import android.widget.ToggleButton;
@@ -19,7 +20,6 @@ public class AutoCalibDevice extends Device
     AutoCalibDevice(long handle){
         super(handle);
         mOwner = false;
-
         mCalibrationTableNew = ByteBuffer.allocateDirect(512);
         mCalibrationTableOriginal = ByteBuffer.allocateDirect(512);
         nGetTable(mHandle, mCalibrationTableOriginal);
@@ -28,28 +28,27 @@ public class AutoCalibDevice extends Device
 
     public float runAutoCalib(String jsonString) {
         float health = nRunAutoCalib(mHandle, mCalibrationTableNew, jsonString);
-        setTable(false);
+        setTable(true);
         return health;
     }
 
     public void runTare(int tareDistance_mm, String tareJson) throws RuntimeException {
         nTare(mHandle, mCalibrationTableNew, tareDistance_mm, tareJson);
-        setTable(false);
+        setTable(true);
     }
 
-    public void toggleOrigCalibTables(View view) {
-        ToggleButton toggleButton =
-                (ToggleButton) view;
-        if (toggleButton.isChecked()) {
-            bShowCalibrated = true;
-        } else {
-            bShowCalibrated = false;
-        }
-        setTable(false);
+    public void toggleOrigCalibTables(boolean shouldCalibTableBeShown) {
+        bShowCalibrated = shouldCalibTableBeShown;
+        setTable(bShowCalibrated);
     }
 
-    public void setTable(boolean write){
-        nSetTable(mHandle, bShowCalibrated ? mCalibrationTableNew : mCalibrationTableOriginal, write);
+    public void setTable(boolean shouldCalibTableBeSet){
+        nSetTable(mHandle, shouldCalibTableBeSet ? mCalibrationTableNew : mCalibrationTableOriginal);
+    }
+
+    public void writeToCamera() {
+        setTable(true);
+        nWriteToCamera(mHandle);
     }
 
     public void resetFactoryCalibration(){
@@ -62,7 +61,8 @@ public class AutoCalibDevice extends Device
     private native float nRunAutoCalib(long handle, ByteBuffer new_table, String json_content);
     private native void nTare(long handle, ByteBuffer table, int tare_distance, String json_cont);
     private native void nResetToFactoryCalibration(long handle);
+    private native void nWriteToCamera(long handle);
 
-    private native void nSetTable(long device_handle, ByteBuffer table, boolean write_table);
-    private native void nGetTable(long pipeline_handle, ByteBuffer table);
+    private native void nSetTable(long device_handle, ByteBuffer table);
+    private native void nGetTable(long device_handle, ByteBuffer table);
 }

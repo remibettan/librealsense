@@ -50,9 +50,7 @@ public class CalibrationActivity extends AppCompatActivity {
     private GLRsSurfaceView mGLSurfaceView;
 
     private Colorizer mColorize;
-    private Context mContext;
     private PipelineProfile mProfile;
-    private Pipeline mPipeline;
 
     private CalibTareProcessor mTareProcessor;
     private CalibrationProcessor mCalibrationProcessor;
@@ -72,9 +70,6 @@ public class CalibrationActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.calibration_activity);
-
-        // Get the application context
-        mContext = getApplicationContext();
 
         setupRs();
         setupUi();
@@ -131,7 +126,7 @@ public class CalibrationActivity extends AppCompatActivity {
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mAutoCalibDevice.setTable(true);
+                mAutoCalibDevice.writeToCamera();
             }
         });
 
@@ -147,7 +142,8 @@ public class CalibrationActivity extends AppCompatActivity {
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mAutoCalibDevice.toggleOrigCalibTables(v);
+                ToggleButton toggleButton = (ToggleButton) v;
+                mAutoCalibDevice.toggleOrigCalibTables(toggleButton.isChecked());
             }
         });
 
@@ -212,14 +208,13 @@ public class CalibrationActivity extends AppCompatActivity {
         cfg.enableStream(StreamType.DEPTH, 256, 144, StreamFormat.Z16);
         mProfile = pipe.start(cfg);
         setProjectorState(false);
-        mPipeline = pipe;
 
         final DecimalFormat df = new DecimalFormat("#.##");
         mGLSurfaceView.clear();
 
         while (!mStreamingThread.isInterrupted()) {
             try (FrameReleaser fr = new FrameReleaser()) {
-                FrameSet frames = mPipeline.waitForFrames(15000).releaseWith(fr);
+                FrameSet frames = pipe.waitForFrames(15000).releaseWith(fr);
                 FrameSet orgSet = frames.applyFilter(mColorize).releaseWith(fr);
                 Frame org = orgSet.first(StreamType.DEPTH, StreamFormat.RGB8).releaseWith(fr);
                 mGLSurfaceView.upload(org);

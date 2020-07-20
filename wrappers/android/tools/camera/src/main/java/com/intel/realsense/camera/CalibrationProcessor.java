@@ -47,6 +47,8 @@ public class CalibrationProcessor {
     private CalibrationResult mCalibrationResult = CalibrationResult.CALIB_RESULT_IN_PROCESS;
     private PropertyChangeListener mCalibResultListener;
     private PropertyChangeSupport mCalibResultPcs;
+    private RsContext mRsContext;
+    private Device mDevice;
 
     private AlertDialog mCalibrationAlertDialog;
 
@@ -150,15 +152,14 @@ public class CalibrationProcessor {
             //calibration operation
             mCalibrationListener = progressListener;
             String jsonString = getSelfCalibrationJson();
-            RsContext ctx = new RsContext();
-            try(DeviceList devices = ctx.queryDevices()) {
-                try (Device device = devices.createDevice(0)) {
-                    AutoCalibDevice autoCalibDevice = device.as(Extension.AUTO_CALIBRATED_DEVICE);
-                    float health = autoCalibDevice.runAutoCalib(jsonString);
-                    health = Math.abs(health);
-                    health *= 100;
-                    mCalibrationHealth = health;
-                }
+            mRsContext = new RsContext();
+            try(DeviceList devices = mRsContext.queryDevices()) {
+                mDevice = devices.createDevice(0);
+                AutoCalibDevice autoCalibDevice = mDevice.as(Extension.AUTO_CALIBRATED_DEVICE);
+                float health = autoCalibDevice.runAutoCalib(jsonString);
+                health = Math.abs(health);
+                health *= 100;
+                mCalibrationHealth = health;
             }
 
             //sending calibration result changed event
