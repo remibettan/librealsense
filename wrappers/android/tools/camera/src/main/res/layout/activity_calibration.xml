@@ -80,17 +80,10 @@
                 android:onClick="showHelpDialog"/>
         </RelativeLayout>
 
-        <ToggleButton
-            android:id="@+id/original_calibrated_toggle"
-            android:layout_width="140dp"
-            android:layout_height="wrap_content"
-            android:backgroundTint="@color/black"
-            android:clickable="true"
-            android:textColor="#ffffff"
-            android:textOff="@string/original"
-            android:textOn="@string/calibrated"
-            android:textSize="14dp" />
-
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="0.2" />
 
         <TextView
             android:id="@+id/distanceTextView"

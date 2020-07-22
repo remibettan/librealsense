@@ -304,18 +304,16 @@ Java_com_intel_realsense_librealsense_AutoCalibDevice_nTare(JNIEnv *env, jobject
             rs2_delete_raw_data);
     handle_error(env, e);
 
-    if (new_table_buffer != nullptr) {
-        auto size = rs2_get_raw_data_size(new_table_buffer.get(), &e);
-        handle_error(env, e);
-        auto start = rs2_get_raw_data(new_table_buffer.get(), &e);
-        handle_error(env, e);
+    // TODO - Remi - exception must be thrown in the above line if error e is not null
+    auto size = rs2_get_raw_data_size(new_table_buffer.get(), &e);
+    handle_error(env, e);
+    auto start = rs2_get_raw_data(new_table_buffer.get(), &e);
+    handle_error(env, e);
 
-        std::vector<uint8_t> new_table;
-        new_table.insert(new_table.begin(), start, start + size);
+    std::vector<uint8_t> new_table;
+    new_table.insert(new_table.begin(), start, start + size);
 
-
-        copy_vector_to_jbytebuffer(env, new_table, target_buffer);
-    }
+    copy_vector_to_jbytebuffer(env, new_table, target_buffer);
 }
 
 extern "C"

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/fragment_template">
+
+    <TextView
+        android:id="@+id/post_calib_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Post Calibration"
+        android:textColor="#ffffff"
+        android:textSize="20dp"
+        android:textStyle="bold"
+        android:layout_marginBottom="5dp"/>
+
+    <TextView
+        android:id="@+id/post_calib_task_completed"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#ffffff"
+        android:textSize="15dp"
+        android:textStyle="bold"
+        android:layout_marginBottom="5dp"
+        android:layout_below="@+id/post_calib_title"/>
+
+    <TextView
+        android:id="@+id/post_calib_instructions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#ffffff"
+        android:textSize="15dp"
+        android:text="Please compare new vs original calibration\nand decide if to keep or discard the result..."
+        android:layout_marginBottom="5dp"
+        android:layout_below="@+id/post_calib_task_completed"/>
+
+    <RadioGroup xmlns:android="http://schemas.android.com/apk/res/android"
+        android:id="@+id/post_calib_radio"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="20dp"
+        android:layout_below="@+id/post_calib_instructions">
+        <RadioButton android:id="@+id/post_calib_new_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="NEW"
+            android:textColor="#ffffff"
+            android:textSize="14dp" />
+        <RadioButton android:id="@+id/post_calib_orig_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#ffffff"
+            android:textSize="14dp"
+            android:text="ORIGINAL"
+            android:layout_toRightOf="@+id/post_calib_new_button"/>
+    </RadioGroup>
+
+    <LinearLayout
+        android:id="@+id/post_calib_decision_buttons"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="20dp"
+        android:layout_below="@+id/post_calib_radio">
+        <Button
+            android:id="@+id/post_calib_apply_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="APPLY"
+            android:layout_weight="1"/>
+
+        <Button
+            android:id="@+id/post_calib_dismiss_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="DISMISS"
+            android:layout_weight="1"
+            android:layout_toRightOf="@+id/post_calib_apply_button"/>
+    </LinearLayout>
+
+</RelativeLayout>

@@ -1,6 +1,5 @@
 package com.intel.realsense.camera;
 
-import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
@@ -43,9 +42,43 @@ public class CalibTareProcessor {
     ProgressBar mTareProgressBar;
     private AlertDialog mTareAlertDialog;
 
+    private ObservableValue<CalibrationActivity.CalibrationResult> mCalibrationResult = new ObservableValue();
+    private RsContext mRsContext;
+    private Device mDevice;
+
+    private ByteBuffer mCalibrationTableOriginal;
+    private ByteBuffer mCalibrationTableNew;
+
+    private String mCalibrationFailureMessage;
+
+
     CalibTareProcessor(AppCompatActivity mainActivity, SharedPreferences sharedPref) {
         mMainActivity = mainActivity;
         mSharePreferences = sharedPref;
+
+        mCalibrationResult.setOnValueChangeListener(new OnValueChangeListener<CalibrationActivity.CalibrationResult>() {
+            @Override
+            public void onValueChanged(CalibrationActivity.CalibrationResult value) {
+                mMainActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        switch(mCalibrationResult.get()) {
+                            case CALIB_RESULT_IN_PROCESS:
+                                return;
+                            case CALIB_RESULT_FAILURE:
+                                Toast.makeText(mMainActivity, mCalibrationFailureMessage, Toast.LENGTH_LONG).show();
+                                return;
+                            case CALIB_RESULT_SUCCESS:
+                                String title = "Tare Calibration Completed";
+                                PostCalibrationDialog dialog = new PostCalibrationDialog(mMainActivity, title, mCalibrationTableNew, mCalibrationTableOriginal);
+                        }
+                    }
+                });
+            }
+        });
+
+        mCalibrationTableNew = ByteBuffer.allocateDirect(512);
+        mCalibrationTableOriginal = ByteBuffer.allocateDirect(512);
     }
 
     public void showTareDialog() {
@@ -82,6 +115,8 @@ public class CalibTareProcessor {
             public void onClick(View v) {
                 int distance = Integer.parseInt(distanceText.getText().toString());
                 setTareDistance(distance);
+
+                mCalibrationResult.set(CalibrationActivity.CalibrationResult.CALIB_RESULT_IN_PROCESS);
 
                 //tare operation
                 Thread t = new Thread(mTareCamera);
@@ -125,33 +160,30 @@ public class CalibTareProcessor {
         setProgressValue(progress + 10);
     }
 
-    private void showTareResultDialog(String resultString)
-    {
-        CalibrationResultDialog dialog = new CalibrationResultDialog(mMainActivity, "Tare Result", resultString);
-    }
-
     private void tareCamera() {
         try {
             if (mTareDistance > 0) {
                 Log.i(TAG, "Tare process started");
-                RsContext ctx = new RsContext();
-                try(DeviceList devices = ctx.queryDevices()) {
-                    try (Device device = devices.createDevice(0)) {
-                        AutoCalibDevice autoCalibDevice = device.as(Extension.AUTO_CALIBRATED_DEVICE);
-                        autoCalibDevice.runTare(mTareDistance, getTareJson());
-                    }
+                mRsContext = new RsContext();
+                try(DeviceList devices = mRsContext.queryDevices()) {
+                    mDevice = devices.createDevice(0);
+                    AutoCalibDevice autoCalibDevice = mDevice.as(Extension.AUTO_CALIBRATED_DEVICE);
+                    mCalibrationTableNew = autoCalibDevice.getTable();
+                    mCalibrationTableOriginal = autoCalibDevice.getTable();
+                    autoCalibDevice.runTare(mTareDistance, getTareJson());
+                    mTareAlertDialog.dismiss();
+                    Log.i(TAG, "Tare process succesfully finished");
+                    mCalibrationResult.set(CalibrationActivity.CalibrationResult.CALIB_RESULT_SUCCESS);
                 }
-                mTareAlertDialog.dismiss();
-                Log.i(TAG, "Tare process succesfully finished");
-                showTareResultDialog("Tare process succesfully finished");
             } else {
-                String formattedString = String.format("Distance to wall cannot be 0 mm");
-                Toast.makeText(mMainActivity, formattedString, Toast.LENGTH_LONG).show();
+                mCalibrationFailureMessage = String.format("Distance to wall cannot be 0 mm");
+                mCalibrationResult.set(CalibrationActivity.CalibrationResult.CALIB_RESULT_FAILURE);
             }
         } catch (RuntimeException e) {
+            mCalibrationFailureMessage = String.format(e.getMessage());
             mTareAlertDialog.dismiss();
             Log.i(TAG, "Tare process failed");
-            showTareResultDialog("Tare process failed with error: "+ e.getMessage());
+            mCalibrationResult.set(CalibrationActivity.CalibrationResult.CALIB_RESULT_FAILURE);
         }
     }
 
