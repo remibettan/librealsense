@@ -6,7 +6,6 @@ import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -55,6 +54,8 @@ public class CalibrationActivity extends AppCompatActivity {
     private CalibTareProcessor mTareProcessor;
     private CalibrationProcessor mCalibrationProcessor;
 
+    public enum CalibrationResult {CALIB_RESULT_IN_PROCESS, CALIB_RESULT_SUCCESS, CALIB_RESULT_FAILURE}
+
     private Thread mStreamingThread = new Thread(new Runnable() {
         @Override
         public void run() {
@@ -69,7 +70,7 @@ public class CalibrationActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.calibration_activity);
+        setContentView(R.layout.activity_calibration);
 
         setupRs();
         setupUi();
@@ -138,15 +139,6 @@ public class CalibrationActivity extends AppCompatActivity {
             }
         });
 
-        button = findViewById(R.id.original_calibrated_toggle);
-        button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                ToggleButton toggleButton = (ToggleButton) v;
-                mAutoCalibDevice.toggleOrigCalibTables(toggleButton.isChecked());
-            }
-        });
-
         button = findViewById(R.id.reset_button);
         button.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -209,7 +201,7 @@ public class CalibrationActivity extends AppCompatActivity {
         mProfile = pipe.start(cfg);
         setProjectorState(false);
 
-        final DecimalFormat df = new DecimalFormat("#.##");
+        final DecimalFormat decimalFormat = new DecimalFormat("#.##");
         mGLSurfaceView.clear();
 
         while (!mStreamingThread.isInterrupted()) {
@@ -221,12 +213,12 @@ public class CalibrationActivity extends AppCompatActivity {
                 try (Frame f = frames.first(StreamType.DEPTH)) {
                     DepthFrame depth = f.as(Extension.DEPTH_FRAME);
 
-                    final float deptValue = depth.getDistance(depth.getWidth() / 2, depth.getHeight() / 2);
+                    final float depthValue = depth.getDistance(depth.getWidth() / 2, depth.getHeight() / 2);
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
                             TextView textView = findViewById(R.id.distanceTextView);
-                            textView.setText("Distance: " + df.format(deptValue));
+                            textView.setText("Distance: " + decimalFormat.format(depthValue));
                         }
                     });
                 }

@@ -1,53 +1,51 @@
 package com.intel.realsense.librealsense;
 
-import android.content.SharedPreferences;
 import android.util.Log;
-import android.view.View;
-import android.widget.Toast;
-import android.widget.ToggleButton;
-
-import org.json.JSONObject;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 
 public class AutoCalibDevice extends Device
 {
-    private boolean bShowCalibrated = false;
-    private ByteBuffer mCalibrationTableNew;
-    private ByteBuffer mCalibrationTableOriginal;
+    private ByteBuffer mCalibrationTable;
 
     AutoCalibDevice(long handle){
         super(handle);
         mOwner = false;
-        mCalibrationTableNew = ByteBuffer.allocateDirect(512);
-        mCalibrationTableOriginal = ByteBuffer.allocateDirect(512);
-        nGetTable(mHandle, mCalibrationTableOriginal);
-        nGetTable(mHandle, mCalibrationTableNew);
+        mCalibrationTable = ByteBuffer.allocateDirect(512);
+        nGetTable(mHandle, mCalibrationTable);
     }
 
     public float runAutoCalib(String jsonString) {
-        float health = nRunAutoCalib(mHandle, mCalibrationTableNew, jsonString);
-        setTable(true);
+        float health = nRunAutoCalib(mHandle, mCalibrationTable, jsonString);
+        setTableInCamera();
         return health;
     }
 
     public void runTare(int tareDistance_mm, String tareJson) throws RuntimeException {
-        nTare(mHandle, mCalibrationTableNew, tareDistance_mm, tareJson);
-        setTable(true);
+        ByteBuffer oldCalib = mCalibrationTable;
+        nTare(mHandle, mCalibrationTable, tareDistance_mm, tareJson);
+        if (mCalibrationTable.equals(oldCalib))
+            Log.d("remi", "after runTare in device - tables are identical");
+        else
+            Log.d("remi", "after runTare in device - tables are different");
+        setTableInCamera();
     }
 
-    public void toggleOrigCalibTables(boolean shouldCalibTableBeShown) {
-        bShowCalibrated = shouldCalibTableBeShown;
-        setTable(bShowCalibrated);
+    public ByteBuffer getTable() {
+        return mCalibrationTable;
     }
 
-    public void setTable(boolean shouldCalibTableBeSet){
-        nSetTable(mHandle, shouldCalibTableBeSet ? mCalibrationTableNew : mCalibrationTableOriginal);
+    public void setTable(ByteBuffer table) {
+        mCalibrationTable = table;
+        setTableInCamera();
+    }
+
+    private void setTableInCamera(){
+        nSetTable(mHandle, mCalibrationTable);
     }
 
     public void writeToCamera() {
-        setTable(true);
+        setTableInCamera();
         nWriteToCamera(mHandle);
     }
 
