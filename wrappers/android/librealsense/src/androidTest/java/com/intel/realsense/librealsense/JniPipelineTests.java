@@ -20,4 +20,6 @@ public class JniPipelineTests {
         long handle = p.getHandle();
         assertNotEquals(0, handle);
     }
+
+
 }
