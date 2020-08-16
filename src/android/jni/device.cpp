@@ -291,29 +291,32 @@ Java_com_intel_realsense_librealsense_AutoCalibDevice_nTare(JNIEnv *env, jobject
                                                                          jobject target_buffer,
                                                                          jint ground_truth,
                                                                          jstring json_cont) {
-    rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
-    auto json_ptr = (*env).GetStringUTFChars(json_cont, NULL);
-    int json_length = strlen(json_ptr);
+    try{
+        rs2_device* device = reinterpret_cast<rs2_device*>(device_handle);
+        auto json_ptr = (*env).GetStringUTFChars(json_cont, NULL);
+        int json_length = strlen(json_ptr);
 
-    rs2_error* e = nullptr;
-    int timeout_ms = 5000; //default as defined in CPP API
-    std::shared_ptr<const rs2_raw_data_buffer> new_table_buffer(
-            //no callback for progress because it is not available in FW
-            rs2_run_tare_calibration_cpp(device, ground_truth, json_ptr, json_length,
-                    nullptr, timeout_ms, &e),
-            rs2_delete_raw_data);
-    handle_error(env, e);
+        rs2_error* e = nullptr;
+        int timeout_ms = 5000; //default as defined in CPP API
+        std::shared_ptr<const rs2_raw_data_buffer> new_table_buffer(
+                //no callback for progress because it is not available in FW
+                rs2_run_tare_calibration_cpp(device, ground_truth, json_ptr, json_length,
+                                             nullptr, timeout_ms, &e),
+                rs2_delete_raw_data);
 
-    // TODO - Remi - exception must be thrown in the above line if error e is not null
-    auto size = rs2_get_raw_data_size(new_table_buffer.get(), &e);
-    handle_error(env, e);
-    auto start = rs2_get_raw_data(new_table_buffer.get(), &e);
-    handle_error(env, e);
+        // TODO - Remi - exception must be thrown in the above line if error e is not null
+        auto size = rs2_get_raw_data_size(new_table_buffer.get(), &e);
+        auto start = rs2_get_raw_data(new_table_buffer.get(), &e);
 
-    std::vector<uint8_t> new_table;
-    new_table.insert(new_table.begin(), start, start + size);
+        std::vector<uint8_t> new_table;
+        new_table.insert(new_table.begin(), start, start + size);
 
-    copy_vector_to_jbytebuffer(env, new_table, target_buffer);
+        copy_vector_to_jbytebuffer(env, new_table, target_buffer);
+    } catch (const rs2::error &e) {
+        handle_error(env, e);
+        return;
+    }
+
 }
 
 extern "C"
