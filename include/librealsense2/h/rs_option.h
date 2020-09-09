@@ -97,6 +97,7 @@ extern "C" {
         RS2_OPTION_TRIGGER_CAMERA_ACCURACY_HEALTH, /**< Enable depth & color frame sync with periodic calibration for proper alignment */
         RS2_OPTION_RESET_CAMERA_ACCURACY_HEALTH,
         RS2_OPTION_HDR_MODE,  /**< Enable / disable HDR */
+        RS2_OPTION_SUBPRESET_ID, /**< HDR Sequence size */
         RS2_OPTION_SUBPRESET_SEQUENCE_SIZE, /**< HDR Sequence size */
         RS2_OPTION_SUBPRESET_SEQUENCE_ID, /**< HDR Sequence ID - 0 is not HDR; sequence ID for HDR configuartion starts from 1 */
         RS2_OPTION_SELECT_ID, /**< Select which ID to be streamed when split is enabled - 0 used for all */
