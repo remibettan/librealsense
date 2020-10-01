@@ -2807,7 +2807,15 @@ namespace rs2
             float val{};
             if (texture->try_pick(x, y, &val))
             {
-                ss << " 0x" << std::hex << static_cast<int>(round(val)) << " =";
+                if (texture->get_last_frame().is<depth_frame>())
+                    ss << " 0x" << std::hex << static_cast<int>(round(val)) << " =";
+                else
+                {
+                    int value = static_cast<int>(round(val));
+                    if (profile.format() == RS2_FORMAT_RAW16 || profile.format() == RS2_FORMAT_Y16)
+                        value = (value >> 6);
+                    ss << " = " << value;
+                }
             }
 
             if (texture->get_last_frame().is<depth_frame>())
