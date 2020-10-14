@@ -248,6 +248,8 @@ TEST_CASE("RGB getting stuck - do not push!!!", "[remi]") {
             {
                 std::cout << "waiting 1500 ms for the " << waiting_iteration++ << "th time" << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+                if (waiting_iteration == 10)
+                    break;
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
