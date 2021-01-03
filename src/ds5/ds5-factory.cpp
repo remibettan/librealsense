@@ -902,9 +902,7 @@ namespace librealsense
     };
 
     class rs405_device  :      public ds5_nonmonochrome,
-                               public ds5_active,
                                public ds5_color,
-                               public ds5_motion,
                                public ds5_advanced_mode_base,
                                public firmware_logger_device
     {
@@ -915,9 +913,7 @@ namespace librealsense
             : device(ctx, group, register_device_notifications),
               ds5_device(ctx, group),
               ds5_nonmonochrome(ctx, group),
-              ds5_active(ctx, group),
               ds5_color(ctx,  group),
-              ds5_motion(ctx, group),
               ds5_advanced_mode_base(ds5_device::_hw_monitor, get_depth_sensor()),
               firmware_logger_device(ctx, group, ds5_device::_hw_monitor,
                 get_firmware_logs_command(),
@@ -1271,8 +1267,6 @@ namespace librealsense
     std::shared_ptr<matcher> rs405_device::create_matcher(const frame_holder& frame) const
     {
         std::vector<stream_interface*> streams = { _depth_stream.get() , _left_ir_stream.get() , _right_ir_stream.get(), _color_stream.get() };
-        std::vector<stream_interface*> mm_streams = { _accel_stream.get(), _gyro_stream.get()};
-        streams.insert(streams.end(), mm_streams.begin(), mm_streams.end());
         return matcher_factory::create(RS2_MATCHER_DEFAULT, streams);
     }
 
