@@ -58,7 +58,7 @@ namespace librealsense
         if (ds::RS405_PID == group.uvc_devices.front().pid)
         {
             mi = 0;
-            devs = 3;
+            //devs = 3; 
         }
 
         auto color_devs_info = filter_by_mi(group.uvc_devices, mi); // TODO check
