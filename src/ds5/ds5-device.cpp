@@ -611,7 +611,7 @@ namespace librealsense
           _depth_stream(new stream(RS2_STREAM_DEPTH)),
           _left_ir_stream(new stream(RS2_STREAM_INFRARED, 1)),
           _right_ir_stream(new stream(RS2_STREAM_INFRARED, 2)),
-          _color_stream(new stream(RS2_STREAM_COLOR))
+          _color_stream(nullptr)
     {
         _depth_device_idx = add_sensor(create_depth_device(ctx, group.uvc_devices));
         init(ctx, group);
@@ -649,11 +649,6 @@ namespace librealsense
             ext.translation[0] = 0.001f * table->baseline; // mm to meters
             return ext;
         });
-
-        _color_calib_table_raw = [this]() { return get_raw_calibration_table(rgb_calibration_id); };
-        _color_extrinsic = std::make_shared<lazy<rs2_extrinsics>>([this]() { return from_pose(get_color_stream_extrinsic(*_color_calib_table_raw)); });
-        environment::get_instance().get_extrinsics_graph().register_extrinsics(*_color_stream, *_depth_stream, _color_extrinsic);
-        register_stream_to_extrinsic_group(*_color_stream, 0);
 
         environment::get_instance().get_extrinsics_graph().register_same_extrinsics(*_depth_stream, *_left_ir_stream);
         environment::get_instance().get_extrinsics_graph().register_extrinsics(*_depth_stream, *_right_ir_stream, _left_right_extrinsics);
@@ -717,10 +712,6 @@ namespace librealsense
             {{RS2_FORMAT_Y16, RS2_STREAM_INFRARED, 1}, {RS2_FORMAT_Y16, RS2_STREAM_INFRARED, 2}},
             []() {return std::make_shared<y12i_to_y16y16>(); }
         );
-
-        //depth_sensor.register_processing_block(processing_block_factory::create_pbf_vector<uyvy_converter>(RS2_FORMAT_UYVY, map_supported_color_formats(RS2_FORMAT_UYVY), RS2_STREAM_COLOR));
-        depth_sensor.register_processing_block(processing_block_factory::create_pbf_vector<yuy2_converter>(RS2_FORMAT_YUYV, map_supported_color_formats(RS2_FORMAT_YUYV), RS2_STREAM_COLOR));
-        depth_sensor.register_processing_block(processing_block_factory::create_id_pbf(RS2_FORMAT_RAW16, RS2_STREAM_COLOR));
 
         auto pid_hex_str = hexify(pid);
 
