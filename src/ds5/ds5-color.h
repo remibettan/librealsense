@@ -14,8 +14,6 @@ namespace librealsense
     class ds5_color : public virtual ds5_device
     {
     public:
-        void create_color_device(std::shared_ptr<context> ctx,
-            const platform::backend_device_group& group);
         ds5_color(std::shared_ptr<context> ctx,
                   const platform::backend_device_group& group);
 
@@ -34,16 +32,15 @@ namespace librealsense
         std::shared_ptr<stream_interface> _color_stream;
 
     private:
-        void get_end_point(const std::vector<platform::uvc_device_info>& color_devices_info,
-            std::shared_ptr<uvc_sensor> raw_color_ep, std::shared_ptr<synthetic_sensor> color_ep);
+        void create_color_device(std::shared_ptr<context> ctx,
+            const platform::backend_device_group& group);
         void init();
 
         friend class ds5_color_sensor;
         friend class rs435i_device;
 
         uint8_t _color_device_idx = -1;
-        bool _color_in_depth;
-        uint16_t _pid;
+        bool _separate_color;
         lazy<std::vector<uint8_t>> _color_calib_table_raw;
         std::shared_ptr<lazy<rs2_extrinsics>> _color_extrinsic;
     };
