@@ -43,7 +43,7 @@ namespace librealsense
         const platform::backend_device_group& group)
         : ds5_device(ctx, group), device(ctx, group),
           _color_stream(new stream(RS2_STREAM_COLOR)),
-          _color_in_depth(false)
+          _separate_color(true)
     {
         create_color_device(ctx, group);
         init();
@@ -60,8 +60,9 @@ namespace librealsense
         register_stream_to_extrinsic_group(*_color_stream, 0);
 
         std::vector<platform::uvc_device_info> color_devs_info;
+        // end point 3 is used for color sensor
         auto color_devs_info_mi3 = filter_by_mi(group.uvc_devices, 3);
-        if (color_devs_info_mi3.size())
+        if (color_devs_info_mi3.size() == 1)
         {
             // means color end point in part of a separate color sensor (e.g. D435)
             color_devs_info = color_devs_info_mi3;
@@ -88,25 +89,20 @@ namespace librealsense
         else
         {
             auto color_devs_info_mi0 = filter_by_mi(group.uvc_devices, 0);
-            if (color_devs_info_mi0.size())
+            if (color_devs_info_mi0.size() == 1)
             {
                 // means color end point is part of the depth sensor (e.g. D405)
                 color_devs_info = color_devs_info_mi0;
                 _color_device_idx = _depth_device_idx;
+                // CHECK no cyclic shared_ptr !!!
                 ds5_device::_color_stream = _color_stream;
-                _color_in_depth = true;
+                //_color_stream = nullptr;
+                _separate_color = false;
             }
             else
                 throw invalid_value_exception(to_string() << "RS4XX: RGB modules inconsistency - "
                     << color_devs_info.size() << " found");
         }
-        
-        /* PREVIOUS CODE - could it be more than 1???
-        if (color_devs_info.size() != 1)
-            throw invalid_value_exception(to_string() << "RS4XX: RGB modules inconsistency - "
-                << color_devs_info.size() << " found");*/
-
-        _pid = color_devs_info.front().pid;
     }
 
     void ds5_color::init()
@@ -164,7 +160,7 @@ namespace librealsense
                 { 2.f, "60Hz" },
                 { 3.f, "Auto" }, }));
 
-        if (!_color_in_depth)
+        if (_separate_color)
         {
             color_ep.register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_uvc_header_parser(&platform::uvc_header::timestamp));
             color_ep.register_metadata(RS2_FRAME_METADATA_ACTUAL_FPS, std::make_shared<ds5_md_attribute_actual_fps>(false, [](const rs2_metadata_type& param)
@@ -215,10 +211,6 @@ namespace librealsense
                 if ((roi_sensor = dynamic_cast<roi_sensor_interface*>(&color_ep)))
                     roi_sensor->set_roi_method(std::make_shared<ds5_auto_exposure_roi_method>(*_hw_monitor, ds::fw_cmd::SETRGBAEROI));
             }
-            
-            // This processing block is not registrered when the color stream comes from the depth sensor,
-            // becuse the UYVY format is then assigned to the infrared stream
-            color_ep.register_processing_block(processing_block_factory::create_pbf_vector<uyvy_converter>(RS2_FORMAT_UYVY, map_supported_color_formats(RS2_FORMAT_UYVY), RS2_STREAM_COLOR));
         }
 
         color_ep.register_processing_block(processing_block_factory::create_pbf_vector<yuy2_converter>(RS2_FORMAT_YUYV, map_supported_color_formats(RS2_FORMAT_YUYV), RS2_STREAM_COLOR));
