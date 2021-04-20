@@ -453,6 +453,7 @@ namespace librealsense
         {
             As<librealsense::global_time_interface>(_owner)->enable_time_diff_keeper(false);
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
         _power.reset();
         _is_opened = false;
         set_active_streams({});
