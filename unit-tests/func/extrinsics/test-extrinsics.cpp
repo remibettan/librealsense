@@ -119,7 +119,15 @@ position_and_rotation matrix_4_by_4_from_translation_and_rotation(const float* p
     return pos_rot;
 }
 
+std::string to_string(const rs2_extrinsics& extrinsics)
+{
+    std::stringstream ss;
+    ss << extrinsics.rotation[0] << " " << extrinsics.rotation[3] << " " << extrinsics.rotation[6] << std::endl;
+    ss << extrinsics.rotation[1] << " " << extrinsics.rotation[4] << " " << extrinsics.rotation[7] << std::endl;
+    ss << extrinsics.rotation[2] << " " << extrinsics.rotation[5] << " " << extrinsics.rotation[8] << std::endl;
 
+    return ss.str();
+}
 
 // checking the extrinsics graph
 // steps are:
@@ -162,6 +170,23 @@ TEST_CASE("Extrinsics graph - matrices 4x4", "[live]")
 
                 position_and_rotation product = pr_i_to_j * pr_j_to_i;
                 // checking that product of extrinsics from i to j with extrinsiscs from j to i is identity matrix
+                if (!product.is_identity())
+                {
+                    std::cout << "i : stream type: " << profiles[i].stream_type()
+                        << ", format: " << profiles[i].format()
+                        << ", fps: " << profiles[i].fps()
+                        << ", stream index: " << profiles[i].stream_index();
+
+                    std::cout << "j : stream type: " << profiles[j].stream_type()
+                        << ", format: " << profiles[j].format()
+                        << ", fps: " << profiles[j].fps()
+                        << ", stream index: " << profiles[j].stream_index();
+
+                    std::cout << "extr_i_to_j : " << std::endl;
+                    std::cout << to_string(extr_i_to_j) << std::endl;
+                    std::cout << "extr_j_to_i : " << std::endl;
+                    std::cout << to_string(extr_j_to_i) << std::endl;
+                }
                 REQUIRE(product.is_identity());
 
                 // checking with API rs2_transform_point_to_point
