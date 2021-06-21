@@ -21,3 +21,7 @@ project(':processing').projectDir = new File('examples/processing')
 
 include ':multicam'
 project(':multicam').projectDir = new File('examples/multicam')
+
+include ':start_stop_test'
+project(':start_stop_test').projectDir = new File('examples/start_stop_test')
+

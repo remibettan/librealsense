@@ -160,8 +160,8 @@ public class MainActivity extends AppCompatActivity {
     private void configAndStart() throws Exception {
         try(Config config  = new Config())
         {
-            config.enableStream(StreamType.DEPTH, 640, 480);
-            config.enableStream(StreamType.COLOR, 640, 480);
+            config.enableStream(StreamType.DEPTH, 1280, 720);
+            config.enableStream(StreamType.INFRARED, 1280, 720);
             // try statement needed here to release resources allocated by the Pipeline:start() method
             try(PipelineProfile pp = mPipeline.start(config)){}
         }
