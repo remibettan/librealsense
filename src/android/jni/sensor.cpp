@@ -60,6 +60,28 @@ Java_com_intel_realsense_librealsense_Sensor_nRelease(JNIEnv *env, jclass type, 
     rs2_delete_sensor(reinterpret_cast<rs2_sensor *>(handle));
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_intel_realsense_librealsense_Sensor_nSupportsInfo(JNIEnv *env, jclass type, jlong handle,
+                                                           jint info) {
+    rs2_error *e = NULL;
+    auto rv = rs2_supports_sensor_info(reinterpret_cast<const rs2_sensor *>(handle),
+                                       static_cast<rs2_camera_info>(info), &e);
+    handle_error(env, e);
+    return rv > 0;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_intel_realsense_librealsense_Sensor_nGetInfo(JNIEnv *env, jclass type, jlong handle,
+                                                      jint info) {
+    rs2_error *e = NULL;
+    const char* rv = rs2_get_sensor_info(reinterpret_cast<const rs2_sensor *>(handle),
+                                         static_cast<rs2_camera_info>(info), &e);
+    handle_error(env, e);
+    if (NULL == rv)
+        rv = "";
+    return env->NewStringUTF(rv);
+}
+
 extern "C"
 JNIEXPORT jlongArray JNICALL
 Java_com_intel_realsense_librealsense_Sensor_nGetStreamProfiles(JNIEnv *env, jclass type,

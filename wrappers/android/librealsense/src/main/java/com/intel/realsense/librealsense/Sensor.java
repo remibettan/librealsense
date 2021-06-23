@@ -57,6 +57,16 @@ public class Sensor extends Options {
             nRelease(mHandle);
     }
 
+    public boolean supportsInfo(CameraInfo info){
+        return nSupportsInfo(mHandle, info.value());
+    }
+
+    public String getInfo(CameraInfo info){
+        return nGetInfo(mHandle, info.value());
+    }
+
+    private static native boolean nSupportsInfo(long handle, int info);
+    private static native String nGetInfo(long handle, int info);
     private static native long[] nGetStreamProfiles(long handle);
     private static native void nRelease(long handle);
     private static native boolean nIsSensorExtendableTo(long handle, int extension);
