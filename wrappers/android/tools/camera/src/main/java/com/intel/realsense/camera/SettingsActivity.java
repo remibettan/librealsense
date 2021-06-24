@@ -7,24 +7,19 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
 import android.util.Pair;
 import android.view.View;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.ExpandableListView;
-import android.widget.ListView;
 import android.widget.Toast;
 
 import com.intel.realsense.librealsense.CameraInfo;
 import com.intel.realsense.librealsense.Device;
 import com.intel.realsense.librealsense.DeviceList;
 import com.intel.realsense.librealsense.Extension;
-import com.intel.realsense.librealsense.FwLogger;
 import com.intel.realsense.librealsense.RsContext;
 import com.intel.realsense.librealsense.Sensor;
 import com.intel.realsense.librealsense.StreamProfile;
@@ -92,11 +87,10 @@ public class SettingsActivity extends AppCompatActivity {
                 _device = devices.createDevice(0);
                 loadInfosList();
                 loadSettingsList(_device);
-                List<StreamProfile> profilesList = createSettingList(_device);
-                List<StreamProfileSelector> profilesSelList = createSettingListSel(_device);
+                List<SensorSelector> sensorSelectorsList = createSensorsAndProfilesList(_device);
                 //REMI - TODO - remove confidence from profiles
                 // RemoveUnsupportedProfiles(profilesList);
-                loadStreamList(_device, profilesList);
+                loadStreamList(_device, sensorSelectorsList);
                 return;
             } catch(Exception e){
                 Log.e(TAG, "failed to load settings, error: " + e.getMessage());
@@ -313,10 +307,26 @@ public class SettingsActivity extends AppCompatActivity {
         return getDeviceConfig(pid, streamType, streamIndex) + "_index";
     }
 
+    public static Map<Integer, List<StreamProfile>> createProfilesMap(Device device){
+        Map<Integer, List<StreamProfile>> rv = new HashMap<>();
+        List<Sensor> sensors = device.querySensors();
+        for (Sensor s : sensors){
+            List<StreamProfile> profiles = s.getStreamProfiles();
+            for (StreamProfile p : profiles){
+                Pair<StreamType, Integer> pair = new Pair<>(p.getType(), p.getIndex());
+                if(!rv.containsKey(pair.hashCode()))
+                    rv.put(pair.hashCode(), new ArrayList<StreamProfile>());
+                rv.get(pair.hashCode()).add(p);
+                p.close();
+            }
+        }
+        return rv;
+    }
+
     // returns a map of type Map<String, List<StreamProfile>>
     // key: name of the sensor
     // value: list of stream profiles
-    public static Map<String, List<StreamProfile>> createProfilesMap(Device device){
+    public static Map<String, List<StreamProfile>> createSensorsToProfilesMap(Device device){
         Map<String, List<StreamProfile>> sensorsProfiles = new HashMap<>();
         List<Sensor> sensors = device.querySensors();
         for (Sensor s : sensors){
@@ -325,30 +335,43 @@ public class SettingsActivity extends AppCompatActivity {
         return sensorsProfiles;
     }
 
-    private void loadStreamList(Device device, List<StreamProfileSelector> streamProfiles){
-        if(device == null || streamProfiles.size() == 0)
+    private void loadStreamList(Device device, List<SensorSelector> sensorSelectors){
+        if(device == null || sensorSelectors.size() == 0)
             return;
         if(!device.supportsInfo(CameraInfo.PRODUCT_ID))
             throw new RuntimeException("try to config unknown device");
 
         List<String> settings_group = new ArrayList<String>();
         List<Sensor> sensors = device.querySensors();
+        SensorSelector[] sensorsArray = sensorSelectors.toArray(new SensorSelector[sensorSelectors.size()]);
+        for (int i = 0; i < sensors.size() ; i++) {
+            settings_group.add(sensorsArray[i].getName());
+        }
         /*StreamProfileSelector[] streamProfilesArray = streamProfiles.toArray(new StreamProfileSelector[streamProfiles.size()]);
 
         for (int i = 0; i < streamProfilesArray.length ; i++) {
             settings_group.add(streamProfilesArray[i].getName());
         }*/
-        for (int i = 0; i < sensors.size() ; i++) {
-            settings_group.add(sensors.get(i).getInfo(CameraInfo.NAME));
-        }
+
         // Create expandable list view
-        ExpandableListView streamListView = findViewById(R.id.configuration_ex_list_view);
+        ExpandableListView sensorsistView = findViewById(R.id.configuration_ex_list_view);
         HashMap<String, List<String>> expandableListDetail = new HashMap<String, List<String>>();
 
         expandableListDetail.put("Configuration:(default-disable all)",settings_group);
         List<String> expandableListTitle = new ArrayList<String>(expandableListDetail.keySet());
 
         final String pid = device.getInfo(CameraInfo.PRODUCT_ID);
+        final SensorAdapter adapter = new SensorAdapter(this, expandableListTitle,
+                expandableListDetail, sensorsArray, new SensorAdapter.Listener() {
+            @Override
+            public void onCheckedChanged(SensorSelector holder) {
+                SharedPreferences sharedPref = getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
+                SharedPreferences.Editor editor = sharedPref.edit();
+                editor.putBoolean(getEnabledSensorString(pid, holder.getName()), holder.isEnabled());
+                editor.commit();
+            }
+
+        });
         /*final StreamProfileAdapter adapter = new StreamProfileAdapter(this, expandableListTitle, expandableListDetail, streamProfilesArray, new StreamProfileAdapter.Listener() {
             @Override
             public void onCheckedChanged(StreamProfileSelector holder) {
@@ -365,19 +388,48 @@ public class SettingsActivity extends AppCompatActivity {
         adapter.notifyDataSetChanged();*/
     }
 
-    /*
-    List<StreamProfile> profiles = s.getStreamProfiles();
-            for (StreamProfile p : profiles){
-                Pair<StreamType, Integer> pair = new Pair<>(p.getType(), p.getIndex());
-                if(!rv.containsKey(pair.hashCode()))
-                    rv.put(pair.hashCode(), new ArrayList<StreamProfile>());
-                rv.get(pair.hashCode()).add(p);
-                p.close();
-            }
-     */
+    /*private void loadStreamList(Device device, List<StreamProfileSelector> streamProfiles){
+        if(device == null || streamProfiles.size() == 0)
+            return;
+        if(!device.supportsInfo(CameraInfo.PRODUCT_ID))
+            throw new RuntimeException("try to config unknown device");
 
-    private List<StreamProfile> createSensorsAndProfilesList(final Device device){
-        Map<String, List<StreamProfile>> profilesMap = createProfilesMap(device);
+        List<String> settings_group = new ArrayList<String>();
+        List<Sensor> sensors = device.querySensors();
+        /*StreamProfileSelector[] streamProfilesArray = streamProfiles.toArray(new StreamProfileSelector[streamProfiles.size()]);
+
+        for (int i = 0; i < streamProfilesArray.length ; i++) {
+            settings_group.add(streamProfilesArray[i].getName());
+        }
+        for (int i = 0; i < sensors.size() ; i++) {
+            settings_group.add(sensors.get(i).getInfo(CameraInfo.NAME));
+        }
+        // Create expandable list view
+        ExpandableListView streamListView = findViewById(R.id.configuration_ex_list_view);
+        HashMap<String, List<String>> expandableListDetail = new HashMap<String, List<String>>();
+
+        expandableListDetail.put("Configuration:(default-disable all)",settings_group);
+        List<String> expandableListTitle = new ArrayList<String>(expandableListDetail.keySet());
+
+        final String pid = device.getInfo(CameraInfo.PRODUCT_ID);
+        final StreamProfileAdapter adapter = new StreamProfileAdapter(this, expandableListTitle, expandableListDetail, streamProfilesArray, new StreamProfileAdapter.Listener() {
+            @Override
+            public void onCheckedChanged(StreamProfileSelector holder) {
+                SharedPreferences sharedPref = getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
+                SharedPreferences.Editor editor = sharedPref.edit();
+                StreamProfile p = holder.getProfile();
+                editor.putBoolean(getEnabledDeviceConfigString(pid, p.getType(), p.getIndex()), holder.isEnabled());
+                editor.putInt(getIndexdDeviceConfigString(pid, p.getType(), p.getIndex()), holder.getIndex());
+                editor.commit();
+            }
+        });
+
+        streamListView.setAdapter(adapter);
+        adapter.notifyDataSetChanged();
+    }*/
+
+    private List<SensorSelector> createSensorsAndProfilesList(final Device device){
+        Map<String, List<StreamProfile>> sensorsToProfilesMap = createSensorsToProfilesMap(device);
 
         SharedPreferences sharedPref = getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
         if(!device.supportsInfo(CameraInfo.PRODUCT_ID))
@@ -385,31 +437,20 @@ public class SettingsActivity extends AppCompatActivity {
         String pid = device.getInfo(CameraInfo.PRODUCT_ID);
 
         List<SensorSelector> lines = new ArrayList<>();
-        for(Map.Entry e : profilesMap.entrySet()){
-            List<Sensor> list = (List<Sensor>) e.getValue();
-            Sensor s = list.get(0);
-            boolean enabled = sharedPref.getBoolean(getEnabledSensorString(pid, s.getInfo(CameraInfo.NAME)), false);
+        for(Map.Entry e : sensorsToProfilesMap.entrySet()){
+            List<StreamProfile> list = (List<StreamProfile>) e.getValue();
+            StreamProfile sp = list.get(0);
+            boolean enabled = sharedPref.getBoolean(getEnabledDeviceConfigString(pid, sp.getType(), sp.getIndex()), false);
             //boolean enabled = sharedPref.getBoolean(getEnabledDeviceConfigString(pid, p.getType(), p.getIndex()), false);
             //int index = sharedPref.getInt(getIndexdDeviceConfigString(pid, p.getType(), p.getIndex()), 0);
-            lines.add(new SensorSelector(enabled, list));
+            lines.add(new SensorSelector(enabled, e.getKey().toString(), list));
         }
-
-        List<StreamProfileSelector> lines = new ArrayList<>();
-        for(Map.Entry e : profilesMap.entrySet()){
-            List<StreamProfile> list = (List<StreamProfile>) e.getValue();
-            StreamProfile p = list.get(0);
-            boolean enabled = sharedPref.getBoolean(getEnabledDeviceConfigString(pid, p.getType(), p.getIndex()), false);
-            int index = sharedPref.getInt(getIndexdDeviceConfigString(pid, p.getType(), p.getIndex()), 0);
-            lines.add(new StreamProfileSelector(enabled, index, list));
-        }
-
         Collections.sort(lines);
-
         return lines;
     }
 
-    private List<StreamProfile> createSettingList(final Device device){
-        Map<String, List<StreamProfile>> profilesMap = createProfilesMap(device);
+    /*private List<StreamProfile> createSettingList(final Device device){
+        Map<String, List<StreamProfile>> profilesMap = createSensorsToProfilesMap(device);
 
         SharedPreferences sharedPref = getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
         if(!device.supportsInfo(CameraInfo.PRODUCT_ID))
@@ -427,7 +468,7 @@ public class SettingsActivity extends AppCompatActivity {
         Collections.sort(lines);
 
         return lines;
-    }
+    }*/
 
     private List<StreamProfileSelector> createSettingListSel(final Device device){
         Map<Integer, List<StreamProfile>> profilesMap = createProfilesMap(device);

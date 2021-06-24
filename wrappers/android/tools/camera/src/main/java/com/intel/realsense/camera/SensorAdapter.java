@@ -21,7 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class SensorAdpater extends SettingsViewAdapter{
+public class SensorAdapter extends SettingsViewAdapter{
 
     private static final int mLayoutResourceId = R.layout.stream_profile_list_view;
     private final SensorSelector mSensorCells[];
@@ -38,7 +38,7 @@ public class SensorAdpater extends SettingsViewAdapter{
         void onCheckedChanged(SensorSelector holder);
     }
 
-    public SensorAdpater(Context context, List<String> expandableListTitle,
+    public SensorAdapter(Context context, List<String> expandableListTitle,
                          HashMap<String, List<String>> expandableListDetail,
                          SensorSelector[] data,
                          Listener listener) {
@@ -66,12 +66,11 @@ public class SensorAdpater extends SettingsViewAdapter{
     }
 
     void createSpinners(final Holder holder, final int position, SensorSelector sensorSelector){
-        Set<String> formatsSet = new HashSet<>();
+        Set<String> sensorsNamesSet = new HashSet<>();
         Set<String> frameRatesSet = new HashSet<>();
         Set<String> resolutionsSet = new HashSet<>();
 
         for(StreamProfile sp : sensorSelector.getProfiles()){
-            formatsSet.add(sp.getFormat().name());
             frameRatesSet.add(String.valueOf(sp.getFrameRate()));
             if(!sp.is(Extension.VIDEO_PROFILE))
                 continue;
@@ -81,8 +80,6 @@ public class SensorAdpater extends SettingsViewAdapter{
 
         ArrayList<String> frameRates = new ArrayList<>(frameRatesSet);
         ArrayList<String> resolutions = new ArrayList<>(resolutionsSet);
-
-
 
         //frame rates
         ArrayAdapter<String> frameRatesAdapter = new ArrayAdapter<>(mContext, android.R.layout.simple_spinner_item, frameRates);

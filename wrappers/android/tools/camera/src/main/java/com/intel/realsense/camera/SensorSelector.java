@@ -7,23 +7,30 @@ import com.intel.realsense.librealsense.StreamProfile;
 
 import java.util.List;
 
-public class SensorSelector{
+public class SensorSelector implements Comparable<SensorSelector>{
 
+    private String mName;
     private int mWidth = 0;
     private int mHeight = 0;
     private int mFps = 0;
     private boolean mEnabled;
     private List<StreamProfile> mStreamProfiles;
 
-    public SensorSelector(boolean enable, List<StreamProfile> streamProfiles)
+    public SensorSelector(boolean enable, String name, List<StreamProfile> streamProfiles)
     {
+        mName = name;
         mEnabled = enable;
         mStreamProfiles = streamProfiles;
     }
 
+    public List<StreamProfile> getProfiles() {
+        return mStreamProfiles;
+    }
+
+    public boolean isEnabled() { return mEnabled; }
+
     public String getName(){
-        Sensor s = mSensors.get(mIndex);
-        return s.getInfo(CameraInfo.NAME);
+        return mName;
     }
 
     public void updateResolution(String str) {
@@ -41,5 +48,10 @@ public class SensorSelector{
 
     public String getResolutionString() {
         return String.valueOf(mWidth) + "x" + String.valueOf(mHeight);
+    }
+
+    @Override
+    public int compareTo(SensorSelector sensorSelector) {
+        return getName().compareTo(sensorSelector.getName());
     }
 }
