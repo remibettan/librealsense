@@ -22,14 +22,14 @@ import java.util.List;
 import java.util.Set;
 
 public class SensorAdapter extends SettingsViewAdapter{
-
-    private static final int mLayoutResourceId = R.layout.stream_profile_list_view;
+    private static final int mLayoutResourceId = R.layout.sensors_config_list_view;
     private final SensorSelector mSensorCells[];
     private final LayoutInflater mLayoutInflater;
     private final Listener mListener;
     private Context mContext;
 
     public class Holder {
+        private Switch name;
         private Spinner resolution;
         private Spinner fps;
     }
@@ -50,15 +50,20 @@ public class SensorAdapter extends SettingsViewAdapter{
     }
 
     @Override
-    public View getChildView(int listPosition, int expandedListPosition,
+    public View getChildView(int listPosition, final int expandedListPosition,
                              boolean isLastChild, View convertView, ViewGroup parent) {
         View rawView = mLayoutInflater.inflate(mLayoutResourceId, parent, false);
         SensorSelector listViewLine = mSensorCells[expandedListPosition];
 
         final Holder holder;
         holder = new Holder();
-        holder.resolution = rawView.findViewById(R.id.resolution_spinner);
+        holder.name = rawView.findViewById(R.id.sensor_switch);
         holder.fps = rawView.findViewById(R.id.fps_spinner);
+        holder.resolution = rawView.findViewById(R.id.resolution_spinner);
+
+        holder.name.setText(listViewLine.getName());
+        holder.name.setChecked(listViewLine.isEnabled());
+        holder.name.setTag(expandedListPosition);
 
         createSpinners(holder, expandedListPosition, listViewLine);
 
@@ -66,7 +71,6 @@ public class SensorAdapter extends SettingsViewAdapter{
     }
 
     void createSpinners(final Holder holder, final int position, SensorSelector sensorSelector){
-        Set<String> sensorsNamesSet = new HashSet<>();
         Set<String> frameRatesSet = new HashSet<>();
         Set<String> resolutionsSet = new HashSet<>();
 
@@ -85,11 +89,11 @@ public class SensorAdapter extends SettingsViewAdapter{
         ArrayAdapter<String> frameRatesAdapter = new ArrayAdapter<>(mContext, android.R.layout.simple_spinner_item, frameRates);
         frameRatesAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         holder.fps.setAdapter(frameRatesAdapter);
-        holder.fps.setSelection(frameRates.indexOf(String.valueOf(sps.getProfile().getFrameRate())));
+        //holder.fps.setSelection(frameRates.indexOf(String.valueOf(sensorSelector.getFrameRate())));
         holder.fps.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
-                StreamProfileSelector s = mStreamProfileCells[position];
+                SensorSelector s = mSensorCells[position];
                 String str = (String) adapterView.getItemAtPosition(i);
                 s.updateFrameRate(str);
                 mListener.onCheckedChanged(s);
@@ -102,11 +106,11 @@ public class SensorAdapter extends SettingsViewAdapter{
         ArrayAdapter<String> resolutionsAdapter = new ArrayAdapter<>(mContext, android.R.layout.simple_spinner_item,  resolutions);
         resolutionsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         holder.resolution.setAdapter(resolutionsAdapter);
-        holder.resolution.setSelection(resolutions.indexOf(sps.getResolutionString()));
+        //holder.resolution.setSelection(resolutions.indexOf(sensorSelector.getResolutionString()));
         holder.resolution.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
-                StreamProfileSelector s = mStreamProfileCells[position];
+                SensorSelector s = mSensorCells[position];
                 String str = (String) adapterView.getItemAtPosition(i);
                 s.updateResolution(str);
                 mListener.onCheckedChanged(s);
@@ -115,14 +119,13 @@ public class SensorAdapter extends SettingsViewAdapter{
             public void onNothingSelected(AdapterView<?> adapterView) { }
         });
 
-        holder.type.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+        holder.name.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
                 int position = (int) compoundButton.getTag();
-                StreamProfileSelector s = mStreamProfileCells[position];
+                SensorSelector s = mSensorCells[position];
                 s.updateEnabled(b);
                 mListener.onCheckedChanged(s);
-
             }
         });
     }

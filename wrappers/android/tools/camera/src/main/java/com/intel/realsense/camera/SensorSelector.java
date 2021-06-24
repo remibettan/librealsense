@@ -50,6 +50,10 @@ public class SensorSelector implements Comparable<SensorSelector>{
         return String.valueOf(mWidth) + "x" + String.valueOf(mHeight);
     }
 
+    public int getFrameRate() {
+        return mFps;
+    }
+
     @Override
     public int compareTo(SensorSelector sensorSelector) {
         return getName().compareTo(sensorSelector.getName());

@@ -10,7 +10,6 @@ import android.widget.ArrayAdapter;
 import android.widget.CompoundButton;
 import android.widget.Spinner;
 import android.widget.Switch;
-import android.widget.TextView;
 
 import com.intel.realsense.librealsense.Extension;
 import com.intel.realsense.librealsense.StreamProfile;
@@ -154,5 +153,6 @@ public class StreamProfileAdapter extends SettingsViewAdapter {
             }
         });
     }
+
 }
 
