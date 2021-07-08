@@ -120,10 +120,12 @@ namespace librealsense
                 frame->log_callback_start(_ts ? _ts->get_time() : 0);
                 if (_callback)
                 {
+                    __android_log_print(ANDROID_LOG_VERBOSE, "remi", "callback not null");
                     frame_interface* ref = nullptr;
                     std::swap(frame.frame, ref);
                     _callback->on_frame((rs2_frame*)ref);
-                }
+                } else
+                    __android_log_print(ANDROID_LOG_VERBOSE, "remi", "callback null!!!");
             }
             catch( const std::exception & e )
             {
