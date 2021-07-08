@@ -72,7 +72,9 @@ bool rs_jni_cb(rs2::frame f, frame_callback_data* ud)
     }
 
     if(cb_thread_env){
+        LRS_JNI_LOGD("before cb_thread_env->GetObjectClass(callback)");
         jclass usercb = cb_thread_env->GetObjectClass(callback);
+        LRS_JNI_LOGD("after cb_thread_env->GetObjectClass(callback)");
         if(usercb == NULL){
             LRS_JNI_LOGE("cannot find user callback class ...");
             ud->jvm->DetachCurrentThread();
