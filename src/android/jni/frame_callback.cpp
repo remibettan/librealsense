@@ -96,13 +96,19 @@ bool rs_jni_cb(rs2::frame f, frame_callback_data* ud)
         }
 
         // get the Frame class constructor
+        LRS_JNI_LOGD("before cb_thread_env->GetMethodID");
         jmethodID frame_constructor = cb_thread_env->GetMethodID(frameclass, "<init>", "(J)V");
+        LRS_JNI_LOGD("after cb_thread_env->GetMethodID");
 
         // create a Frame object
+        LRS_JNI_LOGD("before cb_thread_env->NewObject");
         jobject frame = cb_thread_env->NewObject(frameclass, frame_constructor, (jlong) f.get());
+        LRS_JNI_LOGD("after cb_thread_env->NewObject");
 
         // invoke the java callback with the frame
+        LRS_JNI_LOGD("before cb_thread_env->CallVoidMethod");
         cb_thread_env->CallVoidMethod(callback,methodid, frame);
+        LRS_JNI_LOGD("after cb_thread_env->CallVoidMethod");
     }
 
     if(ud->attached){
