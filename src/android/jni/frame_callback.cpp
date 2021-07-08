@@ -63,9 +63,10 @@ bool rs_jni_cb(rs2::frame f, frame_callback_data* ud)
         ud->attached = JNI_TRUE;
     }
 
-    jobject callback = ud->frame_cb;
+    jobject callbackLocalObject = ud->frame_cb;
+    jobject callbackGlobalObject = reinterpret_cast<jclass>(cb_thread_env->NewGlobalRef(callbackLocalObject));
 
-    if (callback == NULL)
+    if (callbackGlobalObject == NULL)
     {
         ud->jvm->DetachCurrentThread();
         return false;
@@ -73,7 +74,7 @@ bool rs_jni_cb(rs2::frame f, frame_callback_data* ud)
 
     if(cb_thread_env){
         LRS_JNI_LOGD("before cb_thread_env->GetObjectClass(callback)");
-        jclass usercb = cb_thread_env->GetObjectClass(callback);
+        jclass usercb = cb_thread_env->GetObjectClass(callbackGlobalObject);
         LRS_JNI_LOGD("after cb_thread_env->GetObjectClass(callback)");
         if(usercb == NULL){
             LRS_JNI_LOGE("cannot find user callback class ...");
@@ -88,27 +89,32 @@ bool rs_jni_cb(rs2::frame f, frame_callback_data* ud)
             return false;
         }
 
-        jclass frameclass = ud->frameclass;
-        if(frameclass == NULL){
+        jclass frameLocalClass = ud->frameclass;
+        jclass frameGlobalClass = reinterpret_cast<jclass>(cb_thread_env->NewGlobalRef(frameLocalClass));
+
+        if(frameGlobalClass == NULL){
             LRS_JNI_LOGE("cannot find java Frame class...");
             ud->jvm->DetachCurrentThread();
+            cb_thread_env->DeleteGlobalRef(callbackGlobalObject);
             return false;
         }
-
         // get the Frame class constructor
         LRS_JNI_LOGD("before cb_thread_env->GetMethodID");
-        jmethodID frame_constructor = cb_thread_env->GetMethodID(frameclass, "<init>", "(J)V");
+        jmethodID frame_constructor = cb_thread_env->GetMethodID(frameGlobalClass, "<init>", "(J)V");
         LRS_JNI_LOGD("after cb_thread_env->GetMethodID");
 
         // create a Frame object
         LRS_JNI_LOGD("before cb_thread_env->NewObject");
-        jobject frame = cb_thread_env->NewObject(frameclass, frame_constructor, (jlong) f.get());
+        jobject frame = cb_thread_env->NewObject(frameGlobalClass, frame_constructor, (jlong) f.get());
         LRS_JNI_LOGD("after cb_thread_env->NewObject");
 
         // invoke the java callback with the frame
         LRS_JNI_LOGD("before cb_thread_env->CallVoidMethod");
-        cb_thread_env->CallVoidMethod(callback,methodid, frame);
+        cb_thread_env->CallVoidMethod(callbackGlobalObject, methodid, frame);
         LRS_JNI_LOGD("after cb_thread_env->CallVoidMethod");
+
+        cb_thread_env->DeleteGlobalRef(frameGlobalClass);
+        cb_thread_env->DeleteGlobalRef(callbackGlobalObject);
     }
 
     if(ud->attached){
