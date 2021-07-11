@@ -48,7 +48,11 @@ JNIEXPORT void JNICALL
 Java_com_intel_realsense_librealsense_Sensor_nStart(JNIEnv *env, jclass type, jlong handle, jobject jcb) {
     rs2_error* e = nullptr;
 
-    if (rs_jni_callback_init(env, jcb, &sdata) != true) return;
+    if (rs_jni_callback_init(env, jcb, &sdata) != true) {
+        LRS_JNI_LOGE("rs_jni_callback_init returned false");
+        return;
+    }
+    LRS_JNI_LOGD("rs_jni_callback_init returned true");
 
     auto cb = [&](rs2::frame f) {
         rs_jni_cb(f, &sdata);
@@ -63,19 +67,18 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_intel_realsense_librealsense_Sensor_nStop(JNIEnv *env, jclass type, jlong handle) {
     rs2_error* e = nullptr;
-    LRS_JNI_LOGD("before rs2_stop");
+    rs_jni_cleanup(env, &sdata);
     rs2_stop(reinterpret_cast<rs2_sensor *>(handle), &e);
     handle_error(env, e);
-    LRS_JNI_LOGD("after rs2_stop");
-    rs_jni_cleanup(env, &sdata);
-    LRS_JNI_LOGD("after rs_jni_cleanup");
 }
 
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_intel_realsense_librealsense_Sensor_nClose(JNIEnv *env, jclass type, jlong handle) {
     rs2_error* e = nullptr;
+    LRS_JNI_LOGD("before rs2_close");
     rs2_close(reinterpret_cast<rs2_sensor *>(handle), &e);
+    LRS_JNI_LOGD("after rs2_close");
     handle_error(env, e);
 }
 
