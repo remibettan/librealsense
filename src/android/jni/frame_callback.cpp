@@ -122,7 +122,15 @@ void rs_jni_cleanup(JNIEnv *env, frame_callback_data* ud)
 {
     if (ud)
     {
-        if (ud->frame_cb) { env->DeleteGlobalRef(ud->frame_cb); ud->frame_cb = NULL; }
-        if (ud->frameclass) { env->DeleteGlobalRef(ud->frameclass); ud->frameclass = NULL; }
+        if (ud->frame_cb) {
+            env->DeleteGlobalRef(ud->frame_cb); ud->frame_cb = NULL;
+            LRS_JNI_LOGD("rs_jni_cleanup - after DeleteGlobalRef(ud->frame_cb)");
+        }
+        if (ud->frameclass) {
+            env->DeleteGlobalRef(ud->frameclass); ud->frameclass = NULL;
+            LRS_JNI_LOGD("rs_jni_cleanup - after DeleteGlobalRef(ud->frameclass)");
+        }
+    } else{
+        LRS_JNI_LOGE("rs_jni_cleanup - ud was null)");
     }
 }
