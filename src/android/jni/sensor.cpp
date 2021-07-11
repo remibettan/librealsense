@@ -63,11 +63,12 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_intel_realsense_librealsense_Sensor_nStop(JNIEnv *env, jclass type, jlong handle) {
     rs2_error* e = nullptr;
-    //rs_jni_cleanup(env, &sdata);
+    LRS_JNI_LOGD("before rs2_stop");
     rs2_stop(reinterpret_cast<rs2_sensor *>(handle), &e);
     handle_error(env, e);
-
+    LRS_JNI_LOGD("after rs2_stop");
     rs_jni_cleanup(env, &sdata);
+    LRS_JNI_LOGD("after rs_jni_cleanup");
 }
 
 extern "C"
