@@ -382,8 +382,9 @@ namespace librealsense
                 return r;
             }
 
-            stream_profiles map_sub_device(stream_profiles profiles, std::set<index_type> satisfied_streams, const device_interface* dev) const
+            stream_profiles map_sub_device(stream_profiles profiles, const device_interface* dev) const
             {
+                std::set<index_type> satisfied_streams;
                 stream_profiles rv;
                 try
                 {
@@ -433,7 +434,6 @@ namespace librealsense
             std::multimap<int, std::shared_ptr<stream_profile_interface>> map_streams(const device_interface* dev) const
             {
                 std::multimap<int, std::shared_ptr<stream_profile_interface>> out;
-                std::set<index_type> satisfied_streams;
 
                 // Algorithm assumes get_adjacent_devices always
                 // returns the devices in the same order
@@ -441,8 +441,8 @@ namespace librealsense
                 {
                     auto&& sub = dev->get_sensor(i);
 
-                    auto default_profiles = map_sub_device(sub.get_stream_profiles(profile_tag::PROFILE_TAG_SUPERSET), satisfied_streams, dev);
-                    auto any_profiles = map_sub_device(sub.get_stream_profiles(profile_tag::PROFILE_TAG_ANY), satisfied_streams, dev);
+                    auto default_profiles = map_sub_device(sub.get_stream_profiles(profile_tag::PROFILE_TAG_SUPERSET), dev);
+                    auto any_profiles = map_sub_device(sub.get_stream_profiles(profile_tag::PROFILE_TAG_ANY), dev);
 
                     //use any streams if default streams wasn't satisfy
                     auto profiles = default_profiles.size() == any_profiles.size() ? default_profiles : any_profiles;
