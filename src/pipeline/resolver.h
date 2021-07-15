@@ -351,14 +351,10 @@ namespace librealsense
                     if (!has_wildcards(request)) continue;
                     for (auto candidate : candidates)
                     {
-                        //if (match(candidate.get(), request) && !dev->contradicts(candidate.get(), requests))
-                        if (match(candidate.get(), request))
+                        if (match(candidate.get(), request) && !dev->contradicts(candidate.get(), requests))
                         {
-                            if (!dev->contradicts(candidate.get(), requests))
-                            {
-                                request = to_request(candidate.get());
-                                break;
-                            }
+                            request = to_request(candidate.get());
+                            break;
                         }
                     }
                     if (has_wildcards(request))
