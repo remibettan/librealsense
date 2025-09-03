@@ -545,28 +545,64 @@ namespace librealsense
             }
         }
 
-        bool v4l_uvc_device::get_devname_from_video_path(const std::string& video_path, std::string& devname, bool is_for_dfu)
+        bool v4l_uvc_device::get_devname_from_video_path(const std::string& video_path, std::string& dev_name, bool is_for_dfu)
         {
+            // CHECK MIPI AND DFU
+
             std::ifstream uevent_file(video_path + "/uevent");
             if (!uevent_file)
             {
                 LOG_ERROR("Cannot access " + video_path + "/uevent");
                 return false;
             }
-            std::string uevent_line;
-            while (std::getline(uevent_file, uevent_line) && (devname.empty()))
+
+            std::string uevent_line, major_string, minor_string;
+            while (std::getline(uevent_file, uevent_line) && (major_string.empty() || minor_string.empty()))
             {
-                if (uevent_line.find("DEVNAME=") != std::string::npos)
+                if (uevent_line.find("MAJOR=") != std::string::npos)
                 {
-                    devname = uevent_line.substr(uevent_line.find_last_of('=') + 1);
+                    major_string = uevent_line.substr(uevent_line.find_last_of('=') + 1);
+                }
+                else if (uevent_line.find("MINOR=") != std::string::npos)
+                {
+                    minor_string = uevent_line.substr(uevent_line.find_last_of('=') + 1);
                 }
             }
             uevent_file.close();
-            if (!is_for_dfu)
+
+            if (major_string.empty() || minor_string.empty())
             {
-                devname = "/dev/" + devname;
+                LOG_ERROR("No Major or Minor number found for " + video_path);
+                return false;
             }
-            return true;
+
+            DIR * dir = opendir("/dev");
+            if (!dir)
+            {
+                LOG_ERROR("Cannot access /dev");
+                return false;
+            }
+            while (dirent * entry = readdir(dir))
+            {
+                std::string name = entry->d_name;
+                std::string path = "/dev/" + name;
+
+                struct stat st = {};
+                if (stat(path.c_str(), &st) < 0)
+                {
+                    continue;
+                }
+
+                if (std::stoi(major_string) == major(st.st_rdev) && std::stoi(minor_string) == minor(st.st_rdev))
+                {
+                    dev_name = path;
+                    closedir(dir);
+                    return true;
+                }
+            }
+            closedir(dir);
+
+            return false;
         }
 
         std::vector<std::string> v4l_uvc_device::get_video_paths()
