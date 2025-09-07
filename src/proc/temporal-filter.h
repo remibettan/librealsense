@@ -3,6 +3,8 @@
 
 #pragma once
 #include "types.h"
+#include <fstream>
+
 
 namespace librealsense
 {
@@ -36,6 +38,20 @@ namespace librealsense
             // Copy locally, to remove need for a lock.
             float alpha = _alpha_param;
             float one_minus_alpha = 1.f - alpha;
+
+			// create folder and change dir to it
+			_saving_data_folder_path = "temp_jw_smooth_frame_" + std::to_string(static_cast<int>(_cur_frame_index));
+            if (!create_folder_for_saving_data())
+            {
+				throw std::runtime_error("Failed to create folder for saving data");
+            }
+
+			// Save input parameters for test vector
+			save_input_params<T>(delta_z, alpha);
+
+			// Save input data for test vector
+			save_input_data<T>(frame, _last_frame, history);
+
             // pass one -- go through image and update all
             for (size_t i = 0; i < _current_frm_size_pixels; i++)
             {
@@ -84,6 +100,14 @@ namespace librealsense
             }
 
             _cur_frame_index = (_cur_frame_index + 1) % 8;  // at end of cycle
+
+            // writing output data from test vector
+			save_output_data<T>(frame, history);
+
+            if (!change_dir_to_one_above())
+            {
+				throw std::runtime_error("Failed to change dir to one above");
+            }
         }
 
     private:
@@ -107,6 +131,49 @@ namespace librealsense
         uint8_t                 _cur_frame_index;
         // encodes whether a particular 8 bit history is good enough for all 8 phases of storage
         std::array<uint8_t, PRESISTENCY_LUT_SIZE> _persistence_map;
+        std::string _saving_data_folder_path;
+
+        bool create_folder_for_saving_data();
+        bool change_dir_to_one_above();
+
+        template <class T>
+        void save_input_params(T delta_z, float alpha)
+        {
+            // writing input data from test vector
+
+            std::ofstream input_params_file("temp_jw_smooth_input_params.txt");
+            input_params_file << "size \t\t\t" << _current_frm_size_pixels << std::endl;
+            input_params_file << "delta_z \t\t" << delta_z << std::endl;
+            input_params_file << "alpha \t\t\t" << alpha << std::endl;
+            input_params_file << "frame_index \t" << static_cast<int>(_cur_frame_index) << std::endl;
+        }
+
+        template <class T>
+        void save_input_data(T* frame, T* last_frame, uint8_t* history)
+        {
+            std::ofstream input_frame_file("temp_jw_smooth_input_frame.bin", std::ios::binary);
+            input_frame_file.write(reinterpret_cast<const char*>(frame), _current_frm_size_pixels * sizeof(T));
+
+            std::ofstream input_last_processed_frame_file("temp_jw_smooth_input_last_processed_frame.bin", std::ios::binary);
+            input_last_processed_frame_file.write(reinterpret_cast<const char*>(last_frame), _current_frm_size_pixels * sizeof(T));
+
+            std::ofstream input_history_vector_file("temp_jw_smooth_input_history_vector.bin", std::ios::binary);
+            input_history_vector_file.write(reinterpret_cast<const char*>(history), _current_frm_size_pixels * sizeof(uint8_t));
+
+            std::ofstream input_persistency_index_file("temp_jw_smooth_input_persistency_index.bin", std::ios::binary);
+            input_persistency_index_file.write(reinterpret_cast<const char*>(_persistence_map.data()), PRESISTENCY_LUT_SIZE * sizeof(uint8_t));
+        }
+
+        template <class T>
+        void save_output_data(T* frame, uint8_t* history)
+        {
+            // writing output data from test vector
+            std::ofstream output_frame_file("temp_jw_smooth_output_frame.bin", std::ios::binary);
+            output_frame_file.write(reinterpret_cast<const char*>(frame), _current_frm_size_pixels * sizeof(T));
+
+            std::ofstream output_history_vector_file("temp_jw_smooth_output_history_vector.bin", std::ios::binary);
+            output_history_vector_file.write(reinterpret_cast<const char*>(history), _current_frm_size_pixels * sizeof(uint8_t));
+        }
     };
     MAP_EXTENSION(RS2_EXTENSION_TEMPORAL_FILTER, librealsense::temporal_filter);
 }

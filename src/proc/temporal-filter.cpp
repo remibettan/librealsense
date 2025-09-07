@@ -11,6 +11,13 @@
 
 #include <rsutils/string/from.h>
 
+#ifdef _WIN32
+#include <direct.h>   // _chdir
+#define CHANGE_DIR _chdir
+#else
+#include <unistd.h>   // chdir
+#define CHANGE_DIR chdir
+#endif
 
 namespace librealsense
 {
@@ -278,5 +285,21 @@ namespace librealsense
         }
         // Store results
         _persistence_map = credible_threshold;
+    }
+
+    bool temporal_filter::create_folder_for_saving_data()
+    {
+#ifdef _WIN32
+        return ( (_mkdir(_saving_data_folder_path.c_str()) == 0 || errno == EEXIST) &&
+                 CHANGE_DIR(_saving_data_folder_path.c_str()) == 0 );
+#else
+        return ( (mkdir(_saving_data_folder_path.c_str(), 0755) == 0 || errno == EEXIST) &&
+                 CHANGE_DIR(_saving_data_folder_path.c_str()) == 0 );
+#endif
+    }
+
+    bool temporal_filter::change_dir_to_one_above()
+    {
+        return CHANGE_DIR("..") == 0;
     }
 }
