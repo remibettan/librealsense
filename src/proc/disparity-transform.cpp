@@ -13,6 +13,14 @@
 #include "software-device.h"
 #include "environment.h"
 
+#ifdef _WIN32
+#include <direct.h>   // _chdir
+#define CHANGE_DIR _chdir
+#else
+#include <unistd.h>   // chdir
+#define CHANGE_DIR chdir
+#endif
+
 namespace librealsense
 {
     disparity_transform::disparity_transform(bool transform_to_disparity):
@@ -116,5 +124,21 @@ namespace librealsense
     {
         return source.allocate_video_frame(_target_stream_profile, f, int(_bpp), int(_width), int(_height), int(_width*_bpp),
             _transform_to_disparity ? RS2_EXTENSION_DISPARITY_FRAME :RS2_EXTENSION_DEPTH_FRAME);
+    }
+
+    bool disparity_transform::create_folder_for_saving_data()
+    {
+#ifdef _WIN32
+        return ((_mkdir(_saving_data_folder_path.c_str()) == 0 || errno == EEXIST) &&
+            CHANGE_DIR(_saving_data_folder_path.c_str()) == 0);
+#else
+        return ((mkdir(_saving_data_folder_path.c_str(), 0755) == 0 || errno == EEXIST) &&
+            CHANGE_DIR(_saving_data_folder_path.c_str()) == 0);
+#endif
+    }
+
+    bool disparity_transform::change_dir_to_one_above()
+    {
+        return CHANGE_DIR("..") == 0;
     }
 }

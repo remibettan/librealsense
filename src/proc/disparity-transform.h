@@ -48,7 +48,36 @@ namespace librealsense
                         *out++ = 0;
                     in++;
                 }
+
+            static int cyclic_index = 0;
+
+            // create folder and change dir to it
+            _saving_data_folder_path = "temp_jw_smooth_frame_" + std::to_string(static_cast<int>(cyclic_index));
+            if (!create_folder_for_saving_data())
+            {
+                throw std::runtime_error("Failed to create folder for saving data");
+            }
+            // writing output data for test vector
+            save_output_data<Tout>(reinterpret_cast<Tout*>(out_data));
+            if (!change_dir_to_one_above())
+            {
+                throw std::runtime_error("Failed to change dir to one above");
+            }
+			cyclic_index = (cyclic_index + 1) % 8;
         }
+
+        template <class T>
+        void save_output_data(T* output_frame)
+        {
+			auto current_frm_size_pixels = _width * _height;
+            // writing output data from test vector
+            std::ofstream output_frame_file("temp_jw_smooth_z16_output_frame.bin", std::ios::binary);
+            output_frame_file.write(reinterpret_cast<const char*>(output_frame), current_frm_size_pixels * sizeof(T));
+        }
+
+        bool create_folder_for_saving_data();
+
+        bool change_dir_to_one_above();
 
     private:
         void    update_transformation_profile(const rs2::frame& f);
@@ -64,6 +93,8 @@ namespace librealsense
         float                   _d2d_convert_factor;
         size_t                  _width, _height;
         size_t                  _bpp;
+
+        std::string _saving_data_folder_path;
     };
     MAP_EXTENSION(RS2_EXTENSION_DISPARITY_FILTER, librealsense::disparity_transform);
 

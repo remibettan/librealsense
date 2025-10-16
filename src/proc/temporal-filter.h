@@ -152,11 +152,33 @@ namespace librealsense
         void save_input_data(T* frame, T* last_frame, uint8_t* history)
         {
             std::ofstream input_frame_file("temp_jw_smooth_input_frame.bin", std::ios::binary);
-            input_frame_file.write(reinterpret_cast<const char*>(frame), _current_frm_size_pixels * sizeof(T));
+            if constexpr (std::is_same_v<T, float>)
+            {
+				// convert float to uint16_t
+				std::vector<uint16_t> frame_u16(_current_frm_size_pixels);
+				for (size_t i = 0; i < _current_frm_size_pixels; i++)
+					frame_u16[i] = static_cast<uint16_t>(frame[i] * 32);
+                input_frame_file.write(reinterpret_cast<const char*>(frame_u16.data()), _current_frm_size_pixels * sizeof(uint16_t));
+            }
+            else
+			{
+                input_frame_file.write(reinterpret_cast<const char*>(frame), _current_frm_size_pixels * sizeof(T));
+			}
 
             std::ofstream input_last_processed_frame_file("temp_jw_smooth_input_last_processed_frame.bin", std::ios::binary);
-            input_last_processed_frame_file.write(reinterpret_cast<const char*>(last_frame), _current_frm_size_pixels * sizeof(T));
-
+            if constexpr (std::is_same_v<T, float>)
+            {
+                // convert float to uint16_t
+				std::vector<uint16_t> last_frame_u16(_current_frm_size_pixels);
+				for (size_t i = 0; i < _current_frm_size_pixels; i++)
+					last_frame_u16[i] = static_cast<uint16_t>(last_frame[i] * 32);
+				input_last_processed_frame_file.write(reinterpret_cast<const char*>(last_frame_u16.data()), _current_frm_size_pixels * sizeof(uint16_t));
+			}
+            else
+            {
+                input_last_processed_frame_file.write(reinterpret_cast<const char*>(last_frame), _current_frm_size_pixels * sizeof(T));
+            }
+                
             std::ofstream input_history_vector_file("temp_jw_smooth_input_history_vector.bin", std::ios::binary);
             input_history_vector_file.write(reinterpret_cast<const char*>(history), _current_frm_size_pixels * sizeof(uint8_t));
 
@@ -169,7 +191,18 @@ namespace librealsense
         {
             // writing output data from test vector
             std::ofstream output_frame_file("temp_jw_smooth_output_frame.bin", std::ios::binary);
-            output_frame_file.write(reinterpret_cast<const char*>(frame), _current_frm_size_pixels * sizeof(T));
+            if constexpr (std::is_same_v<T, float>)
+            {
+				// convert float to uint16_t
+				std::vector<uint16_t> frame_u16(_current_frm_size_pixels);
+				for (size_t i = 0; i < _current_frm_size_pixels; i++)
+                    frame_u16[i] = static_cast<uint16_t>(frame[i] * 32);
+                output_frame_file.write(reinterpret_cast<const char*>(frame_u16.data()), _current_frm_size_pixels * sizeof(uint16_t));
+            }
+            else
+            {
+				output_frame_file.write(reinterpret_cast<const char*>(frame), _current_frm_size_pixels * sizeof(T));
+            }
 
             std::ofstream output_history_vector_file("temp_jw_smooth_output_history_vector.bin", std::ios::binary);
             output_history_vector_file.write(reinterpret_cast<const char*>(history), _current_frm_size_pixels * sizeof(uint8_t));
