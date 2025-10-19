@@ -157,7 +157,7 @@ namespace librealsense
 				// convert float to uint16_t
 				std::vector<uint16_t> frame_u16(_current_frm_size_pixels);
 				for (size_t i = 0; i < _current_frm_size_pixels; i++)
-					frame_u16[i] = static_cast<uint16_t>(frame[i] * 32);
+					frame_u16[i] = static_cast<uint16_t>(frame[i] + 0.5f);
                 input_frame_file.write(reinterpret_cast<const char*>(frame_u16.data()), _current_frm_size_pixels * sizeof(uint16_t));
             }
             else
@@ -171,7 +171,7 @@ namespace librealsense
                 // convert float to uint16_t
 				std::vector<uint16_t> last_frame_u16(_current_frm_size_pixels);
 				for (size_t i = 0; i < _current_frm_size_pixels; i++)
-					last_frame_u16[i] = static_cast<uint16_t>(last_frame[i] * 32);
+					last_frame_u16[i] = static_cast<uint16_t>(last_frame[i] + 0.5f);
 				input_last_processed_frame_file.write(reinterpret_cast<const char*>(last_frame_u16.data()), _current_frm_size_pixels * sizeof(uint16_t));
 			}
             else
@@ -196,7 +196,7 @@ namespace librealsense
 				// convert float to uint16_t
 				std::vector<uint16_t> frame_u16(_current_frm_size_pixels);
 				for (size_t i = 0; i < _current_frm_size_pixels; i++)
-                    frame_u16[i] = static_cast<uint16_t>(frame[i] * 32);
+                    frame_u16[i] = static_cast<uint16_t>(frame[i] + 0.5f);
                 output_frame_file.write(reinterpret_cast<const char*>(frame_u16.data()), _current_frm_size_pixels * sizeof(uint16_t));
             }
             else
