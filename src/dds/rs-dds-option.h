@@ -48,35 +48,4 @@ namespace librealsense {
         virtual const char* get_description() const override;
         virtual const char* get_value_description(float) const override;
     };
-
-    template<class T>
-    class rs_dds_option_items_desc : public rs_dds_option
-    {
-    private:
-        std::map<float, std::string> _item_desc;
-
-    public:
-        rs_dds_option_items_desc(const std::shared_ptr< realdds::dds_option >& dds_opt,
-            const std::map<float, std::string>& description_per_value,
-            set_option_callback set_opt_cb,
-            query_option_callback query_opt_cb)
-            : rs_dds_option(dds_opt, set_opt_cb, query_opt_cb)
-            , _item_desc(description_per_value)
-        { }
-
-        const char* get_value_description(float val) const override 
-        { 
-            auto it = _item_desc.find(val);
-            if (it != _item_desc.end())
-            {
-                return it->second.c_str();
-            }
-            return nullptr;
-        }
-
-        void set_description(float val, const std::string& desc)
-        {
-            _item_desc[val] = desc;
-        }
-    };
 }// namespace librealsense

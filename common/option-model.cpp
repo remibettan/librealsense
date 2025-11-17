@@ -55,12 +55,6 @@ bool option_model::draw( std::string & error_message,
     auto res = false;
     if( endpoint->supports( opt ) )
     {
-        // The option's rendering model supports an alternative option title derived from its
-        // description rather than name. This is applied to the Holes Filling as its display must
-        // conform with the names used by a 3rd-party tools for consistency.
-        if( opt == RS2_OPTION_HOLES_FILL )
-            use_option_name = false;
-
         std::string desc_str( endpoint->get_option_description( opt ) );
 
         // Device D405 is for short range, therefore, its units are in cm - for better UX
