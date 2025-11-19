@@ -1,48 +1,70 @@
-// License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2017 RealSense, Inc. All Rights Reserved.
+﻿// License: Apache 2.0. See LICENSE file in root directory.
+// Copyright(c) 2017 Intel Corporation. All Rights Reserved.
 
+#include "memory-monitor.h"
 #include <librealsense2/rs.hpp> // Include RealSense Cross Platform API
 #include "example.hpp"          // Include short list of convenience functions for rendering
-
+#include <thread>
+#include <cstring>
 // Capture Example demonstrates how to
 // capture depth and color video streams and render them to the screen
-int main(int argc, char * argv[]) try
+
+rs2::stream_profile get_depth_profile(rs2::depth_sensor depth_sensor)
 {
-    rs2::log_to_console(RS2_LOG_SEVERITY_ERROR);
-    // Create a simple OpenGL window for rendering:
-    window app(1280, 720, "RealSense Capture Example");
-
-    // Declare depth colorizer for pretty visualization of depth data
-    rs2::colorizer color_map;
-    // Declare rates printer for showing streaming rates of the enabled streams.
-    rs2::rates_printer printer;
-
-    // Declare RealSense pipeline, encapsulating the actual device and sensors
-    rs2::pipeline pipe;
-    rs2::config cfg;
-
-    // Enable all camera streams
-    cfg.enable_all_streams();
-
-    // Start streaming with default recommended configuration
-    // The default video configuration contains Depth and Color streams
-    // If a device is capable to stream IMU data, both Gyro and Accelerometer are enabled by default
-    pipe.start(cfg);
-
-    while (app) // Application still alive?
+    auto depth_profiles = depth_sensor.get_stream_profiles();
+    rs2::stream_profile depth_profile;
+    for (auto& p : depth_profiles)
     {
-        rs2::frameset data = pipe.wait_for_frames().    // Wait for next set of frames from the camera
-                             apply_filter(printer).     // Print each enabled stream frame rate
-                             apply_filter(color_map);   // Find and colorize the depth data
-
-        // The show method, when applied on frameset, break it to frames and upload each frame into a gl textures
-        // Each texture is displayed on different viewport according to it's stream unique id
-        app.show(data);
+        if (p.format() == RS2_FORMAT_Z16 && p.fps() == 30)
+        {
+            auto vsp = p.as<rs2::video_stream_profile>();
+            if (vsp.height() == 480 && vsp.width() == 640)
+            {
+                depth_profile = p;
+                break;
+            }
+        }
     }
+    return depth_profile;
+}
+
+
+int main(int argc, char* argv[]) try
+{
+    rs2::log_to_file(RS2_LOG_SEVERITY_DEBUG, "lrs.log");
+
+    auto mem_monitor = memory_monitor();
+
+    auto ctx = rs2::context();
+    auto dev = ctx.query_devices()[0];
+    auto sensors = dev.query_sensors();
+    auto depth_sensor = sensors[0];
+
+    auto depth_profile = get_depth_profile(depth_sensor);
+
+    
+    // DEPTH
+    depth_sensor.open(depth_profile);
+    int iterations = 0;
+    depth_sensor.start([&iterations](rs2::frame f) {
+        std::cout << ".";
+        });
+
+    int minutes = 300;
+    std::cout << "streaming depth for " << minutes << " minutes" << std::endl;
+    mem_monitor.record_memory_samples(minutes);
+
+    depth_sensor.stop();
+    depth_sensor.close();
+
+    std::string path_to_file("memory_usage.csv");
+    mem_monitor.generate_memory_usage_csv(path_to_file);
+    std::cout << "Memory data saved to: " << path_to_file << std::endl;
+    std::cout << "Import this CSV into Excel or Python for plotting." << std::endl;
 
     return EXIT_SUCCESS;
 }
-catch (const rs2::error & e)
+catch (const rs2::error& e)
 {
     std::cerr << "RealSense error calling " << e.get_failed_function() << "(" << e.get_failed_args() << "):\n    " << e.what() << std::endl;
     return EXIT_FAILURE;
