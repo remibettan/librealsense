@@ -349,6 +349,7 @@ namespace rs2
         int playback_speed_index = 2;
         bool _playback_repeat = true;
         bool _should_replay = false;
+        bool is_sync_enabled = false;
         bool show_device_info = false;
         bool _allow_remove = true;
         bool show_depth_only = false;

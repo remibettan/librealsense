@@ -1287,7 +1287,6 @@ namespace rs2
         // Draw Sync icon
         ////////////////////////////////////////
         std::string sync_button_name = rsutils::string::from() << textual_icons::refresh << "##" << id;
-        bool is_sync_enabled = false; //TODO: use device's member
         auto sync_button_color = is_sync_enabled ? light_blue : light_grey;
         ImGui::PushStyleColor(ImGuiCol_Text, sync_button_color);
         ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, sync_button_color);
@@ -1297,8 +1296,9 @@ namespace rs2
         if (ImGui::ButtonEx(sync_button_name.c_str(), device_panel_icons_size))
         {
             is_sync_enabled = !is_sync_enabled;
+            viewer.synchronization_enable = is_sync_enabled;
         }
-        }, true);
+        });
         ImGui::PopStyleColor(2);
         ImGui::PopFont();
         ImGui::PushFont(window.get_font());
@@ -1502,7 +1502,7 @@ namespace rs2
         ImGui::PopStyleColor(2);
 
         ImGui::SameLine();  
-        RsImGui::RsImButton([&]() {ImGui::ButtonEx("Sync", device_panel_icons_size);},true);
+        RsImGui::RsImButton([&]() {ImGui::ButtonEx("Sync", device_panel_icons_size);});
 
         auto info_button_color = show_device_info ? light_blue : light_grey;
         ImGui::PushStyleColor(ImGuiCol_Text, info_button_color);
