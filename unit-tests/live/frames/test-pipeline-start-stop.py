@@ -2,8 +2,7 @@
 # Copyright(c) 2023-2024 RealSense, Inc. All Rights Reserved.
 
 # test:donotrun:!nightly
-# Currently, we exclude D457 as it's failing
-# test:device each(D400*) !D457
+# test:device each(D400*) 
 # test:device each(D500*) 
 # On D455 and other units with IMU it takes ~4 seconds per iteration
 # test:timeout 220
@@ -15,7 +14,7 @@ import time
 
 # Run multiple start stop of all streams and verify we get a frame for each once
 # relaxed to 3 as 50 was failing often, See [LRS-1213]
-ITERATIONS_COUNT = 3
+ITERATIONS_COUNT = 12
 
 dev, ctx = test.find_first_device_or_exit()
 pipe = rs.pipeline(ctx)
