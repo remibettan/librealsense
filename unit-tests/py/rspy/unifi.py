@@ -207,6 +207,7 @@ class UniFiSwitch(device_hub.device_hub):
             self.disable_ports(list(other_ports), sleep_on_change)
 
         if not ports:  # ports is []
+            log.d(f"No ports at all!")
             return True
         ports_str = ','.join(map(str, ports))
         cmd = f"swctrl poe set auto id {ports_str}"  # cmd should be able to get multiple ports at once
@@ -256,6 +257,11 @@ if __name__ == '__main__':
         if opt in ('--enable'):
             unifi.connect()
             unifi.enable_ports(ports)   # so ports() will return all
+            print("Unify ports status:")
+            port_status = unifi._get_port_stats()
+            for port, status in port_status.items():
+                print(f"Port {port}: {'enabled' if status else 'disabled'}")
+                
         elif opt in ('--disable'):
             unifi.connect()
             unifi.disable_ports(ports)
