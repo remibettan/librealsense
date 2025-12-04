@@ -255,12 +255,13 @@ if __name__ == '__main__':
     for opt,arg in opts:
         ports = None if not arg else [int(x) for x in arg.split(",")]
         if opt in ('--enable'):
+            log.d("REMI checking prints!")
             unifi.connect()
             unifi.enable_ports(ports)   # so ports() will return all
-            print("Unify ports status:")
+            log.d("Unify ports status:")
             port_status = unifi._get_port_stats()
             for port, status in port_status.items():
-                print(f"Port {port}: {'enabled' if status else 'disabled'}")
+                log.d(f"Port {port}: {'enabled' if status else 'disabled'}")
                 
         elif opt in ('--disable'):
             unifi.connect()
@@ -275,4 +276,4 @@ if __name__ == '__main__':
             unifi.connect()
             port_status = unifi._get_port_stats()
             for port, status in port_status.items():
-                print(f"Port {port}: {'enabled' if status else 'disabled'}")
+                log.d(f"Port {port}: {'enabled' if status else 'disabled'}")
