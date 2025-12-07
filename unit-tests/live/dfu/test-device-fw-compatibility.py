@@ -8,7 +8,7 @@
 import pyrealsense2 as rs
 from rspy import test, libci
 import os
-
+print("libci.home = " + libci.home)
 fw_dir = os.path.join( libci.home, 'data/FW', '' )
 d400_fw_min_version_1 = 'Signed_Image_UVC_5_8_15_0.bin'
 d400_fw_min_version_2 = 'Signed_Image_UVC_5_12_7_100.bin'
