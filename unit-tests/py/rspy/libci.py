@@ -21,6 +21,9 @@ if platform.system() == 'Linux':
 else:
     home = 'C:\\LibCI'
 if not os.path.isdir( home ):
+    print("got in if not os.path.isdir( home ):")
+    print("os.path.expanduser( '~/LibCI' ) = " + os.path.expanduser( '~/LibCI' ))
+    print("os.path.normpath( os.path.expanduser( '~/LibCI' )) = " + os.path.normpath( os.path.expanduser( '~/LibCI' ) ))
     home = os.path.normpath( os.path.expanduser( '~/LibCI' ))
 #
 # Configuration (git config format) is kept in this file:
