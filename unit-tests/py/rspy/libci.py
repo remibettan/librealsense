@@ -24,6 +24,8 @@ if not os.path.isdir( home ):
     print("got in if not os.path.isdir( home ):")
     print("os.path.expanduser( '~/LibCI' ) = " + os.path.expanduser( '~/LibCI' ))
     print("os.path.normpath( os.path.expanduser( '~/LibCI' )) = " + os.path.normpath( os.path.expanduser( '~/LibCI' ) ))
+    print("os.environ.get(\"HOME\"):" + os.environ.get("HOME"))
+    print("os.path.expanduser(\"~\"):" + os.path.expanduser("~"))
     home = os.path.normpath( os.path.expanduser( '~/LibCI' ))
 #
 # Configuration (git config format) is kept in this file:
