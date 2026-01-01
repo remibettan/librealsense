@@ -299,6 +299,7 @@ int main(int argc, char** argv) try
     cli::value<string> out_file('f', "FullFilePath", "path", "", "the file where the data will be saved to");
     cli::value<string> config_file('c', "ConfigurationFile", "path", "", "Specify file path with the requested configuration");
     cli::value<string> serial_number('s', "SerialNumber", "serial_number", "", "the device Serial Number");
+    cli::value<string> logs_file('l', "FullLogsPath", "path", "", "the file where the logs will be saved to");
 
     auto settings = cli( "librealsense rs-data-collect tool" )
                         .default_log_level( RS2_LOG_SEVERITY_WARN )
@@ -307,12 +308,19 @@ int main(int argc, char** argv) try
                         .arg( out_file )
                         .arg( config_file )
                         .arg( serial_number )
+                        .arg( logs_file )
                         .process( argc, argv );
 
     std::cout << "Running rs-data-collect: ";
     for (auto i=1; i < argc; ++i)
         std::cout << argv[i] << " ";
     std::cout << std::endl << std::endl;
+
+    if (logs_file.isSet())
+    {
+        auto logs_file_path = logs_file.getValue();
+        rs2::log_to_file(RS2_LOG_SEVERITY_DEBUG, logs_file_path.c_str());
+    }
 
     auto output_file       = out_file.isSet() ? out_file.getValue() : DEF_OUTPUT_FILE_NAME;
 
