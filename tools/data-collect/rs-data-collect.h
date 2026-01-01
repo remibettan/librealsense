@@ -29,6 +29,7 @@ GYRO,1,1,200,MOTION_XYZ32F
 #include <fstream>
 #include <sstream>
 #include <map>
+#include <ctime>
 
 
 using namespace std;
@@ -210,13 +211,56 @@ namespace rs_data_collect
             _params({_p1,_p2,_p3,_p4,_p5,_p6,_p7})
             {};
 
+            frame_record(unsigned long long frame_number, double frame_ts, double host_ts,
+                       rs2_timestamp_domain domain, rs2_stream stream_type,int stream_index,
+                       std::string iso_ts):
+            _frame_number(frame_number),
+            _ts(frame_ts),
+            _arrival_time(host_ts),
+            _domain(domain),
+            _stream_type(stream_type),
+            _stream_idx(stream_index),
+            _iso_timestamp(iso_ts)
+            {};
+
+            static std::string iso_timestamp()
+            {
+                using namespace std::chrono;
+
+                // Anchor point
+                static const auto sys_start = system_clock::now();
+                static const auto steady_start = steady_clock::now();
+
+                // High-resolution elapsed time
+                auto steady_now = steady_clock::now();
+                auto delta = steady_now - steady_start;
+
+                // Apply delta to wall clock
+                auto now = sys_start + duration_cast<system_clock::duration>(delta);
+
+                auto sec = time_point_cast<seconds>(now);
+                auto ms  = duration_cast<milliseconds>(now - sec);
+
+                std::time_t t = system_clock::to_time_t(sec);
+
+                std::tm tm{};
+                localtime_r(&t, &tm);
+
+                std::ostringstream oss;
+                oss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%S")
+                    << "." << std::setw(3) << std::setfill('0') << ms.count();
+
+                return oss.str();
+            }
+
+
             std::string to_string() const
             {
                 std::stringstream ss;
                 ss  << std::endl
                     <<  rs2_stream_to_string(_stream_type) << ","
                     << _stream_idx << "," << _frame_number << ","
-                    << std::fixed << std::setprecision(3) << _ts << "," << _arrival_time;
+                    << std::fixed << std::setprecision(3) << _ts << "," << _arrival_time << "," << _iso_timestamp;
 
                 // IMU and Pose frame hold the sample data in addition to the frame's header attributes
                 size_t specific_attributes = 0;
@@ -238,6 +282,7 @@ namespace rs_data_collect
             rs2_stream              _stream_type;
             int                     _stream_idx;
             std::array<double,7>    _params;            // |The parameters are optional and sensor specific
+            std::string             _iso_timestamp;
         };
 
     private:

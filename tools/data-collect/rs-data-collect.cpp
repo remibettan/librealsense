@@ -131,7 +131,7 @@ void data_collector::save_data_to_file(const string& out_filename)
 
     for (const auto& elem : data_collection)
     {
-        csv << "\n\nStream Type,Index,F#,HW Timestamp (ms),Host Timestamp(ms)"
+        csv << "\n\nStream Type,Index,F#,HW Timestamp (ms),Host Timestamp(ms),ISO_TS"
             << (val_in_range(elem.first.first, { RS2_STREAM_GYRO,RS2_STREAM_ACCEL }) ? ",3DOF_x,3DOF_y,3DOF_z" : "")
             << (val_in_range(elem.first.first, { RS2_STREAM_POSE }) ? ",t_x,t_y,t_z,r_x,r_y,r_z,r_w" : "")
             << std::endl;
@@ -153,7 +153,8 @@ void data_collector::collect_frame_attributes(rs2::frame f)
             arrival_time.count(),
             f.get_frame_timestamp_domain(),
             f.get_profile().stream_type(),
-            f.get_profile().stream_index() };
+            f.get_profile().stream_index(),
+            frame_record::iso_timestamp() };
 
         // Assume that the frame extensions are unique
         if (auto motion = f.as<rs2::motion_frame>())
