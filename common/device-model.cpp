@@ -2241,6 +2241,13 @@ namespace rs2
 
         bool update_read_only_options = false; // _update_readonly_options_timer;
 
+        bool is_mipi = dev.supports( RS2_CAMERA_INFO_CONNECTION_TYPE )
+                    && dev.get_info( RS2_CAMERA_INFO_CONNECTION_TYPE ) == "GMSL";
+        if(is_mipi)
+        {
+            update_read_only_options = false;
+        }
+
         const ImVec2 initial_screen_pos = ImGui::GetCursorScreenPos();
         //Upper Space
         ImGui::GetWindowDrawList()->AddRectFilled({ initial_screen_pos.x,initial_screen_pos.y }, { initial_screen_pos.x + panel_width,initial_screen_pos.y + upper_space }, ImColor(black));
