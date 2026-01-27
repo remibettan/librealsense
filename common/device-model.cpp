@@ -383,17 +383,6 @@ namespace rs2
         auto name = get_device_name(dev);
         id = rsutils::string::from() << name.first << ", " << name.second;
 
-        for (auto&& sub : dev.query_sensors())
-        {
-            auto s = std::make_shared<sensor>(sub);
-            auto objects = std::make_shared< atomic_objects_in_frame >();
-            // checking if the sensor is color_sensor or is D405 (with integrated RGB in depth sensor)
-            if (s->is<color_sensor>() || (dev.supports(RS2_CAMERA_INFO_PRODUCT_ID) && !strcmp(dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID), "0B5B")))
-                objects = _detected_objects;
-            auto model = std::make_shared<subdevice_model>(dev, std::make_shared<sensor>(sub), objects, error_message, viewer, this, new_device_connected);
-            subdevices.push_back(model);
-        }
-
         // Initialize static camera info:
         for (auto i = 0; i < RS2_CAMERA_INFO_COUNT; i++)
         {
@@ -409,6 +398,9 @@ namespace rs2
 
                     if( info == RS2_CAMERA_INFO_PRODUCT_LINE )
                         _is_d500_device = strcmp( value, "D500" ) == 0;
+
+                    if( info == RS2_CAMERA_INFO_CONNECTION_TYPE)
+                        _is_mipi_device = strcmp( value, "GMSL" ) == 0;
                 }
             }
             catch (...)
@@ -416,6 +408,20 @@ namespace rs2
                 infos.push_back({ std::string(rs2_camera_info_to_string(info)),
                                   std::string("???") });
             }
+        }
+
+        if (_is_mipi_device)
+            _update_read_only_options = true;
+
+        for (auto&& sub : dev.query_sensors())
+        {
+            auto s = std::make_shared<sensor>(sub);
+            auto objects = std::make_shared< atomic_objects_in_frame >();
+            // checking if the sensor is color_sensor or is D405 (with integrated RGB in depth sensor)
+            if (s->is<color_sensor>() || (dev.supports(RS2_CAMERA_INFO_PRODUCT_ID) && !strcmp(dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID), "0B5B")))
+                objects = _detected_objects;
+            auto model = std::make_shared<subdevice_model>(dev, std::make_shared<sensor>(sub), objects, error_message, viewer, this, new_device_connected);
+            subdevices.push_back(model);
         }
 
         if (dev.is<playback>())
@@ -1879,7 +1885,6 @@ namespace rs2
         ux_window& window,
         std::string& error_message,
         viewer_model& viewer,
-        bool update_read_only_options,
         bool load_json_if_streaming,
         json_loading_func json_loading)
     {
@@ -2080,7 +2085,7 @@ namespace rs2
                     };
                     sub->options_metadata[RS2_OPTION_VISUAL_PRESET].custom_draw_method = draw_preset_combo_box;
                     ImGui::PopStyleColor(1);
-                    if (sub->draw_option(RS2_OPTION_VISUAL_PRESET, dev.is<playback>() || update_read_only_options, error_message, *viewer.not_model))
+                    if (sub->draw_option(RS2_OPTION_VISUAL_PRESET, dev.is<playback>() || _update_read_only_options, error_message, *viewer.not_model))
                     {
                         get_curr_advanced_controls = true;
                         std::this_thread::sleep_for( std::chrono::milliseconds( 20 ) ); // Give FW time to update advanced mode controls before reading them
@@ -2239,15 +2244,6 @@ namespace rs2
         const float left_space = 3.f;
         const float upper_space = 3.f;
 
-        bool update_read_only_options = false; // _update_readonly_options_timer;
-
-        bool is_mipi = dev.supports( RS2_CAMERA_INFO_CONNECTION_TYPE )
-                    && dev.get_info( RS2_CAMERA_INFO_CONNECTION_TYPE ) == "GMSL";
-        if(is_mipi)
-        {
-            update_read_only_options = false;
-        }
-
         const ImVec2 initial_screen_pos = ImGui::GetCursorScreenPos();
         //Upper Space
         ImGui::GetWindowDrawList()->AddRectFilled({ initial_screen_pos.x,initial_screen_pos.y }, { initial_screen_pos.x + panel_width,initial_screen_pos.y + upper_space }, ImColor(black));
@@ -2397,7 +2393,7 @@ namespace rs2
             const float horizontal_space_before_device_control = 3.0f;
             auto advanced_mode_pos = ImVec2{ pos.x + horizontal_space_before_device_control, pos.y + vertical_space_before_advanced_mode_control };
             ImGui::SetCursorPos(advanced_mode_pos);
-            const float advanced_mode_panel_height = draw_preset_panel(panel_width, window, error_message, viewer, update_read_only_options, load_json_if_streaming, json_loading);
+            const float advanced_mode_panel_height = draw_preset_panel(panel_width, window, error_message, viewer, load_json_if_streaming, json_loading);
             ImGui::SetCursorPos({ advanced_mode_pos.x, advanced_mode_pos.y + advanced_mode_panel_height });
         }
 
@@ -2658,7 +2654,7 @@ namespace rs2
 
                 for (auto& opt : drawing_order)
                 {
-                    if (sub->draw_option(opt, dev.is<playback>() || update_read_only_options, error_message, *viewer.not_model))
+                    if (sub->draw_option(opt, dev.is<playback>() || _update_read_only_options, error_message, *viewer.not_model))
                     {
                         get_curr_advanced_controls = true;
                         selected_file_preset.clear();
@@ -2712,7 +2708,7 @@ namespace rs2
                                 if (serialize && opt == RS2_OPTION_VISUAL_PRESET)
                                     continue;
 
-                                if (sub->draw_option(opt, dev.is<playback>() || update_read_only_options, error_message, *viewer.not_model))
+                                if (sub->draw_option(opt, dev.is<playback>() || _update_read_only_options, error_message, *viewer.not_model))
                                 {
                                     get_curr_advanced_controls = true;
                                     selected_file_preset.clear();
@@ -2741,7 +2737,7 @@ namespace rs2
                         if (ImGui::TreeNode(label.c_str()))
                         {
                             pb->draw_options( viewer,
-                                              dev.is< playback >() || update_read_only_options,
+                                              dev.is< playback >() || _update_read_only_options,
                                               false,
                                               error_message );
 
@@ -2751,10 +2747,10 @@ namespace rs2
                 }
 
                 draw_embedded_filters(sub, windows_width, window, viewer,
-                    error_message, label, draw_later, update_read_only_options);
+                    error_message, label, draw_later);
 
                 draw_processing_blocks(sub, windows_width, window, viewer, 
-                    error_message, label, draw_later, update_read_only_options);
+                    error_message, label, draw_later);
 
                 ImGui::TreePop();
             }
@@ -2793,7 +2789,7 @@ namespace rs2
 
     void device_model::draw_processing_blocks(std::shared_ptr<subdevice_model> sub, float windows_width,
         ux_window& window, viewer_model& viewer, std::string& error_message, std::string& label,
-        std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options)
+        std::vector<std::function<void()>>& draw_later)
     {
         if (sub->post_processing.size() > 0)
         {
@@ -2990,7 +2986,7 @@ namespace rs2
                     {
                         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
                         pb->draw_options(viewer,
-                            dev.is< playback >() || update_read_only_options,
+                            dev.is< playback >() || _update_read_only_options,
                             false,
                             error_message);
 
@@ -3004,7 +3000,7 @@ namespace rs2
 
     void device_model::draw_embedded_filters(std::shared_ptr<subdevice_model> sub, float windows_width,
         ux_window& window, viewer_model& viewer, std::string& error_message, std::string& label,
-        std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options)
+        std::vector<std::function<void()>>& draw_later)
     {
         if (sub->embedded_filters.size() > 0)
         {
@@ -3094,7 +3090,7 @@ namespace rs2
                     {
                         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
                         pb->draw_options(viewer,
-                            dev.is< playback >() || update_read_only_options,
+                            dev.is< playback >() || _update_read_only_options,
                             false,
                             error_message);
 

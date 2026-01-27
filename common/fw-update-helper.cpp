@@ -149,13 +149,37 @@ namespace rs2
         }
         log("Burning Signed Firmware on MIPI device");
 
-        _progress = 30;
         rs2_camera_info _dfu_port_info = (is_mipi_recovery)?(RS2_CAMERA_INFO_PHYSICAL_PORT):(RS2_CAMERA_INFO_DFU_DEVICE_PATH);
         // Write signed firmware to appropriate file descriptor
         std::ofstream fw_path_in_device(_dev.get_info(_dfu_port_info), std::ios::binary);
         if (fw_path_in_device)
         {
-            fw_path_in_device.write(reinterpret_cast<const char*>(_fw.data()), _fw.size());
+            try
+            {
+                // stopping updating controls
+                _model._update_read_only_options = false;
+                bool burn_done = false;
+                std::thread show_progress_thread(
+                    [&burn_done, this]()
+                    {
+                        for( int i = 0; i < 101 && !burn_done; ++i ) // Show percentage [0-100]
+                        {
+                            _progress = i;
+                            std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
+                        }
+                    } );
+
+                fw_path_in_device.write(reinterpret_cast<const char*>(_fw.data()), _fw.size());
+
+                burn_done = true;
+                show_progress_thread.join();
+                // restore the updating controls flag
+                _model._update_read_only_options = true;
+            }
+            catch (...)
+            {
+                // Nothing to do, file goodbit is false
+            }
         }
         else
         {

@@ -39,17 +39,23 @@ namespace rs2
                     = create_option_model( option, opt_base_label, this, s, options_invalidated, error_message );
             }
 
-            s->on_options_changed( [this]( const options_list & list )
+            // not subscribing to options watcher for mipi devices
+            bool should_subscribe_to_options_watcher = !( dev_model && dev_model->_is_mipi_device);
+
+            if (should_subscribe_to_options_watcher)
             {
-                for( auto changed_option : list )
+                s->on_options_changed( [this]( const options_list & list )
                 {
-                    auto it = options_metadata.find( changed_option->id );
-                    if( it != options_metadata.end() && ! _destructing ) // Callback runs in different context, check options_metadata still valid
+                    for( auto changed_option : list )
                     {
-                        it->second.update_value( changed_option, *viewer.not_model );
+                        auto it = options_metadata.find( changed_option->id );
+                        if( it != options_metadata.end() && ! _destructing ) // Callback runs in different context, check options_metadata still valid
+                        {
+                            it->second.update_value( changed_option, *viewer.not_model );
+                        }
                     }
-                }
-            } );
+                } );
+            }
         }
         catch( const std::exception & e )
         {

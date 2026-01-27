@@ -353,6 +353,8 @@ namespace rs2
         bool _allow_remove = true;
         bool show_depth_only = false;
         bool show_stream_selection = true;
+        bool _is_mipi_device = false;
+        bool _update_read_only_options = false;
         std::vector<std::pair<std::string, std::string>> infos;
         std::vector<std::string> restarting_device_info;
         std::set<std::string> advanced_mode_settings_file_names;
@@ -379,7 +381,6 @@ namespace rs2
             ux_window& window,
             std::string& error_message,
             viewer_model& viewer,
-            bool update_read_only_options,
             bool load_json_if_streaming,
             json_loading_func json_loading);
         bool prompt_toggle_advanced_mode(bool enable_advanced_mode, const std::string& message_text,
@@ -408,11 +409,11 @@ namespace rs2
         void draw_processing_blocks(std::shared_ptr<subdevice_model> sub, float windows_width,
             ux_window& window, viewer_model& viewer,
             std::string& error_message, std::string& label,
-            std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options);
+            std::vector<std::function<void()>>& draw_later);
 
         void draw_embedded_filters(std::shared_ptr<subdevice_model> sub, float windows_width,
             ux_window& window, viewer_model& viewer, std::string& error_message, std::string& label,
-            std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options);
+            std::vector<std::function<void()>>& draw_later);
 
         std::thread check_for_device_updates_thread;
         std::mutex dev_mutex;
