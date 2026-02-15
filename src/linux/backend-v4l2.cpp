@@ -2937,7 +2937,8 @@ namespace librealsense
 
         bool v4l_mipi_device::get_pu(rs2_option opt, int32_t& value) const
         {
-            v4l2_ext_control control{get_cid(opt), 0, 0, 0};
+            v4l2_ext_control control{};
+            control.id = get_cid(opt);
             // Extract the control group from the underlying control query
             v4l2_ext_controls ctrls_block { control.id&0xffff0000, 1, 0, 0, 0, &control};
 
@@ -2960,7 +2961,9 @@ namespace librealsense
 
         bool v4l_mipi_device::set_pu(rs2_option opt, int32_t value)
         {
-            v4l2_ext_control control{get_cid(opt), 0, 0, value};
+            v4l2_ext_control control{};
+            control.id = get_cid(opt);
+            control.value = value;
             if (opt == RS2_OPTION_ENABLE_AUTO_EXPOSURE)
                 control.value = value ? V4L2_EXPOSURE_APERTURE_PRIORITY : V4L2_EXPOSURE_MANUAL;
 
@@ -2981,7 +2984,9 @@ namespace librealsense
 
         bool v4l_mipi_device::set_xu(const extension_unit& xu, uint8_t control, const uint8_t* data, int size)
         {
-            v4l2_ext_control xctrl{xu_to_cid(xu,control), uint32_t(size), 0, 0};
+            v4l2_ext_control xctrl{};
+            xctrl.id = xu_to_cid(xu, control);
+            xctrl.size = uint32_t(size);
             switch (size)
             {
                 case 1: xctrl.value   = *(reinterpret_cast<const uint8_t*>(data)); break;
@@ -3013,7 +3018,9 @@ namespace librealsense
 
         bool v4l_mipi_device::get_xu(const extension_unit& xu, uint8_t control, uint8_t* data, int size) const
         {
-            v4l2_ext_control xctrl{xu_to_cid(xu,control), uint32_t(size), 0, 0};
+            v4l2_ext_control xctrl{};
+            xctrl.id = xu_to_cid(xu, control);
+            xctrl.size = uint32_t(size);
             xctrl.p_u8 = data;
 
             v4l2_ext_controls ext {xctrl.id & 0xffff0000, 1, 0, 0, 0, &xctrl};
