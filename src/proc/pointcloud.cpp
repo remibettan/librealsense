@@ -17,6 +17,11 @@
 #include <rsutils/string/from.h>
 #include <rsutils/easylogging/easyloggingpp.h>
 
+// Force disable SIMD optimizations
+#undef __ARM_NEON
+#undef __SSSE3__
+#undef RS2_USE_CUDA
+
 #ifdef RS2_USE_CUDA
 #include "proc/cuda/cuda-pointcloud.h"
 #include "rsutils/accelerators/gpu.h"
