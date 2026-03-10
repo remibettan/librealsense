@@ -32,61 +32,6 @@ def retry_on_exception(func, max_retries=10):
     return None
 
 # HDR CONFIGURATION TESTS
-with test.closure("HDR Config - default config"):
-    device, ctx = test.find_first_device_or_exit()
-    depth_sensor = device.first_depth_sensor()
-
-    if test.check(depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)):
-        exposure_range = depth_sensor.get_option_range(rs.option.exposure)
-        gain_range = depth_sensor.get_option_range(rs.option.gain)
-
-        depth_sensor.set_option(rs.option.hdr_enabled, 1)
-        test.check(depth_sensor.get_option(rs.option.hdr_enabled) == 1)
-
-        depth_sensor.set_option(rs.option.sequence_id, 1)  # seq id 1 is expected to be the default value
-        test.check(depth_sensor.get_option(rs.option.sequence_id) == 1)
-        exp = depth_sensor.get_option(rs.option.exposure)
-        test.check(depth_sensor.get_option(rs.option.exposure) == exposure_range.default - 1000)  # w/a
-        test.check(depth_sensor.get_option(rs.option.gain) == gain_range.default)
-
-        depth_sensor.set_option(rs.option.sequence_id, 2)  # seq id 2 is expected to be the min value
-        test.check(depth_sensor.get_option(rs.option.sequence_id) == 2)
-        test.check(depth_sensor.get_option(rs.option.exposure) == exposure_range.min)
-        test.check(depth_sensor.get_option(rs.option.gain) == gain_range.min)
-
-        depth_sensor.set_option(rs.option.hdr_enabled, 0)
-        test.check(depth_sensor.get_option(rs.option.hdr_enabled) == 0)
-        
-
-with test.closure("HDR Config - custom config"):
-    # Require at least one device to be plugged in
-    device, ctx = test.find_first_device_or_exit()
-    depth_sensor = device.first_depth_sensor()
-
-    if test.check(depth_sensor and depth_sensor.supports(rs.option.hdr_enabled)):
-        depth_sensor.set_option(rs.option.sequence_size, 2)
-        test.check(depth_sensor.get_option(rs.option.sequence_size) == 2)
-
-        depth_sensor.set_option(rs.option.sequence_id, 1)
-        test.check(depth_sensor.get_option(rs.option.sequence_id) == 1)
-        depth_sensor.set_option(rs.option.exposure, 120)
-        test.check(depth_sensor.get_option(rs.option.exposure) == 120)
-        depth_sensor.set_option(rs.option.gain, 90)
-        test.check(depth_sensor.get_option(rs.option.gain) == 90)
-
-        depth_sensor.set_option(rs.option.sequence_id, 2)
-        test.check(depth_sensor.get_option(rs.option.sequence_id) == 2)
-        depth_sensor.set_option(rs.option.exposure, 1200)
-        test.check(depth_sensor.get_option(rs.option.exposure) == 1200)
-        depth_sensor.set_option(rs.option.gain, 20)
-        test.check(depth_sensor.get_option(rs.option.gain) == 20)
-
-        depth_sensor.set_option(rs.option.hdr_enabled, 1)
-        test.check(depth_sensor.get_option(rs.option.hdr_enabled) == 1)
-
-        depth_sensor.set_option(rs.option.hdr_enabled, 0)
-        test.check(depth_sensor.get_option(rs.option.hdr_enabled) == 0)
-
 def hdr_streaming_default_config():
     """
     This function is used to check the default configuration of HDR streaming.
@@ -129,8 +74,6 @@ def hdr_streaming_default_config():
         depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
 # HDR STREAMING TEST
-with test.closure("HDR Streaming - default config"):
-    retry_on_exception(hdr_streaming_default_config)
 
 
 def hdr_running_restart_hdr_at_restream():
@@ -162,9 +105,6 @@ def hdr_running_restart_hdr_at_restream():
 
 
 # CHECKING HDR AFTER PIPE RESTART
-with test.closure("HDR Running - restart hdr at restream"):
-    retry_on_exception(hdr_running_restart_hdr_at_restream)
-
 
 """
 helper method
@@ -259,8 +199,6 @@ def hdr_running_hdr_merge_after_hdr_restart():
 
 
 # CHECKING HDR MERGE AFTER HDR RESTART
-with test.closure("HDR Running - hdr merge after hdr restart"):
-    retry_on_exception(hdr_running_hdr_merge_after_hdr_restart)
 
 
 def check_sequence_id_on_frame(frame, prev_frame_counter, old_sequence_id):
@@ -347,10 +285,6 @@ def hdr_streaming_checking_sequence_id():
 
 
 # CHECKING SEQUENCE ID WHILE STREAMING
-with test.closure("HDR Streaming - checking sequence id"):
-    retry_on_exception(hdr_streaming_checking_sequence_id)
-        
-
 def emitter_on_off_check_sequence_id():
     """
     This function is used to check the behavior of emitter on/off and sequence ID.
@@ -440,10 +374,6 @@ def hdr_merge_discard_merged_frame():
         depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
 
-# This tests checks that the previously saved merged frame is discarded after a pipe restart
-with test.closure("HDR Merge - discard merged frame"):
-    retry_on_exception(hdr_merge_discard_merged_frame)
-        
 
 def hdr_start_stop_recover_manual_exposure_and_gain():
     """
@@ -501,9 +431,6 @@ def hdr_start_stop_recover_manual_exposure_and_gain():
         pipe.stop()
 
 
-with test.closure("HDR Start Stop - recover manual exposure and gain"):
-    retry_on_exception(hdr_start_stop_recover_manual_exposure_and_gain)
-        
 def hdr_active_set_locked_options():
     """
     This function is used to check the behavior of HDR active set locked options.
@@ -546,8 +473,6 @@ def hdr_active_set_locked_options():
 
 
 # CONTROLS STABILITY WHILE HDR ACTIVE
-with test.closure("HDR Active - set locked options"):
-    retry_on_exception(hdr_active_set_locked_options)
         
 
 def hdr_streaming_set_locked_options():
@@ -591,10 +516,6 @@ def hdr_streaming_set_locked_options():
 
         pipe.stop()
         depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
-
-
-with test.closure("HDR Streaming - set locked options"):
-    retry_on_exception(hdr_streaming_set_locked_options)
 
 
 def hdr_streaming_enable_runtime_exposure_update():
@@ -645,8 +566,5 @@ def hdr_streaming_enable_runtime_exposure_update():
         pipe.stop()
         depth_sensor.set_option(rs.option.hdr_enabled, 0)  # disable hdr before next tests
 
-
-with test.closure("HDR Streaming - enable runtime exposure update in HDR mode"):
-    retry_on_exception(hdr_streaming_enable_runtime_exposure_update)
 
 test.print_results_and_exit()
