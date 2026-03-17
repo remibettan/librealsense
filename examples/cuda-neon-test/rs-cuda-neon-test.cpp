@@ -33,7 +33,7 @@ void print_build_info() {
     std::cout << "CUDA support: DISABLED" << std::endl;
 #endif
 
-#if defined(__ARM_NEON) && !defined(ANDROID)
+#if defined(__ARM_NEON) && defined(BUILD_WITH_NEON) && !defined(ANDROID)
     std::cout << "NEON support: ENABLED" << std::endl;
 #else
     std::cout << "NEON support: DISABLED" << std::endl;
@@ -50,7 +50,7 @@ void print_build_info() {
     // Expected behavior
     std::cout << "=== Expected Behavior ===" << std::endl;
 #if defined(RS2_USE_CUDA)
-    #if defined(__ARM_NEON) && !defined(ANDROID)
+    #if defined(__ARM_NEON) && defined(BUILD_WITH_NEON) && !defined(ANDROID)
         std::cout << "Pointcloud implementation: CUDA+NEON hybrid" << std::endl;
         std::cout << "  - depth_to_points: CUDA accelerated" << std::endl;
         std::cout << "  - get_texture_map: NEON accelerated (inherited)" << std::endl;
@@ -61,7 +61,7 @@ void print_build_info() {
     #endif
 #elif defined(__SSSE3__)
     std::cout << "Pointcloud implementation: SSSE3" << std::endl;
-#elif defined(__ARM_NEON) && !defined(ANDROID)
+#elif defined(__ARM_NEON) && defined(BUILD_WITH_NEON) && !defined(ANDROID)
     std::cout << "Pointcloud implementation: NEON" << std::endl;
 #else
     std::cout << "Pointcloud implementation: generic C++" << std::endl;
@@ -145,7 +145,7 @@ int main(int argc, char * argv[]) try
               << (1000.0 / (total_calculate_time / frame_count)) << " fps" << std::endl;
 
     std::cout << "\n=== Test Results ===" << std::endl;
-#if defined(RS2_USE_CUDA) && defined(__ARM_NEON) && !defined(ANDROID)
+#if defined(RS2_USE_CUDA) && defined(__ARM_NEON) && defined(BUILD_WITH_NEON) && !defined(ANDROID)
     std::cout << "✓ CUDA+NEON hybrid is active" << std::endl;
     std::cout << "✓ depth_to_points: Using CUDA acceleration" << std::endl;
     std::cout << "✓ get_texture_map: Using NEON acceleration" << std::endl;
@@ -154,7 +154,7 @@ int main(int argc, char * argv[]) try
 #elif defined(RS2_USE_CUDA)
     std::cout << "⚠ CUDA is active but NEON is not available" << std::endl;
     std::cout << "  get_texture_map uses generic C++ implementation" << std::endl;
-#elif defined(__ARM_NEON) && !defined(ANDROID)
+#elif defined(__ARM_NEON) && defined(BUILD_WITH_NEON) && !defined(ANDROID)
     std::cout << "✓ NEON acceleration is active" << std::endl;
 #elif defined(__SSSE3__)
     std::cout << "✓ SSSE3 acceleration is active" << std::endl;
