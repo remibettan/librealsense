@@ -153,6 +153,7 @@ int main(int argc, char * argv[]) try
     std::cout << "for methods not accelerated by CUDA!" << std::endl;
 #elif defined(RS2_USE_CUDA)
     std::cout << "⚠ CUDA is active but NEON is not available" << std::endl;
+    std::cout << "✓ depth_to_points: Using CUDA acceleration" << std::endl;
     std::cout << "  get_texture_map uses generic C++ implementation" << std::endl;
 #elif defined(__ARM_NEON) && defined(BUILD_WITH_NEON) && !defined(ANDROID)
     std::cout << "✓ NEON acceleration is active" << std::endl;
