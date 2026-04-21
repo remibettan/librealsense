@@ -301,6 +301,9 @@ class CUDABenchmark:
         
         # Results storage: {operation_name: [(time_us, avg_gpu_load, peak_gpu_load)]}
         self.results = {}
+        
+        # Time-series data: {operation_name: {'timestamps': [], 'gpu_loads': [], 'exec_times': []}}
+        self.timeseries_data = {}
     
     def initialize_pipeline(self):
         """Initialize RealSense pipeline"""
@@ -309,11 +312,9 @@ class CUDABenchmark:
         self.pipeline = rs.pipeline()
         config = rs.config()
         
-        # Enable depth and color streams
+        # Enable depth and color streams (D401 supports these formats)
         config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
         config.enable_stream(rs.stream.color, 640, 480, rs.format.yuyv, 30)
-        config.enable_stream(rs.stream.infrared, 1, 640, 480, rs.format.y8, 30)
-        config.enable_stream(rs.stream.infrared, 2, 640, 480, rs.format.y8, 30)
         
         try:
             profile = self.pipeline.start(config)
@@ -338,6 +339,7 @@ class CUDABenchmark:
             self.pc = rs.pointcloud()
         
         results = []
+        exec_times = []
         
         # Start GPU monitoring for entire benchmark run
         self.gpu_monitor.start_monitoring()
@@ -355,6 +357,7 @@ class CUDABenchmark:
             end = time.perf_counter()
             
             time_us = (end - start) * 1e6
+            exec_times.append(time_us)
             results.append((time_us, 0, 0))  # GPU loads filled in later
             
             if (i + 1) % 10 == 0:
@@ -362,6 +365,13 @@ class CUDABenchmark:
         
         # Stop GPU monitoring and get collected data
         gpu_loads, timestamps = self.gpu_monitor.stop_monitoring()
+        
+        # Store time-series data
+        self.timeseries_data['pointcloud'] = {
+            'timestamps': timestamps,
+            'gpu_loads': gpu_loads,
+            'exec_times': exec_times
+        }
         
         # Calculate average and peak GPU from all collected samples
         avg_gpu = np.mean(gpu_loads) if gpu_loads else 0
@@ -384,6 +394,7 @@ class CUDABenchmark:
             self.align_to_color = rs.align(rs.stream.color)
         
         results = []
+        exec_times = []
         
         # Start GPU monitoring for entire benchmark run
         self.gpu_monitor.start_monitoring()
@@ -397,6 +408,7 @@ class CUDABenchmark:
             end = time.perf_counter()
             
             time_us = (end - start) * 1e6
+            exec_times.append(time_us)
             results.append((time_us, 0, 0))
             
             if (i + 1) % 10 == 0:
@@ -404,6 +416,14 @@ class CUDABenchmark:
         
         # Stop GPU monitoring and get collected data
         gpu_loads, timestamps = self.gpu_monitor.stop_monitoring()
+        
+        # Store time-series data
+        self.timeseries_data['align_depth_to_color'] = {
+            'timestamps': timestamps,
+            'gpu_loads': gpu_loads,
+            'exec_times': exec_times
+        }
+        
         avg_gpu = np.mean(gpu_loads) if gpu_loads else 0
         peak_gpu = np.max(gpu_loads) if gpu_loads else 0
         
@@ -424,6 +444,7 @@ class CUDABenchmark:
             self.align_to_depth = rs.align(rs.stream.depth)
         
         results = []
+        exec_times = []
         
         # Start GPU monitoring for entire benchmark run
         self.gpu_monitor.start_monitoring()
@@ -437,6 +458,7 @@ class CUDABenchmark:
             end = time.perf_counter()
             
             time_us = (end - start) * 1e6
+            exec_times.append(time_us)
             results.append((time_us, 0, 0))
             
             if (i + 1) % 10 == 0:
@@ -444,6 +466,14 @@ class CUDABenchmark:
         
         # Stop GPU monitoring and get collected data
         gpu_loads, timestamps = self.gpu_monitor.stop_monitoring()
+        
+        # Store time-series data
+        self.timeseries_data['align_color_to_depth'] = {
+            'timestamps': timestamps,
+            'gpu_loads': gpu_loads,
+            'exec_times': exec_times
+        }
+        
         avg_gpu = np.mean(gpu_loads) if gpu_loads else 0
         peak_gpu = np.max(gpu_loads) if gpu_loads else 0
         
@@ -461,6 +491,7 @@ class CUDABenchmark:
         print(f"\nBenchmarking YUY2 → RGB8 Conversion ({iterations} iterations)...")
         
         results = []
+        exec_times = []
         
         # Start GPU monitoring for entire benchmark run
         self.gpu_monitor.start_monitoring()
@@ -479,6 +510,7 @@ class CUDABenchmark:
             end = time.perf_counter()
             
             time_us = (end - start) * 1e6
+            exec_times.append(time_us)
             results.append((time_us, 0, 0))
             
             if (i + 1) % 10 == 0:
@@ -486,6 +518,14 @@ class CUDABenchmark:
         
         # Stop GPU monitoring and get collected data
         gpu_loads, timestamps = self.gpu_monitor.stop_monitoring()
+        
+        # Store time-series data
+        self.timeseries_data['yuy2_to_rgb8'] = {
+            'timestamps': timestamps,
+            'gpu_loads': gpu_loads,
+            'exec_times': exec_times
+        }
+        
         avg_gpu = np.mean(gpu_loads) if gpu_loads else 0
         peak_gpu = np.max(gpu_loads) if gpu_loads else 0
         
@@ -499,46 +539,76 @@ class CUDABenchmark:
         return results
     
     def benchmark_format_conversion_y8i(self, iterations=100):
-        """Benchmark Y8I to Y8+Y8 conversion"""
-        print(f"\nBenchmarking Y8I → Y8+Y8 Conversion ({iterations} iterations)...")
+        """Benchmark Y8 infrared processing"""
+        print(f"\nBenchmarking Y8 Infrared Processing ({iterations} iterations)...")
+        print("  Note: D401 doesn't support Y8I format, testing Y8 instead")
         
+        # This operation may not use CUDA on D401
         results = []
+        exec_times = []
         
-        # Start GPU monitoring for entire benchmark run
-        self.gpu_monitor.start_monitoring()
+        # Try to enable infrared stream temporarily
+        config = rs.config()
+        config.enable_stream(rs.stream.infrared, 1, 640, 480, rs.format.y8, 30)
         
-        for i in range(iterations):
-            frames = self.pipeline.wait_for_frames()
-            ir1 = frames.get_infrared_frame(1)
-            ir2 = frames.get_infrared_frame(2)
+        try:
+            temp_pipeline = rs.pipeline()
+            temp_pipeline.start(config)
             
-            if not ir1 or not ir2:
-                continue
+            # Warm up
+            for _ in range(10):
+                temp_pipeline.wait_for_frames()
             
-            # Measure execution time
-            start = time.perf_counter()
-            data1 = np.asanyarray(ir1.get_data())
-            data2 = np.asanyarray(ir2.get_data())
-            end = time.perf_counter()
+            # Start GPU monitoring for entire benchmark run
+            self.gpu_monitor.start_monitoring()
             
-            time_us = (end - start) * 1e6
-            results.append((time_us, 0, 0))
+            for i in range(iterations):
+                frames = temp_pipeline.wait_for_frames()
+                ir_frame = frames.get_infrared_frame(1)
+                
+                if not ir_frame:
+                    continue
+                
+                # Measure execution time
+                start = time.perf_counter()
+                data = np.asanyarray(ir_frame.get_data())
+                end = time.perf_counter()
+                
+                time_us = (end - start) * 1e6
+                exec_times.append(time_us)
+                results.append((time_us, 0, 0))
+                
+                if (i + 1) % 10 == 0:
+                    print(f"  Progress: {i + 1}/{iterations}")
             
-            if (i + 1) % 10 == 0:
-                print(f"  Progress: {i + 1}/{iterations}")
+            temp_pipeline.stop()
+            
+            # Stop GPU monitoring and get collected data
+            gpu_loads, timestamps = self.gpu_monitor.stop_monitoring()
+            
+            # Store time-series data
+            self.timeseries_data['y8i_to_y8y8'] = {
+                'timestamps': timestamps,
+                'gpu_loads': gpu_loads,
+                'exec_times': exec_times
+            }
+            
+            avg_gpu = np.mean(gpu_loads) if gpu_loads else 0
+            peak_gpu = np.max(gpu_loads) if gpu_loads else 0
+            
+            # Update results with GPU data
+            results = [(time_us, avg_gpu, peak_gpu) for time_us, _, _ in results]
+            
+            self.results['y8i_to_y8y8'] = results
+            print(f"  Completed: {len(results)} samples")
+            if gpu_loads:
+                print(f"  GPU Load: avg={avg_gpu:.1f}%, peak={peak_gpu:.1f}%")
+                
+        except Exception as e:
+            print(f"  Skipped: {e}")
+            self.results['y8i_to_y8y8'] = [(0, 0, 0)]
+            results = [(0, 0, 0)]
         
-        # Stop GPU monitoring and get collected data
-        gpu_loads, timestamps = self.gpu_monitor.stop_monitoring()
-        avg_gpu = np.mean(gpu_loads) if gpu_loads else 0
-        peak_gpu = np.max(gpu_loads) if gpu_loads else 0
-        
-        # Update results with GPU data
-        results = [(time_us, avg_gpu, peak_gpu) for time_us, _, _ in results]
-        
-        self.results['y8i_to_y8y8'] = results
-        print(f"  Completed: {len(results)} samples")
-        if gpu_loads:
-            print(f"  GPU Load: avg={avg_gpu:.1f}%, peak={peak_gpu:.1f}%")
         return results
     
     def benchmark_format_conversion_y12i(self, iterations=100):
@@ -579,37 +649,44 @@ class CUDABenchmark:
             avg_loads = [r[1] for r in results]
             peak_loads = [r[2] for r in results]
             
-            # Create figure with two subplots
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+            # Get time-series data if available
+            timeseries = self.timeseries_data.get(operation, {})
+            has_timeseries = bool(timeseries.get('timestamps') and timeseries.get('gpu_loads'))
+            
+            if not has_timeseries:
+                print(f"  Skipping {operation} (no time-series data)")
+                continue
+            
+            # Create single figure for GPU load over time
+            fig, ax = plt.subplots(1, 1, figsize=(10, 6))
             fig.suptitle(f'CUDA Performance: {operation.replace("_", " ").title()}', fontsize=14, fontweight='bold')
             
-            # Scatter plot: Time vs Average GPU Load
-            ax1.scatter(times, avg_loads, alpha=0.6, s=30)
-            ax1.set_xlabel('Process Time (microseconds)', fontsize=11)
-            ax1.set_ylabel('Average GPU Load (%)', fontsize=11)
-            ax1.set_title('Time vs Average GPU Load')
-            ax1.grid(True, alpha=0.3)
+            # Plot: GPU Load Over Time (time-series)
+            timestamps = timeseries['timestamps']
+            gpu_loads = timeseries['gpu_loads']
             
-            # Add trend line
-            if len(times) > 1:
-                z = np.polyfit(times, avg_loads, 1)
-                p = np.poly1d(z)
-                ax1.plot(sorted(times), p(sorted(times)), "r--", alpha=0.8, linewidth=2, label='Trend')
-                ax1.legend()
+            ax.plot(timestamps, gpu_loads, linewidth=1.5, alpha=0.8, color='#2E86AB')
+            ax.fill_between(timestamps, gpu_loads, alpha=0.3, color='#2E86AB')
+            ax.set_xlabel('Time (seconds)', fontsize=12)
+            ax.set_ylabel('GPU Load (%)', fontsize=12)
+            ax.set_title('GPU Load Over Time', fontweight='bold', fontsize=13)
+            ax.grid(True, alpha=0.3, linestyle='--')
             
-            # Scatter plot: Time vs Peak GPU Load
-            ax2.scatter(times, peak_loads, alpha=0.6, s=30, color='orange')
-            ax2.set_xlabel('Process Time (microseconds)', fontsize=11)
-            ax2.set_ylabel('Peak GPU Load (%)', fontsize=11)
-            ax2.set_title('Time vs Peak GPU Load')
-            ax2.grid(True, alpha=0.3)
+            # Set y-axis limits with some headroom
+            if gpu_loads:
+                max_load = max(gpu_loads)
+                ax.set_ylim(0, max_load * 1.1 if max_load > 0 else 10)
             
-            # Add trend line
-            if len(times) > 1:
-                z = np.polyfit(times, peak_loads, 1)
-                p = np.poly1d(z)
-                ax2.plot(sorted(times), p(sorted(times)), "r--", alpha=0.8, linewidth=2, label='Trend')
-                ax2.legend()
+            # Add statistics annotation
+            if gpu_loads:
+                avg = np.mean(gpu_loads)
+                peak = np.max(gpu_loads)
+                min_gpu = np.min(gpu_loads)
+                stats_text = f'Avg: {avg:.1f}%\nPeak: {peak:.1f}%\nMin: {min_gpu:.1f}%'
+                ax.text(0.98, 0.98, stats_text, transform=ax.transAxes,
+                        verticalalignment='top', horizontalalignment='right',
+                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
+                        fontsize=10, family='monospace')
             
             plt.tight_layout()
             
@@ -663,7 +740,10 @@ class CUDABenchmark:
     def cleanup(self):
         """Cleanup resources"""
         if self.pipeline:
-            self.pipeline.stop()
+            try:
+                self.pipeline.stop()
+            except RuntimeError:
+                pass  # Pipeline was never started
         self.gpu_monitor.cleanup()
 
 
