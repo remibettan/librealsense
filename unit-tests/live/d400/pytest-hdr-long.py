@@ -44,6 +44,76 @@ def retry_on_exception(func, max_retries=10):
     raise last_exception
 
 
+def _start_pipeline_with_debug(pipe, cfg, dev, requested_streams_info):
+    """
+    Start pipeline with debug logging. On failure, logs detailed stream information.
+    
+    Args:
+        pipe: rs.pipeline object
+        cfg: rs.config object
+        dev: rs.device object
+        requested_streams_info: String describing what streams were requested (for logging)
+    
+    Returns:
+        The pipeline profile from pipe.start(cfg)
+        
+    Raises:
+        RuntimeError with additional diagnostic information if pipeline fails to start
+    """
+    log.info(f"Attempting to start pipeline with configuration: {requested_streams_info}")
+    
+    try:
+        profile = pipe.start(cfg)
+        log.debug(f"Pipeline started successfully. Resolved streams:")
+        for stream in profile.get_streams():
+            if stream.is_video_stream_profile():
+                vp = stream.as_video_stream_profile()
+                log.debug(f"  - {stream.stream_type()} [{stream.stream_index()}]: {vp.format()} {vp.width()}x{vp.height()} @ {vp.fps()}fps")
+        return profile
+    except RuntimeError as e:
+        log.error(f"Failed to start pipeline with config: {requested_streams_info}")
+        log.error(f"Error: {e}")
+        
+        # Log all available profiles to help diagnose the issue
+        log.error("Available profiles on this device:")
+        for sensor in dev.sensors:
+            sensor_name = sensor.get_info(rs.camera_info.name)
+            log.error(f"  Sensor: {sensor_name}")
+            profiles = sensor.get_stream_profiles()
+            
+            # Group by stream type
+            depth_profiles = []
+            ir_profiles = []
+            
+            for p in profiles:
+                if p.is_video_stream_profile():
+                    vp = p.as_video_stream_profile()
+                    stream_type_str = str(p.stream_type())
+                    profile_str = f"{p.stream_type()} [{p.stream_index()}]: {vp.format()} {vp.width()}x{vp.height()} @ {vp.fps()}fps"
+                    
+                    if 'depth' in stream_type_str.lower():
+                        depth_profiles.append(profile_str)
+                    elif 'infrared' in stream_type_str.lower():
+                        ir_profiles.append(profile_str)
+            
+            if depth_profiles:
+                log.error(f"    Depth profiles ({len(depth_profiles)}):")
+                for prof in depth_profiles[:10]:
+                    log.error(f"      {prof}")
+                if len(depth_profiles) > 10:
+                    log.error(f"      ... and {len(depth_profiles) - 10} more")
+            
+            if ir_profiles:
+                log.error(f"    Infrared profiles ({len(ir_profiles)}):")
+                for prof in ir_profiles[:10]:
+                    log.error(f"      {prof}")
+                if len(ir_profiles) > 10:
+                    log.error(f"      ... and {len(ir_profiles) - 10} more")
+        
+        # Re-raise with original error
+        raise
+
+
 # HDR CONFIGURATION TESTS
 def test_hdr_config_default_config(test_device):
     dev, ctx = test_device
@@ -108,7 +178,7 @@ def _hdr_streaming_default_config(dev, ctx):
     cfg.enable_stream(rs.stream.depth)
     cfg.enable_stream(rs.stream.infrared, 1)
     pipe = rs.pipeline(ctx)
-    pipe.start(cfg)
+    _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto) + infrared[1] (auto)")
     for iteration in range(1, 100):
         data = pipe.wait_for_frames()
         out_depth_frame = data.get_depth_frame()
@@ -140,7 +210,7 @@ def _hdr_running_restart_hdr_at_restream(dev, ctx):
     cfg = rs.config()
     cfg.enable_stream(rs.stream.depth)
     pipe = rs.pipeline(ctx)
-    pipe.start(cfg)
+    _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto)")
     try:
         depth_sensor.set_option(rs.option.hdr_enabled, 1)
         assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
@@ -150,7 +220,7 @@ def _hdr_running_restart_hdr_at_restream(dev, ctx):
 
         assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
         pipe.stop()
-        pipe.start(cfg)
+        _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto) - restarting pipeline")
         assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
         pipe.stop()
     except Exception:
@@ -231,7 +301,7 @@ def _hdr_running_hdr_merge_after_hdr_restart(dev, ctx):
     cfg = rs.config()
     cfg.enable_stream(rs.stream.depth)
     pipe = rs.pipeline(ctx)
-    pipe.start(cfg)
+    _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto)")
     try:
         frames_to_stream = 10
 
@@ -324,7 +394,7 @@ def _hdr_streaming_checking_sequence_id(dev, ctx):
     cfg.enable_stream(rs.stream.depth)
     cfg.enable_stream(rs.stream.infrared, 1)
     pipe = rs.pipeline(ctx)
-    pipe.start(cfg)
+    _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto) + infrared[1] (auto)")
     try:
         depth_sensor.set_option(rs.option.hdr_enabled, 1)
         assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
@@ -351,7 +421,7 @@ def _emitter_on_off_check_sequence_id(dev, ctx):
     cfg.enable_stream(rs.stream.depth)
     cfg.enable_stream(rs.stream.infrared, 1)
     pipe = rs.pipeline(ctx)
-    pipe.start(cfg)
+    _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto) + infrared[1] (auto)")
     try:
         depth_sensor.set_option(rs.option.emitter_on_off, 1)
         assert depth_sensor.get_option(rs.option.emitter_on_off) == 1
@@ -385,7 +455,7 @@ def _hdr_merge_discard_merged_frame(dev, ctx):
     first_series_last_merged_ts = -1
     at_least_one_frame_supported_seq_id = False
 
-    pipe.start(cfg)
+    _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto)")
     try:
         for i in range(0, num_of_iterations_in_series):
             data = pipe.wait_for_frames()
@@ -409,7 +479,7 @@ def _hdr_merge_discard_merged_frame(dev, ctx):
     assert depth_sensor.get_option(rs.option.hdr_enabled) == 1
 
     try:
-        pipe.start(cfg)
+        _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto) - second pipeline start")
         try:
             for i in range(0, 10):
                 data = pipe.wait_for_frames()
@@ -450,7 +520,7 @@ def _hdr_start_stop_recover_manual_exposure_and_gain(dev, ctx):
     cfg = rs.config()
     cfg.enable_stream(rs.stream.depth)
     pipe = rs.pipeline(ctx)
-    pipe.start(cfg)
+    _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto)")
     try:
         iteration_for_disable = 50
         iteration_to_check_after_disable = iteration_for_disable + 5  # Was 2, aligned to validation KPI's [DSO-18682]
@@ -549,7 +619,7 @@ def _hdr_streaming_set_locked_options(dev, ctx):
     cfg = rs.config()
     cfg.enable_stream(rs.stream.depth)
     pipe = rs.pipeline(ctx)
-    pipe.start(cfg)
+    _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto)")
     try:
         for iteration in range(1, 50):
             data = pipe.wait_for_frames()
@@ -589,7 +659,7 @@ def _hdr_streaming_enable_runtime_exposure_update(dev, ctx):
     cfg.enable_stream(rs.stream.depth)
     cfg.enable_stream(rs.stream.infrared, 1)
     pipe = rs.pipeline(ctx)
-    pipe.start(cfg)
+    _start_pipeline_with_debug(pipe, cfg, dev, "depth (auto) + infrared[1] (auto)")
     try:
         #change exposure and gain for seq id 1
         depth_sensor.set_option(rs.option.sequence_id, 1)  # seq id 1 is expected to be the default value
