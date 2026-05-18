@@ -11,6 +11,7 @@ option(BUILD_WITH_CUDA "Enable CUDA" OFF)
 # Activates at runtime only on integrated GPUs; discrete GPUs keep the copy path. Default OFF
 # so a plain CUDA build is byte-for-byte identical to today.
 option(BUILD_WITH_CUDA_ZEROCOPY "Enable zero-copy GPU memory path (Jetson/integrated GPU only, requires BUILD_WITH_CUDA)" OFF)
+option(BUILD_WITH_HIP "Enable HIP/ROCm for AMD GPUs" OFF)
 option(BUILD_GLSL_EXTENSIONS "Build GLSL extensions API" ON)
 option(BUILD_WITH_OPENMP "Use OpenMP" OFF)
 option(BUILD_EASYLOGGINGPP "Build EasyLogging++ as a part of the build" ON)
