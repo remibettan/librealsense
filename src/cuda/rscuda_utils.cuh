@@ -15,20 +15,25 @@
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
 #define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
 #define cudaSuccess hipSuccess
+#define cudaError_t hipError_t
+#define cudaGetErrorString hipGetErrorString
+#define cudaGetLastError hipGetLastError
+#define cudaStreamSynchronize hipStreamSynchronize
+#define cudaMemset hipMemset
 #else
 #include <cuda_runtime.h>
-#endif
-
 #ifdef _MSC_VER
-// Add library dependencies if using VS
+// Add library dependencies if using VS.  Gated to the CUDA branch only;
+// when building for HIP the linker must not pull in cudart_static.lib.
 #pragma comment(lib, "cudart_static")
 #endif
-
 #include "cuda-compat.h"   // RS_CUDA_MEMTYPE — single definition shared across CUDA TUs
+#endif
 
-// Throws std::runtime_error with a descriptive message if a CUDA call returns non-success.
+// Throws std::runtime_error with a descriptive message if a CUDA / HIP call returns non-success.
+// Uses `auto` for the return value so the same macro compiles for both cudaError_t and hipError_t.
 #define RS_CUDA_CHECK(expr) do {                                                                     \
-    cudaError_t _rs_cuda_err = (expr);                                                               \
+    auto _rs_cuda_err = (expr);                                                                      \
     if (_rs_cuda_err != cudaSuccess)                                                                 \
         throw std::runtime_error(std::string(#expr " failed: ") + cudaGetErrorString(_rs_cuda_err)); \
 } while (0)
