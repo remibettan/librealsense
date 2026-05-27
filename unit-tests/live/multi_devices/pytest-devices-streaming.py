@@ -318,7 +318,7 @@ def test_multi_stream_operation(test_devices):
       Phase 1: depth + IR only (no color)
       Phase 2: depth + IR + color
     """
-    rs.log_to_console(rs.log_severity.debug)
+    
     device_list, ctx = test_devices
 
     log.info("=" * 80)
@@ -340,4 +340,7 @@ def test_multi_stream_operation(test_devices):
         pytest.fail(f"At least 2 non-color streams needed for phase 1, but found {len(no_color_configs)}")
 
     run_phase("PHASE 1 (no color)", device_list, no_color_configs)
+    
+    rs.log_to_file(rs.log_severity.debug, f"multi_dev_phase2_log_{time.strftime('%Y%m%d_%H%M%S')}.txt")
+    
     run_phase("PHASE 2 (with color)", device_list, all_stream_configs)
