@@ -102,7 +102,7 @@ namespace librealsense
     {
         // preparing HWM command
         command cmd(ds::DFU);
-        cmd.param1 = (_pid == ds::D585S_PID || _pid == ds::D585_PID) ? 0 : 1;
+        cmd.param1 = (_pid == ds::D585S_PID || _pid == ds::D585_DEMO_PID) ? 0 : 1;
         cmd.require_response = false;
 
         _ds_device_common->enter_update_state(cmd);

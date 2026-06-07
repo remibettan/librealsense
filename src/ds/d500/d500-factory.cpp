@@ -308,7 +308,7 @@ public:
             {
             case ds::D555_PID:
                 return std::make_shared< d555_device >( dev_info );
-            case ds::D585_PID:
+            case ds::D585_DEMO_PID:
                 return std::make_shared< rs_d585_device >( dev_info );
             case ds::D585S_PID:
                 return std::make_shared< rs_d585s_device >( dev_info );
@@ -348,22 +348,6 @@ public:
             auto& hids = g.second;
 
             bool is_mi_0_present = mi_present(devices, 0);
-
-            // Device with multi sensors can be enabled only if all sensors (RGB + Depth) are present
-            auto is_pid_of_multisensor_device = [](int pid) { return std::find(std::begin(ds::d500_multi_sensors_pid), 
-                std::end(ds::d500_multi_sensors_pid), pid) != std::end(ds::d500_multi_sensors_pid); };
-
-
-#if !defined(__APPLE__) // Not supported by macos
-            auto is_pid_of_hid_sensor_device = [](int pid) { return std::find(std::begin(ds::d500_hid_sensors_pid), 
-                std::end(ds::d500_hid_sensors_pid), pid) != std::end(ds::d500_hid_sensors_pid); };
-            bool is_device_hid_sensor = false;
-            for (auto&& uvc : devices)
-            {
-                if (is_pid_of_hid_sensor_device(uvc.pid))
-                    is_device_hid_sensor = true;
-            }
-#endif
 
             if (!devices.empty() && is_mi_0_present)
             {
