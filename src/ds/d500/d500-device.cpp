@@ -124,6 +124,19 @@ namespace librealsense
         return _hw_monitor_response->hwmon_error2str(opcode);
     }
 
+    bool d500_device::contradicts( const stream_profile_interface * a, const std::vector< stream_profile > & others ) const
+    {
+        if( auto vid_a = dynamic_cast< const video_stream_profile_interface * >( a ) )
+        {
+            for( auto request : others )
+            {
+                if( a->get_framerate() != 0 && request.fps != 0 && ( a->get_framerate() != request.fps ) )
+                    return true;
+            }
+        }
+        return false;
+    }
+
     d500_depth_sensor::d500_depth_sensor( d500_device * owner,std::shared_ptr<uvc_sensor> uvc_sensor)
         : synthetic_sensor(ds::DEPTH_STEREO, uvc_sensor, owner, d500_depth_fourcc_to_rs2_format, d500_depth_fourcc_to_rs2_stream)
         , _owner(owner)
@@ -212,7 +225,7 @@ namespace librealsense
             }
             else if (p->get_stream_type() == RS2_STREAM_COLOR)
             {
-                assign_stream(_owner->_color_stream, p);
+                throw invalid_value_exception( "Depth sensor does not have a color stream" );
             }
             auto&& vid_profile = dynamic_cast<video_stream_profile_interface*>(p.get());
 
@@ -376,7 +389,6 @@ namespace librealsense
           _depth_stream(new stream(RS2_STREAM_DEPTH)),
           _left_ir_stream(new stream(RS2_STREAM_INFRARED, 1)),
           _right_ir_stream(new stream(RS2_STREAM_INFRARED, 2)),
-          _color_stream(nullptr),
           _hw_monitor_response(std::make_shared<ds::d500_hwmon_response>())
     {
         _depth_device_idx
