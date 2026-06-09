@@ -20,6 +20,9 @@
 
 #include <rsutils/lazy.h>
 
+#include <map>
+#include <src/embedded-filter-interface.h>
+
 
 namespace librealsense
 {
@@ -46,10 +49,18 @@ namespace librealsense
         float get_stereo_baseline_mm() const override;
         float get_preset_max_value() const override;
 
+        // Embedded filters (USB) - mirrors the DDS proxy's container so the viewer's
+        // query_embedded_filters() returns a populated list on USB transports too.
+        embedded_filters get_supported_embedded_filters() const override;
+        void add_embedded_filter( std::shared_ptr< embedded_filter_interface > filter );
+
     protected:
         const d500_device * _owner;
         mutable std::atomic< float > _depth_units;
         float _stereo_baseline_mm;
+
+    private:
+        std::map< rs2_embedded_filter_type, std::shared_ptr< embedded_filter_interface > > _embedded_filters;
     };
 
     class ds_thermal_monitor;

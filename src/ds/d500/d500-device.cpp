@@ -9,6 +9,7 @@
 #include "d500-device.h"
 #include "d500-private.h"
 #include "d500-options.h"
+#include "d500-minz-embedded-filter.h"
 #include "d500-info.h"
 #include <src/ds/ds-options.h>
 #include <src/ds/ds-timestamp.h>
@@ -274,6 +275,19 @@ namespace librealsense
         return static_cast<float>(RS2_RS400_VISUAL_PRESET_MEDIUM_DENSITY);
     }
 
+    embedded_filters d500_depth_sensor::get_supported_embedded_filters() const
+    {
+        embedded_filters out;
+        for( auto & kv : _embedded_filters )
+            out.push_back( kv.second );
+        return out;
+    }
+
+    void d500_depth_sensor::add_embedded_filter( std::shared_ptr< embedded_filter_interface > filter )
+    {
+        _embedded_filters.insert( { filter->get_type(), filter } );
+    }
+
     float d500_device::get_stereo_baseline_mm() const // to be d500 adapted
     {
         using namespace ds;
@@ -365,6 +379,16 @@ namespace librealsense
 
         depth_ep->register_processing_block({ {RS2_FORMAT_W10} }, { {RS2_FORMAT_RAW10, RS2_STREAM_INFRARED, 1} }, []() { return std::make_shared<w10_converter>(RS2_FORMAT_RAW10); });
         depth_ep->register_processing_block({ {RS2_FORMAT_W10} }, { {RS2_FORMAT_Y10BPACK, RS2_STREAM_INFRARED, 1} }, []() { return std::make_shared<w10_converter>(RS2_FORMAT_Y10BPACK); });
+
+        // MinZ ("Improved Close Range Depth") USB demo - D555 only.
+        // FW currently honors only the enable field of the 38-byte dppc_ctl payload,
+        // so we expose just the toggle. See doc/minz-usb-demo-design.md.
+        // NOTE: this->get_pid() is not populated yet during create_depth_device() -
+        // _pid is assigned in d500_device::init() which runs AFTER. Read it from the device-info parameter.
+        if( ! all_device_infos.empty() && all_device_infos.front().pid == ds::D555_PID )
+        {
+            depth_ep->add_embedded_filter( std::make_shared< d500_minz_embedded_filter >( raw_depth_ep ) );
+        }
 
         return depth_ep;
     }
