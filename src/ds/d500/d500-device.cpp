@@ -9,7 +9,7 @@
 #include "d500-device.h"
 #include "d500-private.h"
 #include "d500-options.h"
-#include "d500-minz-embedded-filter.h"
+#include "d500-close-range-embedded-filter.h"
 #include "d500-info.h"
 #include <src/ds/ds-options.h>
 #include <src/ds/ds-timestamp.h>
@@ -380,7 +380,7 @@ namespace librealsense
         depth_ep->register_processing_block({ {RS2_FORMAT_W10} }, { {RS2_FORMAT_RAW10, RS2_STREAM_INFRARED, 1} }, []() { return std::make_shared<w10_converter>(RS2_FORMAT_RAW10); });
         depth_ep->register_processing_block({ {RS2_FORMAT_W10} }, { {RS2_FORMAT_Y10BPACK, RS2_STREAM_INFRARED, 1} }, []() { return std::make_shared<w10_converter>(RS2_FORMAT_Y10BPACK); });
 
-        // MinZ ("Improved Close Range Depth") - D555 only, toggle only over USB.
+        // Improved Close Range Depth - D555 only, toggle only over USB.
         // FW currently honors only the `enable` field of the 38-byte dppc_ctl payload (XU 0x14);
         // ratio/shift/threshold can be set on the wire but are ignored, so the host exposes
         // just the on/off toggle.
@@ -390,7 +390,7 @@ namespace librealsense
         auto depth_infos = filter_by_mi( all_device_infos, 0 );
         if( ! depth_infos.empty() && depth_infos.front().pid == ds::D555_PID )
         {
-            depth_ep->add_embedded_filter( std::make_shared< d500_minz_embedded_filter >( raw_depth_ep ) );
+            depth_ep->add_embedded_filter( std::make_shared< d500_close_range_embedded_filter >( raw_depth_ep ) );
         }
 
         return depth_ep;
