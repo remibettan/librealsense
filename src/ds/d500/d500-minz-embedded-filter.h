@@ -49,9 +49,8 @@ class d500_minz_embedded_filter : public minz_embedded_filter
 {
 public:
     explicit d500_minz_embedded_filter( std::weak_ptr< uvc_sensor > raw_depth_ep );
-    virtual ~d500_minz_embedded_filter() = default;
 
-    inline rs2_embedded_filter_type get_type() const override { return RS2_EMBEDDED_FILTER_TYPE_MINZ; }
+    rs2_embedded_filter_type get_type() const override { return RS2_EMBEDDED_FILTER_TYPE_MINZ; }
 };
 
 }  // namespace librealsense

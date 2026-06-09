@@ -4,10 +4,8 @@
 #include "d500-minz-embedded-filter.h"
 #include "ds/ds-private.h"
 #include <src/librealsense-exception.h>
-#include <rsutils/string/from.h>
 
 #include <cstdint>
-#include <cstring>
 
 namespace librealsense {
 
@@ -68,8 +66,7 @@ void minz_xu_option::set( float value )
                               reinterpret_cast< uint8_t * >( &payload ),
                               sizeof( payload ) ) )
             {
-                throw invalid_value_exception( rsutils::string::from()
-                                               << "MinZ get_xu(0x14) failed before set; errno=" << strerror( errno ) );
+                throw invalid_value_exception( "MinZ get_xu(0x14) failed before set" );
             }
 
             stamp_header( payload );
@@ -80,8 +77,7 @@ void minz_xu_option::set( float value )
                               reinterpret_cast< uint8_t * >( &payload ),
                               sizeof( payload ) ) )
             {
-                throw invalid_value_exception( rsutils::string::from()
-                                               << "MinZ set_xu(0x14) failed; errno=" << strerror( errno ) );
+                throw invalid_value_exception( "MinZ set_xu(0x14) failed" );
             }
 
             _record( *this );
@@ -92,7 +88,7 @@ float minz_xu_option::query() const
 {
     auto ep = _ep.lock();
     if( ! ep )
-        return 0.f;
+        throw invalid_value_exception( "MinZ: depth sensor not alive for query" );
 
     return ep->invoke_powered(
         [this]( platform::uvc_device & dev ) -> float
@@ -103,8 +99,7 @@ float minz_xu_option::query() const
                               reinterpret_cast< uint8_t * >( &payload ),
                               sizeof( payload ) ) )
             {
-                throw invalid_value_exception( rsutils::string::from()
-                                               << "MinZ get_xu(0x14) failed; errno=" << strerror( errno ) );
+                throw invalid_value_exception( "MinZ get_xu(0x14) failed" );
             }
             return static_cast< float >( payload.params[0] );
         } );

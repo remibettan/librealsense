@@ -66,12 +66,15 @@ with test.closure("MinZ invalid Enable rejected (USB demo)"):
         RuntimeError)
 
 
-depth_profile = next(p for p in
-                     depth_sensor.profiles if p.fps() == 30
-                     and p.stream_type() == rs.stream.depth
-                     and p.format() == rs.format.z16
-                     and p.as_video_stream_profile().width() == 640
-                     and p.as_video_stream_profile().height() == 360)
+depth_profile = next(
+    (p for p in depth_sensor.profiles if p.fps() == 30
+     and p.stream_type() == rs.stream.depth
+     and p.format() == rs.format.z16
+     and p.as_video_stream_profile().width() == 640
+     and p.as_video_stream_profile().height() == 360),
+    None)
+if depth_profile is None:
+    log.f("D555 did not advertise a 640x360@30fps Z16 depth profile - cannot run the metadata test")
 
 waiting_for_test = False
 wait_for_frames_timer = Timer(MAX_TIME_TO_WAIT_FOR_FRAMES)
@@ -92,14 +95,18 @@ def minz_check_callback(frame):
 def stream_and_check_minz_filter():
     global waiting_for_test
     depth_sensor.open(depth_profile)
-    depth_sensor.start(minz_check_callback)
-    wait_for_frames_timer.start()
-    waiting_for_test = True
-    while waiting_for_test and not wait_for_frames_timer.has_expired():
-        time.sleep(0.5)
-    test.check(not wait_for_frames_timer.has_expired())
-    depth_sensor.stop()
-    depth_sensor.close()
+    try:
+        depth_sensor.start(minz_check_callback)
+        try:
+            wait_for_frames_timer.start()
+            waiting_for_test = True
+            while waiting_for_test and not wait_for_frames_timer.has_expired():
+                time.sleep(0.5)
+            test.check(not wait_for_frames_timer.has_expired())
+        finally:
+            depth_sensor.stop()
+    finally:
+        depth_sensor.close()
 
 
 def enable_minz_filter():

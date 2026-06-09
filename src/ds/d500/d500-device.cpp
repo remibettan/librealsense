@@ -380,12 +380,14 @@ namespace librealsense
         depth_ep->register_processing_block({ {RS2_FORMAT_W10} }, { {RS2_FORMAT_RAW10, RS2_STREAM_INFRARED, 1} }, []() { return std::make_shared<w10_converter>(RS2_FORMAT_RAW10); });
         depth_ep->register_processing_block({ {RS2_FORMAT_W10} }, { {RS2_FORMAT_Y10BPACK, RS2_STREAM_INFRARED, 1} }, []() { return std::make_shared<w10_converter>(RS2_FORMAT_Y10BPACK); });
 
-        // MinZ ("Improved Close Range Depth") USB demo - D555 only.
-        // FW currently honors only the enable field of the 38-byte dppc_ctl payload,
-        // so we expose just the toggle. See doc/minz-usb-demo-design.md.
+        // MinZ ("Improved Close Range Depth") USB demo - D555 only, toggle only.
+        // FW currently honors only the `enable` field of the 38-byte dppc_ctl payload (XU 0x14),
+        // so the host exposes just the on/off toggle. See PR #15176.
         // NOTE: this->get_pid() is not populated yet during create_depth_device() -
-        // _pid is assigned in d500_device::init() which runs AFTER. Read it from the device-info parameter.
-        if( ! all_device_infos.empty() && all_device_infos.front().pid == ds::D555_PID )
+        // _pid is assigned in d500_device::init() which runs AFTER. Read the PID from the
+        // depth (MI=0) interface entry directly, matching the convention used elsewhere here.
+        auto depth_infos = filter_by_mi( all_device_infos, 0 );
+        if( ! depth_infos.empty() && depth_infos.front().pid == ds::D555_PID )
         {
             depth_ep->add_embedded_filter( std::make_shared< d500_minz_embedded_filter >( raw_depth_ep ) );
         }
