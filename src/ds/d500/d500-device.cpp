@@ -380,9 +380,10 @@ namespace librealsense
         depth_ep->register_processing_block({ {RS2_FORMAT_W10} }, { {RS2_FORMAT_RAW10, RS2_STREAM_INFRARED, 1} }, []() { return std::make_shared<w10_converter>(RS2_FORMAT_RAW10); });
         depth_ep->register_processing_block({ {RS2_FORMAT_W10} }, { {RS2_FORMAT_Y10BPACK, RS2_STREAM_INFRARED, 1} }, []() { return std::make_shared<w10_converter>(RS2_FORMAT_Y10BPACK); });
 
-        // MinZ ("Improved Close Range Depth") USB demo - D555 only, toggle only.
-        // FW currently honors only the `enable` field of the 38-byte dppc_ctl payload (XU 0x14),
-        // so the host exposes just the on/off toggle. See PR #15176.
+        // MinZ ("Improved Close Range Depth") - D555 only, toggle only over USB.
+        // FW currently honors only the `enable` field of the 38-byte dppc_ctl payload (XU 0x14);
+        // ratio/shift/threshold can be set on the wire but are ignored, so the host exposes
+        // just the on/off toggle.
         // NOTE: this->get_pid() is not populated yet during create_depth_device() -
         // _pid is assigned in d500_device::init() which runs AFTER. Read the PID from the
         // depth (MI=0) interface entry directly, matching the convention used elsewhere here.

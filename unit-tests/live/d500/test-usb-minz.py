@@ -1,7 +1,7 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-# USB MinZ demo - only the toggle is exposed (see doc/minz-usb-demo-design.md).
+# USB MinZ demo - only the on/off toggle is exposed; ratio/shift/threshold are not.
 # This test must run over USB, NOT DDS - the dds context guard is intentionally absent.
 # test:donotrun:!nightly
 # test:device D555
