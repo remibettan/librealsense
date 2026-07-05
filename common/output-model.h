@@ -150,7 +150,7 @@ namespace rs2
         animated< int > default_dashboard_w { 0 };
         bool is_dashboard_open = true;
 
-        bool enable_firmware_logs = false;
+        std::atomic< bool > enable_firmware_logs { false };
 
         bool errors_selected = false;
         bool warnings_selected = false;

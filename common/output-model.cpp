@@ -105,7 +105,7 @@ void output_model::thread_loop()
                 }
             }
 
-            while( enable_firmware_logs )
+            while( enable_firmware_logs && ! to_stop )
             {
                 for( auto & it : loggers )
                 {
@@ -146,7 +146,7 @@ void output_model::thread_loop()
                                 add_log( message.get_severity(), __FILE__, 0, ss.str() );
                             }
 
-                            if( !enable_firmware_logs && fwlogger.get_number_of_fw_logs() == 0 )
+                            if( ! enable_firmware_logs || to_stop )
                                 break;
                         }
                     }
@@ -160,16 +160,19 @@ void output_model::thread_loop()
                 }
                                     
                 // FW define the logs polling intervals to be no less than 100msec to cope with limited resources.
-                // At the same time 100 msec should guarantee no log drops
-                std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+                // At the same time 100 msec should guarantee no log drops.
+                // Sleep in 10 ms chunks so shutdown (to_stop) doesn't wait a full 100 ms.
+                for( int i = 0; i < 10 && ! to_stop; ++i )
+                    std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
             }
 
-            // User dectivated FW logs. Stop collecting logs.
+            // FW logs deactivated (user toggle or shutdown). Stop collecting logs.
             for( auto & fwlogger : loggers )
                 fwlogger.first.stop_collecting();
         }
 
-        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+        for( int i = 0; i < 10 && ! to_stop; ++i )
+            std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
     }
 }
 
