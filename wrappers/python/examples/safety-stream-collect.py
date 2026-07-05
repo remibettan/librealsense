@@ -156,6 +156,11 @@ def main():
     parser.add_argument("--timeout-ms", type=int, default=5000, help="wait_for_frames timeout (default: 5000ms)")
     args = parser.parse_args()
 
+    if args.fps <= 0:
+        parser.error("--fps must be a positive integer")
+    if args.timeout_ms <= 0:
+        parser.error("--timeout-ms must be a positive integer")
+
     writer = make_writer(args)
     pipe, cfg = build_pipeline(args.serial, args.fps)
 
@@ -167,8 +172,9 @@ def main():
 
     try:
         profile = pipe.start(cfg)
-    except RuntimeError as e:
+    except Exception as e:
         print("Failed to start pipeline: {}".format(e), file=sys.stderr)
+        writer.close()
         sys.exit(1)
 
     dev = profile.get_device()
@@ -186,7 +192,7 @@ def main():
                 break
             try:
                 frames = pipe.wait_for_frames(args.timeout_ms)
-            except RuntimeError as e:
+            except Exception as e:
                 print("wait_for_frames timed out / failed: {}".format(e), file=sys.stderr)
                 continue
             safety = frames.first_or_default(rs.stream.safety)
