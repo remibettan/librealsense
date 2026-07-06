@@ -108,12 +108,18 @@ def test_color_fps_manual_exposure(test_device):
     product_name = dev.get_info(rs.camera_info.name)
     os_name = platform.system()
 
-    if any(model in product_name for model in ['D421', 'D405']):
-        pytest.skip(f"Device {product_name} has no color sensor")
-
     log.info(f"Testing color fps (manual exposure) {product_line} device - {os_name} OS")
 
-    cs = dev.first_color_sensor()
+    # D405 and D401 expose color through the depth sensor (no separate color sensor)
+    try:
+        cs = dev.first_color_sensor()
+    except RuntimeError:
+        if 'D405' in product_name or 'D401' in product_name:
+            cs = dev.first_depth_sensor()
+        elif 'D421' in product_name:
+            pytest.skip(f"Device {product_name} has no color sensor")
+        else:
+            raise
     if product_line == "D400":
         if cs.supports(rs.option.enable_auto_exposure):
             cs.set_option(rs.option.enable_auto_exposure, 0)
