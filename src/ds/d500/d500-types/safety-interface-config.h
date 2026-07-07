@@ -445,26 +445,47 @@ namespace librealsense
             {
                 throw librealsense::invalid_value_exception("Invalid calibration_monitor_params format");
             }
-            for (const auto &field : {"alpha_rect", "c_min_rect_threshold", "rect_err_max_limit_abs",
-                                      "alpha_scale", "c_min_scale_threshold",
-                                      "scale_low_limit_threshold", "scale_high_limit_threshold"})
+            static constexpr const char *fields[] = {
+                "alpha_rect", "c_min_rect_threshold", "rect_err_max_limit_abs",
+                "alpha_scale", "c_min_scale_threshold",
+                "scale_low_limit_threshold", "scale_high_limit_threshold"};
+            for (const auto &field : fields)
             {
                 if (!j.contains(field))
                 {
                     throw librealsense::invalid_value_exception(std::string("Invalid calibration_monitor_params format: missing field: ") + field);
                 }
+                if (!j.at(field).is_number())
+                {
+                    throw librealsense::invalid_value_exception(std::string("Invalid calibration_monitor_params format: field must be numeric: ") + field);
+                }
             }
+            // Range checks: smoothing factors alpha_* are in (0, 1]; thresholds must be positive; scale low < high.
+            auto in_open_unit_interval = [](float v) { return v > 0.0f && v <= 1.0f; };
+            if (!in_open_unit_interval(j.at("alpha_rect").get<float>()))
+                throw librealsense::invalid_value_exception("Invalid calibration_monitor_params: alpha_rect must be in (0, 1]");
+            if (!in_open_unit_interval(j.at("alpha_scale").get<float>()))
+                throw librealsense::invalid_value_exception("Invalid calibration_monitor_params: alpha_scale must be in (0, 1]");
+            for (const auto &field : {"c_min_rect_threshold", "rect_err_max_limit_abs",
+                                      "c_min_scale_threshold",
+                                      "scale_low_limit_threshold", "scale_high_limit_threshold"})
+            {
+                if (j.at(field).get<float>() <= 0.0f)
+                    throw librealsense::invalid_value_exception(std::string("Invalid calibration_monitor_params: field must be positive: ") + field);
+            }
+            if (j.at("scale_low_limit_threshold").get<float>() >= j.at("scale_high_limit_threshold").get<float>())
+                throw librealsense::invalid_value_exception("Invalid calibration_monitor_params: scale_low_limit_threshold must be < scale_high_limit_threshold");
         }
 
         // Calib Rectification Error params
-        float m_alpha_rect;                  // Smoothing factor (alpha rect)
-        float m_c_min_rect_threshold;
-        float m_rect_err_max_limit_abs;
+        float m_alpha_rect = 0.0f;                  // Smoothing factor (alpha rect)
+        float m_c_min_rect_threshold = 0.0f;
+        float m_rect_err_max_limit_abs = 0.0f;
         // Calib Scale Error params
-        float m_alpha_scale;                 // Smoothing factor (alpha scale)
-        float m_c_min_scale_threshold;
-        float m_scale_low_limit_threshold;
-        float m_scale_high_limit_threshold;
+        float m_alpha_scale = 0.0f;                 // Smoothing factor (alpha scale)
+        float m_c_min_scale_threshold = 0.0f;
+        float m_scale_low_limit_threshold = 0.0f;
+        float m_scale_high_limit_threshold = 0.0f;
         std::array<uint8_t, 36> m_reserved = {0};
     };
 
