@@ -130,8 +130,8 @@ else:
             assert dev is not None, 'Test OD Device not found among SW devices'
             sensors = dev.query_sensors()
             assert len( sensors ) == 3
-            sensor = next( (s for s in sensors if s.get_info( rs.camera_info.name ) == 'Inference Sensor'), None )
-            assert sensor is not None, 'Inference Sensor not found'
+            sensor = next( (s for s in sensors if s.get_info( rs.camera_info.name ) == 'Person Detection Camera'), None )
+            assert sensor is not None, 'Person Detection Camera not found'
             color_sensor = next( (s for s in sensors if s.get_info( rs.camera_info.name ) == 'RGB Camera'), None )
             assert color_sensor is not None, 'RGB Camera sensor not found'
 

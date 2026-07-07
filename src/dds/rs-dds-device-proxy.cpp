@@ -282,6 +282,8 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
             auto inference_stream = std::dynamic_pointer_cast< realdds::dds_inference_stream >( stream );
             auto & profiles = stream->profiles();
             auto const & default_profile = profiles[stream->default_profile_index()];
+            // Match the USB-side profile name (see d500_object_detection_sensor::init_stream_profiles)
+            std::string const profile_name = ( stream_type == RS2_STREAM_OBJECT_DETECTION ) ? "Person Detection" : stream->name();
             for( auto & profile : profiles )
             {
                 //LOG_DEBUG( "    " << profile->details_to_string() );
@@ -292,7 +294,7 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
                         auto video_profile = std::static_pointer_cast< realdds::dds_video_stream_profile >( profile );
                         auto raw_stream_profile = sensor.add_video_stream(
                             to_rs2_video_stream( stream_type, sidx, video_profile, video_stream->get_intrinsics() ),
-                            profile == default_profile, stream->name() );
+                            profile == default_profile, profile_name );
                         _stream_name_to_profiles[stream->name()].push_back( raw_stream_profile );
                     }
                     else if( motion_stream )
@@ -300,7 +302,7 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
                         auto motion_profile = std::static_pointer_cast< realdds::dds_motion_stream_profile >( profile );
                         auto raw_stream_profile = sensor.add_motion_stream(
                             to_rs2_motion_stream( stream_type, sidx, motion_profile, motion_stream->get_gyro_intrinsics() ),
-                            profile == default_profile, stream->name() );
+                            profile == default_profile, profile_name );
                         _stream_name_to_profiles[stream->name()].push_back( raw_stream_profile );
                     }
                     else if( inference_stream )
@@ -308,7 +310,7 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
                         auto inference_profile = std::static_pointer_cast< realdds::dds_inference_stream_profile >( profile );
                         auto raw_stream_profile = sensor.add_inference_stream(
                             to_rs2_inference_stream( stream_type, sidx, inference_profile ),
-                            profile == default_profile, stream->name() );
+                            profile == default_profile, profile_name );
                         _stream_name_to_profiles[stream->name()].push_back( raw_stream_profile );
                     }
                 }
@@ -627,7 +629,8 @@ std::shared_ptr< dds_sensor_proxy > dds_device_proxy::create_sensor( const std::
     case RS2_STREAM_MOTION:
         return std::make_shared< dds_motion_sensor_proxy >( sensor_name, this, _dds_dev );
     case RS2_STREAM_OBJECT_DETECTION:
-        return std::make_shared< dds_object_detection_sensor_proxy >( sensor_name, this, _dds_dev );
+        // Match the USB-side sensor name (see d500_object_detection_sensor)
+        return std::make_shared< dds_object_detection_sensor_proxy >( "Person Detection Camera", this, _dds_dev );
     case RS2_STREAM_ANY:
         // Generic: no type
         return std::make_shared< dds_sensor_proxy >( sensor_name, this, _dds_dev );
