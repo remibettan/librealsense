@@ -1015,7 +1015,7 @@ namespace librealsense
         register_info(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID, asic_serial);
         register_info(RS2_CAMERA_INFO_FIRMWARE_VERSION, _fw_version);
         register_info(RS2_CAMERA_INFO_PHYSICAL_PORT, group.uvc_devices.front().device_path);
-        register_info(RS2_CAMERA_INFO_DEBUG_OP_CODE, std::to_string(static_cast<int>(fw_cmd::GLD)));
+        register_info(RS2_CAMERA_INFO_DEBUG_OP_CODE, std::to_string(static_cast<int>(ds::GLD)));
         register_info(RS2_CAMERA_INFO_ADVANCED_MODE, ((advanced_mode) ? "YES" : "NO"));
         register_info(RS2_CAMERA_INFO_PRODUCT_ID, pid_hex_str);
         register_info(RS2_CAMERA_INFO_PRODUCT_LINE, "D400");

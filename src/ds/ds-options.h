@@ -268,7 +268,7 @@ namespace librealsense
     class emitter_always_on_option : public option
     {
     public:
-        emitter_always_on_option( std::shared_ptr< hw_monitor > hwm, ds::fw_cmd _hmc_get_opcode, ds::fw_cmd _hmc_set_opcode );
+        emitter_always_on_option( std::shared_ptr< hw_monitor > hwm, uint8_t _hmc_get_opcode, uint8_t _hmc_set_opcode );
         virtual ~emitter_always_on_option() = default;
         virtual void set(float value) override;
         virtual float query() const override;
@@ -286,7 +286,7 @@ namespace librealsense
         std::function<void(const option &)> _record_action = [](const option&) {};
         rsutils::lazy< option_range > _range;
         std::weak_ptr<hw_monitor> _hwm;
-        ds::fw_cmd _hmc_get_opcode, _hmc_set_opcode;
+        uint8_t _hmc_get_opcode, _hmc_set_opcode;
         bool _is_legacy;
     };
 

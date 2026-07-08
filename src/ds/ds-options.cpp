@@ -585,7 +585,7 @@ namespace librealsense
         }
     }
 
-    emitter_always_on_option::emitter_always_on_option( std::shared_ptr<hw_monitor> hwm, ds::fw_cmd _hmc_get_opcode, ds::fw_cmd _hmc_set_opcode )
+    emitter_always_on_option::emitter_always_on_option( std::shared_ptr<hw_monitor> hwm, uint8_t _hmc_get_opcode, uint8_t _hmc_set_opcode )
         : _hwm(hwm), _hmc_get_opcode(_hmc_get_opcode), _hmc_set_opcode(_hmc_set_opcode)
     {
         // On d400 option, We use the same opcode both for set and get.
