@@ -167,6 +167,7 @@ namespace librealsense
             ASIC_TEMP_MIPI     = 0x7A, // get ASIC temperature - with mipi device
             GETAELIMITS        = 0x89, // Auto Exp/Gain Limit command FW version >= 5.13.0.200
             SETAELIMITS        = 0x8A, // Auto Exp/Gain Limit command FW version >= 5.13.0.200
+            AE_ACCEL_PARAMS    = 0x95, // Get/Set Accelerated AE tuning parameters (RSDSO-21571). FW >= 5.17.3.20
         };
 
         inline std::string d400_fw_cmd2str(const d400_fw_cmd state)
@@ -181,6 +182,7 @@ namespace librealsense
                 ENUM2STR(ASIC_TEMP_MIPI);
                 ENUM2STR(GETAELIMITS);
                 ENUM2STR(SETAELIMITS);
+                ENUM2STR(AE_ACCEL_PARAMS);
             default:
                 return ( rsutils::string::from() << "Unrecognized D400 FW command " << state );
             }
