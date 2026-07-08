@@ -141,6 +141,8 @@ else:
             assert len( od_profiles ) == 1
             od_profile = od_profiles[0]
             assert od_profile.fps() == 30
+            assert od_profile.stream_name() == 'Person Detection', \
+                f'Expected stream name "Person Detection", got "{od_profile.stream_name()}"'
 
             # Open sensor and start streaming
             sensor.open( [od_profile] )

@@ -282,8 +282,8 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
             auto inference_stream = std::dynamic_pointer_cast< realdds::dds_inference_stream >( stream );
             auto & profiles = stream->profiles();
             auto const & default_profile = profiles[stream->default_profile_index()];
-            // Match the USB-side profile name (see d500_object_detection_sensor::init_stream_profiles)
-            std::string const profile_name = ( stream_type == RS2_STREAM_OBJECT_DETECTION ) ? "Person Detection" : stream->name();
+            // OD stream is renamed to match the USB side (see object_detection_sensor::STREAM_NAME)
+            std::string const profile_name = ( stream_type == RS2_STREAM_OBJECT_DETECTION ) ? object_detection_sensor::STREAM_NAME : stream->name();
             for( auto & profile : profiles )
             {
                 //LOG_DEBUG( "    " << profile->details_to_string() );
@@ -629,8 +629,8 @@ std::shared_ptr< dds_sensor_proxy > dds_device_proxy::create_sensor( const std::
     case RS2_STREAM_MOTION:
         return std::make_shared< dds_motion_sensor_proxy >( sensor_name, this, _dds_dev );
     case RS2_STREAM_OBJECT_DETECTION:
-        // Match the USB-side sensor name (see d500_object_detection_sensor)
-        return std::make_shared< dds_object_detection_sensor_proxy >( "Person Detection Camera", this, _dds_dev );
+        // OD sensor is renamed to match the USB side; the caller-supplied `sensor_name` is intentionally overridden.
+        return std::make_shared< dds_object_detection_sensor_proxy >( object_detection_sensor::SENSOR_NAME, this, _dds_dev );
     case RS2_STREAM_ANY:
         // Generic: no type
         return std::make_shared< dds_sensor_proxy >( sensor_name, this, _dds_dev );

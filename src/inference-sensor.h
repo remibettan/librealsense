@@ -21,6 +21,10 @@ MAP_EXTENSION( RS2_EXTENSION_INFERENCE_SENSOR, librealsense::inference_sensor );
 class object_detection_sensor : public virtual inference_sensor
 {
 public:
+    // Shared names for the OD sensor and stream profile, used by both the USB (d500) and DDS paths
+    static constexpr const char * SENSOR_NAME = "Person Detection Camera";
+    static constexpr const char * STREAM_NAME = "Person Detection";
+
     virtual ~object_detection_sensor() = default;
 };
 
