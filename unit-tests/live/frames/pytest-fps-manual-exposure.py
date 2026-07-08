@@ -22,6 +22,8 @@ pytestmark = [
 TESTED_FPS =          [5,   6,   15,  30,  60,  90]
 TIME_TO_TEST_FPS =    [25,  20,  13,  10,  5,   4]
 
+fps_helper.TIME_FOR_STEADY_STATE = 1.2  # t2ff KPI is 1 second + some extra
+
 
 def set_exposure_half_frame_time(sensor, requested_fps):
     """Set sensor exposure to half the frame time for the given requested_fps.
@@ -130,14 +132,10 @@ def test_color_fps_manual_exposure(test_device):
     for i in range(len(TESTED_FPS)):
         requested_fps = TESTED_FPS[i]
         try:
-            candidates = [p for p in cs.profiles
-                          if p.fps() == requested_fps
-                          and p.stream_type() == rs.stream.color
-                          and p.format() == rs.format.rgb8]
-            if not candidates:
-                raise StopIteration
-            candidates.sort(key=lambda pr: pr.as_video_stream_profile().width() * pr.as_video_stream_profile().height())
-            cp = candidates[len(candidates)//2]
+            cp = next(p for p in cs.profiles
+                      if p.fps() == requested_fps
+                      and p.stream_type() == rs.stream.color
+                      and p.format() == rs.format.rgb8)
         except StopIteration:
             log.info(f"Requested fps: {requested_fps:.1f} [Hz], not supported")
             continue
