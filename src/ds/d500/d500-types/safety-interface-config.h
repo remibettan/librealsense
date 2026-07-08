@@ -411,6 +411,10 @@ namespace librealsense
     class calibration_monitor_params
     {
     public:
+        // Default-constructed instances are zero-filled placeholders (e.g. as an
+        // uninitialized member of a default-constructed safety_interface_config).
+        // Zeros are outside the ranges enforced by validate_json — do not round-trip
+        // through to_json() / from-json until the object has been populated.
         calibration_monitor_params() = default;
 
         calibration_monitor_params(const json &j)
