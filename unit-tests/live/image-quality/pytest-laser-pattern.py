@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.context("image-quality"),
     pytest.mark.device_each("D400*"),
+    pytest.mark.device_each("D500*"),
     pytest.mark.device_exclude("D401"),  # no laser projector
 ]
 
@@ -35,7 +36,7 @@ MAX_DOT_AREA_PX = 50  # above this, treat it as a brightness blob, not a laser d
 MIN_DOT_COUNT = 30  # need at least this many dot-sized blobs in the diff image
 GRID_SIZE = 4  # frame divided into GRID_SIZE x GRID_SIZE cells to check spread
 MIN_GRID_CELLS_COVERED = 6  # dots must be spread across at least this many cells (of GRID_SIZE**2)
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 
 def capture_avg_ir(pipeline):
