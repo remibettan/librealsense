@@ -3,6 +3,7 @@
 
 
 #include "d500-options.h"
+#include "d500-private.h"
 
 namespace librealsense
 {

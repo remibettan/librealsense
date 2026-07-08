@@ -1559,7 +1559,7 @@ namespace librealsense
 
         table_header* hd = (table_header*)(_curr_calibration.data());
         d400_calibration_table_id  tbl_id = static_cast<d400_calibration_table_id>(hd->table_type);
-        fw_cmd cmd{};
+        d400_fw_cmd cmd{};
         uint32_t param2 = 0;
         switch (tbl_id)
         {
