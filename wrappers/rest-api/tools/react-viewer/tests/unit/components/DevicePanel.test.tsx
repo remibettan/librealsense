@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { render, createMockDevice, createMockDeviceState } from '../../utils/test-utils'
+import { render, createMockDevice, createMockDeviceState, createMockSensor, createMockOption } from '../../utils/test-utils'
 import { DevicePanel } from '@/components/DevicePanel'
 import { useAppStore } from '@/store'
 
@@ -244,8 +244,73 @@ describe('DevicePanel', () => {
   describe('Header', () => {
     it('renders "Devices" header', () => {
       render(<DevicePanel />)
-      
+
       expect(screen.getByText('Devices')).toBeInTheDocument()
+    })
+  })
+
+  describe('Control Search', () => {
+    function renderWithControls() {
+      const device = createMockDevice()
+      const sensor = createMockSensor({ sensor_id: 'sensor-a', name: 'Stereo Module' })
+      const options = [
+        createMockOption({ option_id: 'Exposure', name: 'Exposure', category: 'Basic Controls' }),
+        createMockOption({ option_id: 'Gain', name: 'Gain', category: 'Basic Controls' }),
+        createMockOption({ option_id: 'Laser_Power', name: 'Laser Power', category: 'Basic Controls' }),
+      ]
+      const deviceState = createMockDeviceState(device, {
+        isActive: true,
+        sensors: [sensor],
+        options: { 'sensor-a': options },
+      })
+      render(<DevicePanel />, {
+        initialStoreState: {
+          devices: [device],
+          deviceStates: { [device.device_id]: deviceState },
+        },
+      })
+    }
+
+    it('renders the control search box for an active device', () => {
+      renderWithControls()
+      expect(screen.getByPlaceholderText('Search controls…')).toBeInTheDocument()
+    })
+
+    it('filters to matching controls and auto-expands, hiding non-matches', async () => {
+      renderWithControls()
+      await userEvent.type(screen.getByPlaceholderText('Search controls…'), 'gain')
+
+      await waitFor(() => expect(screen.getByText('Gain')).toBeInTheDocument())
+      expect(screen.queryByText('Exposure')).not.toBeInTheDocument()
+      expect(screen.queryByText('Laser Power')).not.toBeInTheDocument()
+    })
+
+    it('matches via alias (ir projector -> Laser Power)', async () => {
+      renderWithControls()
+      await userEvent.type(screen.getByPlaceholderText('Search controls…'), 'ir projector')
+
+      await waitFor(() => expect(screen.getByText('Laser Power')).toBeInTheDocument())
+      expect(screen.queryByText('Gain')).not.toBeInTheDocument()
+    })
+
+    it('tolerates a typo (expsure -> Exposure)', async () => {
+      renderWithControls()
+      await userEvent.type(screen.getByPlaceholderText('Search controls…'), 'expsure')
+
+      await waitFor(() => expect(screen.getByText('Exposure')).toBeInTheDocument())
+    })
+
+    it('shows a no-match message and clears back to collapsed on X', async () => {
+      renderWithControls()
+      const input = screen.getByPlaceholderText('Search controls…')
+      await userEvent.type(input, 'zzzqqq')
+
+      await waitFor(() => expect(screen.getByText(/No controls match/)).toBeInTheDocument())
+
+      await userEvent.click(screen.getByTitle('Clear search'))
+      expect(screen.queryByText(/No controls match/)).not.toBeInTheDocument()
+      // back to idle: controls collapsed, options not rendered
+      expect(screen.queryByText('Exposure')).not.toBeInTheDocument()
     })
   })
 })

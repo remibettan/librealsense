@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { MutableRefObject, ReactElement } from 'react'
 import { useAppStore } from '../store'
 import type { DeviceInfo, SensorInfo, OptionInfo, StreamConfig, DeviceState, FirmwareState, SensorConfig } from '../api/types'
+import { Search, X } from 'lucide-react'
 import { FirmwareProgressModal } from './FirmwareProgressModal'
 import { ToastContainer, type ToastType, type ToastAction } from './Toast'
+import { filterOptions } from '../utils/optionSearch'
 
 interface Toast {
   id: string
@@ -344,6 +346,7 @@ function DeviceCard({
 }: DeviceCardProps) {
   const [showMenu, setShowMenu] = useState(false)
   const [expandedSensor, setExpandedSensor] = useState<string | null>(null)
+  const [controlSearch, setControlSearch] = useState('')
   const fwPicker = useFilePicker(onUpdateFirmwareFromFile, '.bin')
 
   const isActive = deviceState?.isActive || false
@@ -576,18 +579,59 @@ function DeviceCard({
           {/* Camera Controls */}
           <div className="border-t border-gray-700 p-3">
             <h4 className="text-sm font-medium text-gray-300 mb-2">Controls</h4>
-            {sensors.map((sensor) => (
-              <SensorOptionsPanel
-                key={sensor.sensor_id}
-                sensor={sensor}
-                options={options[sensor.sensor_id] || []}
-                isExpanded={expandedSensor === sensor.sensor_id}
-                onToggle={() =>
-                  setExpandedSensor(expandedSensor === sensor.sensor_id ? null : sensor.sensor_id)
-                }
-                onSetOption={onSetOption}
+            <div className="relative mb-2">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+              <input
+                type="text"
+                value={controlSearch}
+                onChange={(e) => setControlSearch(e.target.value)}
+                placeholder="Search controls…"
+                className="w-full pl-7 pr-7 py-1.5 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-rs-blue text-xs"
               />
-            ))}
+              {controlSearch && (
+                <button
+                  onClick={() => setControlSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {(() => {
+              const searching = controlSearch.trim().length > 0
+              const sensorMatches = sensors.map((sensor) => ({
+                sensor,
+                matchCount: searching
+                  ? filterOptions(options[sensor.sensor_id] || [], controlSearch).length
+                  : (options[sensor.sensor_id] || []).length,
+              }))
+              const anyMatch = sensorMatches.some((s) => s.matchCount > 0)
+              return (
+                <>
+                  {sensorMatches.map(({ sensor, matchCount }) => (
+                    <SensorOptionsPanel
+                      key={sensor.sensor_id}
+                      sensor={sensor}
+                      options={options[sensor.sensor_id] || []}
+                      searchQuery={controlSearch}
+                      isExpanded={
+                        searching ? matchCount > 0 : expandedSensor === sensor.sensor_id
+                      }
+                      onToggle={() =>
+                        setExpandedSensor(expandedSensor === sensor.sensor_id ? null : sensor.sensor_id)
+                      }
+                      onSetOption={onSetOption}
+                    />
+                  ))}
+                  {searching && !anyMatch && (
+                    <p className="text-gray-500 text-xs py-1">
+                      No controls match “{controlSearch.trim()}”.
+                    </p>
+                  )}
+                </>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -856,16 +900,20 @@ function StreamConfigItem({ config, sensors, onUpdate, disabled, isMotionSensor 
 interface SensorOptionsPanelProps {
   sensor: SensorInfo
   options: OptionInfo[]
+  searchQuery: string
   isExpanded: boolean
   onToggle: () => void
   onSetOption: (sensorId: string, optionId: string, value: number | boolean | string) => Promise<void>
 }
 
-function SensorOptionsPanel({ sensor, options, isExpanded, onToggle, onSetOption }: SensorOptionsPanelProps) {
+function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle, onSetOption }: SensorOptionsPanelProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
-  // Group options by category
-  const optionsByCategory = options.reduce((acc, option) => {
+  const searching = searchQuery.trim().length > 0
+  const visibleOptions = filterOptions(options, searchQuery)
+
+  // Group options by category (filtered when a search is active)
+  const optionsByCategory = visibleOptions.reduce((acc, option) => {
     const category = option.category || 'Basic Controls'
     if (!acc[category]) {
       acc[category] = []
@@ -965,7 +1013,8 @@ function SensorOptionsPanel({ sensor, options, isExpanded, onToggle, onSetOption
                   key={category}
                   category={category}
                   options={optionsByCategory[category]}
-                  isExpanded={expandedCategories.has(category)}
+                  searching={searching}
+                  isExpanded={searching ? true : expandedCategories.has(category)}
                   onToggle={() => toggleCategory(category)}
                   onRestoreDefaults={() => handleRestoreCategoryDefaults(category)}
                   sensorId={sensor.sensor_id}
@@ -983,6 +1032,7 @@ function SensorOptionsPanel({ sensor, options, isExpanded, onToggle, onSetOption
 interface CategorySectionProps {
   category: string
   options: OptionInfo[]
+  searching: boolean
   isExpanded: boolean
   onToggle: () => void
   onRestoreDefaults: () => void
@@ -990,7 +1040,7 @@ interface CategorySectionProps {
   onSetOption: (sensorId: string, optionId: string, value: number | boolean | string) => Promise<void>
 }
 
-function CategorySection({ category, options, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption }: CategorySectionProps) {
+function CategorySection({ category, options, searching, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption }: CategorySectionProps) {
   const hasModifiedOptions = options.some(opt => !opt.read_only && opt.current_value !== opt.default_value)
 
   // For Post-Processing category, render specialized filter sections
@@ -998,6 +1048,7 @@ function CategorySection({ category, options, isExpanded, onToggle, onRestoreDef
     return (
       <PostProcessingSection
         options={options}
+        searching={searching}
         isExpanded={isExpanded}
         onToggle={onToggle}
         onRestoreDefaults={onRestoreDefaults}
@@ -1056,6 +1107,7 @@ function CategorySection({ category, options, isExpanded, onToggle, onRestoreDef
 
 interface PostProcessingSectionProps {
   options: OptionInfo[]
+  searching: boolean
   isExpanded: boolean
   onToggle: () => void
   onRestoreDefaults: () => void
@@ -1064,7 +1116,7 @@ interface PostProcessingSectionProps {
   hasModifiedOptions: boolean
 }
 
-function PostProcessingSection({ options, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption, hasModifiedOptions }: PostProcessingSectionProps) {
+function PostProcessingSection({ options, searching, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption, hasModifiedOptions }: PostProcessingSectionProps) {
   const [expandedFilters, setExpandedFilters] = useState<Set<string>>(new Set())
 
   // Group options by filter_name
@@ -1131,7 +1183,7 @@ function PostProcessingSection({ options, isExpanded, onToggle, onRestoreDefault
               filterName={filterName}
               enableOption={group.enableOption}
               paramOptions={group.paramOptions}
-              isExpanded={expandedFilters.has(filterName)}
+              isExpanded={searching ? true : expandedFilters.has(filterName)}
               onToggle={() => toggleFilter(filterName)}
               sensorId={sensorId}
               onSetOption={onSetOption}
