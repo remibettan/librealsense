@@ -144,7 +144,9 @@ def test_setpoint_deadband_clamping(hwm_and_sensor):
 def test_set_during_streaming_is_nacked(hwm_and_sensor):
     hwm, depth_sensor = hwm_and_sensor
     original = _get_params(hwm)
-    depth_profile = next(p for p in depth_sensor.profiles if p.stream_type() == rs.stream.depth)
+    depth_profile = next((p for p in depth_sensor.profiles if p.stream_type() == rs.stream.depth), None)
+    if depth_profile is None:
+        pytest.skip("Sensor does not expose a depth-stream profile")
     depth_sensor.open(depth_profile)
     depth_sensor.start(lambda _f: None)
     try:
