@@ -27,6 +27,7 @@ pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_each("D500*"),
     pytest.mark.device_exclude("D401"),  # no laser projector
+    pytest.mark.timeout(120),
 ]
 
 NUM_FRAMES = 15  # frames averaged per measurement, to average out sensor read noise
@@ -49,7 +50,8 @@ def capture_avg_ir(pipeline):
         if ir_frame:
             frames.append(np.asanyarray(ir_frame.get_data()).astype(np.float32))
 
-    assert frames, "No IR frames captured"
+    if not frames:
+        pytest.fail("No IR frames captured — pipeline returned no valid infrared frames")
     return np.mean(frames, axis=0)
 
 
@@ -123,7 +125,13 @@ def test_laser_pattern_visible(test_device):
 
         dots, mask = find_dot_blobs(on_img - off_img)
         h, w = mask.shape
-        covered_cells = {(int(cx * GRID_SIZE / w), int(cy * GRID_SIZE / h)) for (cx, cy), _ in dots}
+        covered_cells = {
+            (
+                min(int(cx * GRID_SIZE / w), GRID_SIZE - 1),
+                min(int(cy * GRID_SIZE / h), GRID_SIZE - 1)
+            )
+            for (cx, cy), _ in dots
+        }
 
         log.info(f"{product_name}: {len(dots)} dot-sized blobs in ON-OFF diff, "
                  f"spread across {len(covered_cells)}/{GRID_SIZE * GRID_SIZE} grid cells")
