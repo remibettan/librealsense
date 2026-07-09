@@ -36,7 +36,6 @@ MAX_DOT_AREA_PX = 50  # above this, treat it as a brightness blob, not a laser d
 MIN_DOT_COUNT = 30  # need at least this many dot-sized blobs in the diff image
 GRID_SIZE = 4  # frame divided into GRID_SIZE x GRID_SIZE cells to check spread
 MIN_GRID_CELLS_COVERED = 6  # dots must be spread across at least this many cells (of GRID_SIZE**2)
-DEBUG_MODE = False
 
 
 def capture_avg_ir(pipeline):
@@ -131,9 +130,9 @@ def test_laser_pattern_visible(test_device):
 
         pattern_visible = len(dots) >= MIN_DOT_COUNT and len(covered_cells) >= MIN_GRID_CELLS_COVERED
 
-        if DEBUG_MODE:
+        if not pattern_visible:
             dbg = draw_debug(off_img, on_img, mask, dots)
-            save_failure_snapshot("pytest-laser-pattern-pass.py" if pattern_visible else __file__, pipeline, dbg)
+            save_failure_snapshot(__file__, pipeline, dbg)
     finally:
         pipeline.stop()
 
