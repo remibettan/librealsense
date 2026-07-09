@@ -53,6 +53,10 @@ function AboutModal({ isOpen, onClose }: WhatsNewModalProps) {
             <span className="text-white font-mono">{sdkVersion ?? '…'}</span>
           </div>
           <div className="flex justify-between text-sm">
+            <span className="text-gray-400">Viewer</span>
+            <span className="text-white font-mono">{__VIEWER_VERSION__}</span>
+          </div>
+          <div className="flex justify-between text-sm">
             <span className="text-gray-400">License</span>
             <span className="text-white">Apache 2.0</span>
           </div>
