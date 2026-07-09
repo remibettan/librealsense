@@ -133,6 +133,11 @@ namespace rs2
 
     bool stream_model::is_stream_visible() const
     {
+        // Inference streams carry binary data, not displayable video - no tile is shown for them
+        // (detections are overlaid on the color stream instead).
+        if (profile.stream_type() == RS2_STREAM_OBJECT_DETECTION)
+            return false;
+
         if (dev &&
             (dev->is_paused() ||
             (dev->streaming && dev->dev.is<playback>()) ||
@@ -454,8 +459,12 @@ namespace rs2
                 label = tooltip;
             else
             {
-                // Use only the SKU type for compact representation and use only the last three digits for S.N
-                auto short_name = split_string(dev_name, ' ').back();
+                // Use only the SKU type for compact representation and use only the last three digits for S.N.
+                // The SKU is the model token right after "RealSense" (e.g. D435, D585S), not the last word -
+                // e.g. "RealSense D585 Proto Dual RGB" should yield "D585", not "RGB".
+                const std::string prefix = "RealSense ";
+                std::string after_prefix = dev_name.substr( dev_name.find( prefix ) + prefix.size() );
+                auto short_name = split_string( after_prefix, ' ' ).front();
                 auto short_sn = dev_serial;
                 short_sn.erase(0, dev_serial.size() - 5).replace(0, 2, "..");
 
@@ -1242,7 +1251,7 @@ namespace rs2
             "OSSD2_A_present",
             "OSSD2_A status : Raised / Idle",
             "OSSD2_B_present",
-            "OSSD2_B status : Raised / Idle"
+            "OSSD2_B status : Raised / Idle",
             "Device_Ready_present",
             "Device_Ready on / off",
             "Error signal present",

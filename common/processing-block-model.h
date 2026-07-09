@@ -43,6 +43,10 @@ namespace rs2
 
         std::shared_ptr<rs2::filter> get_block() { return _block; }
 
+        // Access the UI model for one of this block's options (nullptr if not present).
+        // Used by the viewer UI tests to drive/read post-processing filter controls.
+        option_model * get_option_model( rs2_option opt );
+
         void enable( bool e = true )
         {
             processing_block_enable_disable( _enabled = e );
@@ -54,7 +58,7 @@ namespace rs2
         // Optional predicate; null means always available.
         // When it returns false the toggle is grayed out in the UI.
         // Set by the owner after construction for filters with runtime constraints
-        // (e.g. in subdevice_model for MinZ: requires CUDA and specific stream config).
+        // (e.g. in subdevice_model for Improved Close Range Depth: requires CUDA and specific stream config).
         std::function<bool()> available;
         std::string unavailable_tooltip;
 

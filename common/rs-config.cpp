@@ -5,18 +5,30 @@
 
 #include <librealsense2/rs.h>
 #include <rsutils/os/special-folder.h>
+#include <rsutils/os/atomic-write-file.h>
 #include <rsutils/json.h>
 #include <rsutils/json-config.h>
-#include <fstream>
+#include <sstream>
+#include <rsutils/easylogging/easyloggingpp.h>
 
 using json = rsutils::json;
 
 using namespace rs2;
 
+constexpr std::chrono::milliseconds config_file::SAVE_INTERVAL;
+
 void config_file::set(const char* key, const char* value)
 {
     std::lock_guard< std::recursive_mutex > lk( _mutex );
     _j[key] = value;
+    _dirty = true;
+}
+
+void config_file::set_and_save( const char * key, const char * value )
+{
+    std::lock_guard< std::recursive_mutex > lk( _mutex );
+    _j[key] = value;
+    _dirty = true;
     save();
 }
 
@@ -30,14 +42,14 @@ void config_file::remove(const char* key)
 {
     std::lock_guard< std::recursive_mutex > lk( _mutex );
     _j.erase(key);
-    save();
+    _dirty = true;
 }
 
 void config_file::reset()
 {
     std::lock_guard< std::recursive_mutex > lk( _mutex );
     _j = json::object();
-    save();
+    _dirty = true;
 }
 
 std::string config_file::get(const char* key, const char* def) const
@@ -75,16 +87,20 @@ config_value config_file::get(const char* key) const
 
 void config_file::save(const char* filename)
 {
-    std::lock_guard< std::recursive_mutex > lk( _mutex );
-    try
+    std::string serialized;
     {
-        std::ofstream out(filename);
-        out << std::setw( 2 ) << _j;
-        out.close();
+        std::lock_guard< std::recursive_mutex > lk( _mutex );
+        if( ! filename )
+        {
+            LOG_ERROR( "Config file name is null, cannot save config." );
+            return;
+        }
+        std::ostringstream oss;
+        oss << std::setw( 2 ) << _j;
+        serialized = oss.str();
     }
-    catch (...)
-    {
-    }
+    if( ! rsutils::os::atomic_write_file( filename, serialized ) )
+        LOG_ERROR( "Failed to save config file '" + std::string( filename ) + "'" );
 }
 
 config_file& config_file::instance()
@@ -96,6 +112,8 @@ config_file& config_file::instance()
 
 config_file::config_file( std::string const & filename )
     : _filename( filename )
+    , _dirty( false )
+    , _save_stop( false )
 {
     try
     {
@@ -107,16 +125,45 @@ config_file::config_file( std::string const & filename )
     {
 
     }
+    _save_thread = std::thread( &config_file::save_loop, this );
 }
 
 void config_file::save()
 {
-    std::lock_guard< std::recursive_mutex > lk( _mutex );
-    save(_filename.c_str());
+    if( ! _filename.empty() )
+        save( _filename.c_str() );
+}
+
+config_file::~config_file()
+{
+    {
+        std::lock_guard< std::mutex > lock( _save_cv_mutex );
+        _save_stop = true;
+    }
+    _save_cv.notify_one();
+    if( _save_thread.joinable() )
+        _save_thread.join();
+    if( _dirty.exchange( false ) )
+        save();
+}
+
+void config_file::save_loop()
+{
+    std::unique_lock< std::mutex > lock( _save_cv_mutex );
+    while( ! _save_stop )
+    {
+        _save_cv.wait_for( lock, SAVE_INTERVAL, [this] { return _save_stop; } );
+        lock.unlock();
+        if( _dirty.exchange( false ) )
+            save();
+        lock.lock();
+    }
 }
 
 config_file::config_file()
     : _j( rsutils::json::object() )
+    , _dirty( false )
+    , _save_stop( false )
 {
 }
 
@@ -135,7 +182,7 @@ config_file& config_file::operator=(const config_file& other)
         std::lock_guard< std::recursive_mutex > lk_this( _mutex );
         _j = std::move( j_copy );
         _defaults = std::move( defaults_copy );
-        save();
+        _dirty = true;
     }
     return *this;
 }
