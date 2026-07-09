@@ -6,7 +6,22 @@ from app.api.endpoints import devices, sensors, options, streams, webrtc, point_
 
 
 def _get_sdk_version() -> str:
-    """Return the installed pyrealsense2/librealsense SDK version, or 'unknown' if not resolvable."""
+    """Return the version of the actually-loaded pyrealsense2 binary, or 'unknown'.
+
+    Read it from the loaded module (RS2_API_*, bound as __full_version__ on the
+    extension module) rather than pip metadata: main.py may load a locally-built
+    .pyd whose version differs from any installed wheel.
+    """
+    try:
+        import pyrealsense2 as rs
+        # `from .pyrealsense2 import *` drops dunders, so they live on the inner module.
+        inner = getattr(rs, "pyrealsense2", rs)
+        v = (getattr(inner, "__full_version__", None) or getattr(inner, "__version__", None)
+             or getattr(rs, "__full_version__", None) or getattr(rs, "__version__", None))
+        if v:
+            return v
+    except Exception:
+        pass
     try:
         from importlib.metadata import version, PackageNotFoundError
         try:
