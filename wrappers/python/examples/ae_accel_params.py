@@ -32,6 +32,11 @@ AE_ACCEL_PARAMS_OPCODE = 0x95
 PARAM1_GET = 0
 PARAM1_SET = 1
 
+# D400-family only. On D500, opcode 0x95 is SAFETY_PRESET_WRITE - running
+# this against a D500 would be destructive, hence the strict product-line gate.
+REQUIRED_PRODUCT_LINE = "D400"
+MIN_FW_VERSION = (5, 17, 3, 20)  # RSDSO-21358 shipped Accelerated AE on D40x/D43x in R58.3b
+
 FIELDS_RW = ["setpoint", "deadband", "saturation_weight", "saturation_value", "stability"]
 FIELDS_RO = ["score_low_th", "score_high_th"]
 FIELDS_ALL = FIELDS_RW + FIELDS_RO
@@ -70,7 +75,10 @@ def unpack_response(raw):
 
 def get_params(hwm):
     cmd = hwm.build_command(opcode=AE_ACCEL_PARAMS_OPCODE, param1=PARAM1_GET)
-    raw = hwm.send_and_receive_raw_data(cmd)
+    try:
+        raw = hwm.send_and_receive_raw_data(cmd)
+    except Exception as e:
+        sys.exit(f"GET AE_ACCEL_PARAMS failed: {e}")
     return unpack_response(raw)
 
 
@@ -87,8 +95,31 @@ def set_params(hwm, current, updates):
     payload = struct.pack("<5f", *(validated[k] for k in FIELDS_RW))
     data = list(payload)
     cmd = hwm.build_command(opcode=AE_ACCEL_PARAMS_OPCODE, param1=PARAM1_SET, data=data)
-    hwm.send_and_receive_raw_data(cmd)
+    try:
+        hwm.send_and_receive_raw_data(cmd)
+    except Exception as e:
+        sys.exit(f"SET AE_ACCEL_PARAMS failed (is the depth sensor streaming?): {e}")
     return get_params(hwm)
+
+
+def parse_fw_version(fw_str):
+    try:
+        return tuple(int(x) for x in fw_str.split("."))
+    except (ValueError, AttributeError):
+        return None
+
+
+def guard_device(device):
+    product_line = device.get_info(rs.camera_info.product_line)
+    if product_line != REQUIRED_PRODUCT_LINE:
+        sys.exit(f"AE_ACCEL_PARAMS is D400-only (opcode 0x95 on D500 is SAFETY_PRESET_WRITE). "
+                 f"Detected product line: {product_line}")
+
+    fw_str = device.get_info(rs.camera_info.firmware_version)
+    fw_tuple = parse_fw_version(fw_str)
+    if fw_tuple is None or fw_tuple < MIN_FW_VERSION:
+        sys.exit(f"FW {fw_str} is below minimum {'.'.join(map(str, MIN_FW_VERSION))} "
+                 f"required for AE_ACCEL_PARAMS (RSDSO-21358).")
 
 
 def print_params(label, params):
@@ -125,7 +156,11 @@ def main():
     fw     = device.get_info(rs.camera_info.firmware_version)
     print(f"Device: {name}  SN={serial}  FW={fw}")
 
+    guard_device(device)
+
     hwm = device.as_debug_protocol()
+    if hwm is None:
+        sys.exit("Device does not expose a debug-protocol interface.")
 
     current = get_params(hwm)
     print_params("Current AE_ACCEL_PARAMS:", current)
