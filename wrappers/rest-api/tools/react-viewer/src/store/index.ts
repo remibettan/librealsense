@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create, type StoreApi } from 'zustand'
 import type {
   DeviceInfo,
   SensorInfo,
@@ -128,8 +128,9 @@ interface AppState {
   hasUserInteracted: boolean // Track if user manually toggled a device (skip auto-activate)
   fetchDevices: (forceRefresh?: boolean) => Promise<void>
   enableMetadata: () => Promise<{ status: string; note?: string }>
-  checkFirmwareUpdates: (deviceId: string) => Promise<void>
+  checkFirmwareUpdates: (deviceId: string, explicit?: boolean) => Promise<void>
   updateFirmwareFromFile: (deviceId: string, file: File) => Promise<void>
+  updateFirmwareFromRecommended: (deviceId: string) => Promise<void>
 
   // Device activation (multi-select support)
   toggleDeviceActive: (device: DeviceInfo) => Promise<void>
@@ -214,6 +215,70 @@ interface AppState {
   pointCloudColors: Uint8Array | null
 }
 
+// Shared driver for both firmware-update paths (user file + recommended download):
+// flips is_updating, runs the API call (progress arrives via Socket.IO), refreshes
+// device info, and records any failure on the device's firmware state.
+async function performFirmwareUpdate(
+  set: StoreApi<AppState>['setState'],
+  get: StoreApi<AppState>['getState'],
+  deviceId: string,
+  apiCall: () => Promise<unknown>,
+): Promise<void> {
+  set((state) => {
+    const ds = state.deviceStates[deviceId]
+    if (!ds) return state
+    const prev = ds.firmware || {
+      status: 'unknown' as FirmwareState['status'],
+      current: ds.device.firmware_version,
+      recommended: ds.device.recommended_firmware_version,
+      file_available: ds.device.firmware_file_available,
+    }
+    const nextFirmware: FirmwareState = {
+      ...prev,
+      status: prev.status ?? 'unknown',
+      is_updating: true,
+      progress: 0,
+      last_error: null,
+    }
+    return { deviceStates: { ...state.deviceStates, [deviceId]: { ...ds, firmware: nextFirmware } } }
+  })
+
+  try {
+    await apiCall()
+    // The device re-enumerates after a flash (DFU → normal). Force a fresh
+    // enumeration and retry until it reappears, so the UI recovers without a
+    // manual Refresh even if the reconnect lags or a devices_changed event raced.
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await get().fetchDevices(true)
+      if (get().devices.some((d) => d.device_id === deviceId)) break
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+    }
+    set((state) => {
+      const ds = state.deviceStates[deviceId]
+      if (!ds) return state
+      const prev = ds.firmware || { status: 'unknown' as FirmwareState['status'] }
+      const next: FirmwareState = { ...prev, status: prev.status ?? 'unknown', is_updating: false, progress: 1 }
+      return { deviceStates: { ...state.deviceStates, [deviceId]: { ...ds, firmware: next } } }
+    })
+  } catch (error) {
+    // Prefer FastAPI's detail string when available.
+    const axiosDetail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    const message = typeof axiosDetail === 'string' && axiosDetail
+      ? axiosDetail
+      : error instanceof Error ? error.message : 'Firmware update failed'
+    // Surface the error only on the device's firmware state — the modal and toast
+    // (driven by the Socket.IO failure event) already inform the user; setting the
+    // global `error` banner here would triple-render the message.
+    set((state) => {
+      const ds = state.deviceStates[deviceId]
+      if (!ds) return state
+      const prev = ds.firmware || { status: 'unknown' as FirmwareState['status'] }
+      const next: FirmwareState = { ...prev, status: prev.status ?? 'unknown', is_updating: false, last_error: message }
+      return { deviceStates: { ...state.deviceStates, [deviceId]: { ...ds, firmware: next } } }
+    })
+  }
+}
+
 export const useAppStore = create<AppState>()((set, get) => ({
   // Connection state
   isConnected: false,
@@ -289,74 +354,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
     }
   },
 
-  updateFirmwareFromFile: async (deviceId: string, file: File) => {
-    set((state) => {
-      const ds = state.deviceStates[deviceId]
-      if (!ds) return state
-      const prev = ds.firmware || {
-        status: 'unknown' as FirmwareState['status'],
-        current: ds.device.firmware_version,
-        recommended: ds.device.recommended_firmware_version,
-        file_available: ds.device.firmware_file_available,
-      }
-      const nextFirmware: FirmwareState = {
-        ...prev,
-        status: prev.status ?? 'unknown',
-        is_updating: true,
-        progress: 0,
-        last_error: null,
-      }
-      return {
-        deviceStates: {
-          ...state.deviceStates,
-          [deviceId]: { ...ds, firmware: nextFirmware },
-        },
-      }
-    })
+  updateFirmwareFromFile: (deviceId: string, file: File) =>
+    performFirmwareUpdate(set, get, deviceId, () => apiClient.updateFirmwareFromFile(deviceId, file)),
 
-    try {
-      await apiClient.updateFirmwareFromFile(deviceId, file)
-      await get().fetchDevices()
-      set((state) => {
-        const ds = state.deviceStates[deviceId]
-        if (!ds) return state
-        const prev = ds.firmware || { status: 'unknown' as FirmwareState['status'] }
-        const next: FirmwareState = { ...prev, status: prev.status ?? 'unknown', is_updating: false, progress: 1 }
-        return {
-          deviceStates: {
-            ...state.deviceStates,
-            [deviceId]: { ...ds, firmware: next },
-          },
-        }
-      })
-    } catch (error) {
-      // Prefer FastAPI's detail string when available.
-      const axiosDetail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      const message = typeof axiosDetail === 'string' && axiosDetail
-        ? axiosDetail
-        : error instanceof Error ? error.message : 'Firmware update failed'
-      // Surface the error only on the device's firmware state — the modal and
-      // toast (driven by the Socket.IO failure event) already inform the user;
-      // setting the global `error` banner here would triple-render the message.
-      set((state) => {
-        const ds = state.deviceStates[deviceId]
-        if (!ds) return state
-        const prev = ds.firmware || { status: 'unknown' as FirmwareState['status'] }
-        const next: FirmwareState = {
-          ...prev,
-          status: prev.status ?? 'unknown',
-          is_updating: false,
-          last_error: message,
-        }
-        return {
-          deviceStates: {
-            ...state.deviceStates,
-            [deviceId]: { ...ds, firmware: next },
-          },
-        }
-      })
-    }
-  },
+  updateFirmwareFromRecommended: (deviceId: string) =>
+    performFirmwareUpdate(set, get, deviceId, () => apiClient.updateFirmwareFromRecommended(deviceId)),
 
   enableMetadata: async () => {
     const result = await apiClient.enableMetadata()
@@ -364,7 +366,21 @@ export const useAppStore = create<AppState>()((set, get) => ({
     return result
   },
 
-  checkFirmwareUpdates: async (deviceId: string) => {
+  checkFirmwareUpdates: async (deviceId: string, explicit = false) => {
+    // An explicit user-triggered check revives a previously dismissed proposal:
+    // clear both permanent (localStorage) and session (sessionStorage) dismissals
+    // for this device so the banner shows the (re-fetched) recommendation again.
+    if (explicit) {
+      try {
+        const prefix = `rs-fw-dismissed:${deviceId}:`
+        for (const s of [localStorage, sessionStorage]) {
+          for (let i = s.length - 1; i >= 0; i--) {
+            const k = s.key(i)
+            if (k && k.startsWith(prefix)) s.removeItem(k)
+          }
+        }
+      } catch { /* ignore storage errors */ }
+    }
     try {
       const firmwareStatus = await apiClient.getFirmwareStatus(deviceId)
       set((state) => {
@@ -376,6 +392,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
           recommended: firmwareStatus.recommended || ds.device.recommended_firmware_version,
           status: (firmwareStatus.status as FirmwareState['status']) || 'unknown',
           file_available: firmwareStatus.file_available,
+          link: firmwareStatus.link,
           is_updating: false,
           progress: undefined,
           last_error: null,
@@ -446,6 +463,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
       
       // Fetch sensors for this device
       await get().fetchSensors(device.device_id)
+      // Check for a firmware-update proposal (online versions DB; best-effort, non-blocking)
+      get().checkFirmwareUpdates(device.device_id)
     }
   },
 

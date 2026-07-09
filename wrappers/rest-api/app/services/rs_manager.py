@@ -2,10 +2,15 @@
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 import asyncio
+import json
+import os
 import platform
 import struct
+import tempfile
 import threading
 import time
+import urllib.parse
+import urllib.request
 import logging
 from collections import deque
 from typing import Callable, Deque, Dict, List, Optional, Any, Tuple, Set
@@ -32,6 +37,154 @@ from app.services.metadata_socket_server import MetadataSocketServer
 _IS_WINDOWS = platform.system() == "Windows"
 
 FW_STATUS_UNKNOWN = "unknown"
+FW_STATUS_OUTDATED = "outdated"
+FW_STATUS_UP_TO_DATE = "up_to_date"
+
+
+def _parse_fw_version(v: Optional[str]) -> Optional[tuple]:
+    """Parse a dotted firmware version ("5.17.0.10") into an int tuple, or None."""
+    if not v:
+        return None
+    try:
+        return tuple(int(p) for p in v.split("."))
+    except ValueError:
+        return None
+
+
+def firmware_update_status(current: Optional[str], recommended: Optional[str]) -> str:
+    """Compare current vs recommended FW versions numerically.
+
+    Returns FW_STATUS_OUTDATED when current < recommended, FW_STATUS_UP_TO_DATE when
+    current >= recommended, and FW_STATUS_UNKNOWN when either can't be parsed. The
+    recommended version comes from the SDK (RS2_CAMERA_INFO_RECOMMENDED_FIRMWARE_VERSION);
+    there is no bundled firmware, so the user supplies the image (Update FW from File).
+    """
+    cur = _parse_fw_version(current)
+    rec = _parse_fw_version(recommended)
+    if cur is None or rec is None:
+        return FW_STATUS_UNKNOWN
+    return FW_STATUS_OUTDATED if cur < rec else FW_STATUS_UP_TO_DATE
+
+
+# Online versions database — the SDK no longer bundles firmware, so the recommended
+# version is looked up here (mirrors the C++ viewer's server_versions_db_url).
+SERVER_VERSIONS_DB_URL = "https://librealsense.realsenseai.com/Releases/rs_versions_db.json"
+_VERSIONS_DB_TTL = 3600.0  # seconds
+_versions_db_cache: Dict[str, Any] = {"ts": 0.0, "entries": None}
+
+
+def _strip_intel_prefix(name):
+    """Drop the legacy 'Intel ' vendor prefix. Newer SDKs report names without it while
+    the DB still carries it, so comparisons must be prefix-agnostic (mirrors the C++
+    versions_db_manager::strip_intel_prefix)."""
+    prefix = "Intel "
+    return name[len(prefix):] if name.startswith(prefix) else name
+
+
+def _device_name_matches(db_name, device_name):
+    """True if a DB device_name pattern matches the reported name, '*' = trailing wildcard.
+    Mirrors versions_db_manager::is_device_name_equal (prefix-stripped, compare up to '*')."""
+    db = _strip_intel_prefix(db_name or "")
+    cmp = _strip_intel_prefix(device_name or "")
+    star = db.find("*")
+    if star == -1:
+        return db == cmp
+    return db[:star] == cmp[:star]
+
+
+def _pick_recommended_fw(entries, device_name, host_platform):
+    """Pick the best RECOMMENDED FIRMWARE (version, link) for a device from DB entries.
+
+    Matches each entry's `device_name` against the device (prefix-agnostic, '*' wildcard);
+    the most specific pattern (longest literal) wins. Entry `platform` must be '*' or
+    match the host. Returns (None, None) when nothing matches.
+    """
+    if not entries or not device_name:
+        return None, None
+    host = (host_platform or "").lower()
+    best = None  # (specificity, version, link)
+    for e in entries:
+        if e.get("component") != "FIRMWARE" or e.get("policy_type") != "RECOMMENDED":
+            continue
+        pattern = e.get("device_name", "")
+        if not _device_name_matches(pattern, device_name):
+            continue
+        plat = (e.get("platform") or "*").lower()
+        if plat != "*" and plat not in host and host not in plat:
+            continue
+        specificity = len(pattern.replace("*", ""))
+        if best is None or specificity > best[0]:
+            best = (specificity, e.get("version"), e.get("link"))
+    return (best[1], best[2]) if best else (None, None)
+
+
+def _fetch_versions_db():
+    """Return the DB 'versions' list (cached ~1h), or None on any network/parse failure."""
+    now = time.monotonic()
+    cached = _versions_db_cache["entries"]
+    if cached is not None and now - _versions_db_cache["ts"] < _VERSIONS_DB_TTL:
+        return cached
+    try:
+        with urllib.request.urlopen(SERVER_VERSIONS_DB_URL, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        entries = data.get("versions", [])
+        _versions_db_cache.update(ts=now, entries=entries)
+        return entries
+    except Exception as e:  # network down, timeout, bad JSON — degrade gracefully
+        logging.warning("Could not fetch firmware versions DB: %s", e)
+        return None
+
+
+def recommended_firmware(device_name):
+    """Recommended FIRMWARE (version, link) for a device from the online DB, or (None, None)."""
+    return _pick_recommended_fw(_fetch_versions_db(), device_name, platform.system())
+
+
+# Downloaded firmware images are cached under the OS temp dir (self-cleaning, cross-OS)
+# so re-flashing the same version skips the download.
+_FW_DOWNLOAD_DIR = os.path.join(tempfile.gettempdir(), "realsense-fw")
+_MAX_FW_DOWNLOAD_BYTES = 64 * 1024 * 1024
+
+
+def _download_firmware(url: str, on_progress=None) -> bytes:
+    """Download a firmware .bin (cached in _FW_DOWNLOAD_DIR). Raises RealSenseError on failure.
+
+    Streams in chunks and reports 0..1 progress via on_progress(fraction) when the server
+    provides Content-Length. A cache hit reports 1.0 immediately.
+    """
+    os.makedirs(_FW_DOWNLOAD_DIR, exist_ok=True)
+    name = os.path.basename(urllib.parse.urlparse(url).path) or "firmware.bin"
+    path = os.path.join(_FW_DOWNLOAD_DIR, name)
+    if os.path.isfile(path) and os.path.getsize(path) > 0:
+        if on_progress:
+            on_progress(1.0)
+        with open(path, "rb") as f:
+            return f.read()
+    try:
+        buf = bytearray()
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            total = int(resp.headers.get("Content-Length") or 0)
+            while True:
+                chunk = resp.read(256 * 1024)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                if len(buf) > _MAX_FW_DOWNLOAD_BYTES:
+                    raise RealSenseError(status_code=413, detail="Firmware image exceeds size limit")
+                if on_progress and total:
+                    on_progress(min(len(buf) / total, 1.0))
+        data = bytes(buf)
+    except RealSenseError:
+        raise
+    except Exception as e:
+        raise RealSenseError(status_code=502, detail=f"Failed to download firmware: {e}")
+    if not data:
+        raise RealSenseError(status_code=502, detail="Downloaded firmware image is empty")
+    if on_progress:
+        on_progress(1.0)
+    with open(path, "wb") as f:
+        f.write(data)
+    return data
 
 # Recent color frames retained per device for texturing the 3D point cloud.
 # Five frames at 30 fps covers the typical depth/color SDK-latency offset
@@ -210,9 +363,11 @@ class RealSenseManager:
             name=_info(rs.camera_info.name, "Unknown Device"),
             serial_number=device_id,
             firmware_version=_info(rs.camera_info.firmware_version),
+            # Recommended version comes from the online versions DB, fetched lazily on the
+            # firmware-status check (the SDK no longer bundles/reports it); unknown until then.
             recommended_firmware_version=None,
             firmware_status=FW_STATUS_UNKNOWN,
-            firmware_file_available=False,
+            firmware_file_available=False,  # no bundled firmware — user supplies the image
             physical_port=_info(rs.camera_info.physical_port),
             usb_type=_info(rs.camera_info.usb_type_descriptor),
             product_id=_info(rs.camera_info.product_id),
@@ -303,13 +458,33 @@ class RealSenseManager:
     def get_firmware_status(self, device_id: str) -> Dict[str, Any]:
         """Return firmware status metadata for a device."""
         device = self.get_device(device_id)
+        recommended, link = recommended_firmware(device.name)
         return {
             "device_id": device_id,
             "current": device.firmware_version,
-            "recommended": None,
-            "status": device.firmware_status or FW_STATUS_UNKNOWN,
-            "file_available": False,
+            "recommended": recommended,
+            "status": firmware_update_status(device.firmware_version, recommended),
+            "file_available": False,  # no bundled image — user downloads the .bin (see link)
+            "link": link,
         }
+
+    def update_firmware_from_recommended(self, device_id: str) -> Dict[str, Any]:
+        """Download the device's recommended firmware image and flash it.
+
+        Looks up the recommended .bin from the online versions DB, downloads it
+        (cached under the OS temp dir), and reuses the standard DFU flash flow — so
+        Socket.IO progress/success/failure events are emitted exactly as for a
+        user-supplied file.
+        """
+        device = self.get_device(device_id)
+        _recommended, link = recommended_firmware(device.name)
+        if not link:
+            raise RealSenseError(status_code=404, detail="No recommended firmware available for this device")
+        # Emit download progress under the "downloading" phase so the UI can show it
+        # before the (separate) install phase begins.
+        _holder, on_download = self._make_fw_progress_callback(device_id, phase="downloading")
+        fw_bytes = _download_firmware(link, on_progress=on_download)
+        return self.update_firmware_from_bytes(device_id, fw_bytes)
 
     @staticmethod
     def _is_update_device(dev: rs.device) -> bool:
@@ -357,7 +532,7 @@ class RealSenseManager:
             # Always emit a starting progress so the UI doesn't stay at 0% forever
             self._emit_socket_event(
                 f"firmware_progress_{device_id}",
-                {"device_id": device_id, "progress": 0.0},
+                {"device_id": device_id, "progress": 0.0, "phase": "installing"},
             )
 
             try:
@@ -400,7 +575,7 @@ class RealSenseManager:
 
             self._emit_socket_event(
                 f"firmware_progress_{device_id}",
-                {"device_id": device_id, "progress": 1.0},
+                {"device_id": device_id, "progress": 1.0, "phase": "installing"},
             )
             self._emit_socket_event(
                 f"firmware_update_success_{device_id}",
@@ -493,11 +668,12 @@ class RealSenseManager:
         return firmware_update_id
 
     def _make_fw_progress_callback(
-        self, device_id: str,
+        self, device_id: str, phase: str = "installing",
     ) -> Tuple[Dict[str, float], Callable[[float], None]]:
         """Build the on_progress callback and a holder dict that records the latest value.
 
         Rate-limits emissions to ~10/sec but always lets the final 100% through.
+        `phase` ("downloading" | "installing") lets the UI label what's happening.
         """
         progress_holder = {"value": 0.0}
         last_emit_ts = {"value": 0.0}
@@ -510,7 +686,7 @@ class RealSenseManager:
             last_emit_ts["value"] = now
             self._emit_socket_event(
                 f"firmware_progress_{device_id}",
-                {"device_id": device_id, "progress": float(p)},
+                {"device_id": device_id, "progress": float(p), "phase": phase},
             )
 
         return progress_holder, _on_progress

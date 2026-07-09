@@ -23,7 +23,9 @@ export interface FirmwareState {
   recommended?: string
   status: FirmwareStatus
   file_available?: boolean
+  link?: string  // download page/.bin for the recommended firmware
   is_updating?: boolean
+  phase?: 'downloading' | 'installing'  // one-click update: download then install
   progress?: number
   last_error?: string | null
 }

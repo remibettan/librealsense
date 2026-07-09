@@ -9,6 +9,24 @@ describe('AppStore', () => {
     resetStore()
   })
 
+  describe('Firmware dismissal', () => {
+    it('explicit checkFirmwareUpdates clears both dismissals for the device', async () => {
+      localStorage.setItem('rs-fw-dismissed:dev1:5.17.3.10', '1')
+      sessionStorage.setItem('rs-fw-dismissed:dev1:5.17.3.10', '1')
+      // Clearing happens before the network call, so a missing status handler is irrelevant.
+      await useAppStore.getState().checkFirmwareUpdates('dev1', true).catch(() => {})
+      expect(localStorage.getItem('rs-fw-dismissed:dev1:5.17.3.10')).toBeNull()
+      expect(sessionStorage.getItem('rs-fw-dismissed:dev1:5.17.3.10')).toBeNull()
+    })
+
+    it('non-explicit check leaves dismissals intact', async () => {
+      localStorage.setItem('rs-fw-dismissed:dev1:5.17.3.10', '1')
+      await useAppStore.getState().checkFirmwareUpdates('dev1').catch(() => {})
+      expect(localStorage.getItem('rs-fw-dismissed:dev1:5.17.3.10')).toBe('1')
+      localStorage.clear()
+    })
+  })
+
   describe('Initial State', () => {
     it('starts with default values', () => {
       const state = useAppStore.getState()

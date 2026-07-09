@@ -244,8 +244,90 @@ describe('DevicePanel', () => {
   describe('Header', () => {
     it('renders "Devices" header', () => {
       render(<DevicePanel />)
-      
+
       expect(screen.getByText('Devices')).toBeInTheDocument()
+    })
+  })
+
+  describe('Firmware Update Proposal', () => {
+    it('shows an update proposal when firmware is outdated', () => {
+      const device = createMockDevice()
+      const ds = createMockDeviceState(device, {
+        firmware: {
+          current: '5.17.0.10',
+          recommended: '5.17.3.10',
+          status: 'outdated',
+          link: 'https://example/fw.bin',
+        },
+      })
+      render(<DevicePanel />, {
+        initialStoreState: { devices: [device], deviceStates: { [device.device_id]: ds } },
+      })
+
+      expect(screen.getByText('Firmware update recommended')).toBeInTheDocument()
+      expect(screen.getByText('5.17.0.10 → 5.17.3.10')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Update' })).toBeInTheDocument()
+    })
+
+    it('can dismiss the proposal, leaving the plain download link', async () => {
+      localStorage.clear()
+      sessionStorage.clear()
+      const device = createMockDevice()
+      const ds = createMockDeviceState(device, {
+        firmware: { current: '5.17.0.10', recommended: '5.17.3.10', status: 'outdated' },
+      })
+      render(<DevicePanel />, {
+        initialStoreState: { devices: [device], deviceStates: { [device.device_id]: ds } },
+      })
+
+      expect(screen.getByText('Firmware update recommended')).toBeInTheDocument()
+      await userEvent.click(screen.getByTitle(/Dismiss/))
+      expect(screen.queryByText('Firmware update recommended')).not.toBeInTheDocument()
+      expect(screen.getByText('Download firmware →')).toBeInTheDocument()
+      expect(localStorage.getItem(`rs-fw-dismissed:${device.device_id}:5.17.3.10`)).toBe('1')
+    })
+
+    it('"Remind me later" hides the proposal for the session (sessionStorage)', async () => {
+      localStorage.clear()
+      sessionStorage.clear()
+      const device = createMockDevice()
+      const ds = createMockDeviceState(device, {
+        firmware: { current: '5.17.0.10', recommended: '5.17.3.10', status: 'outdated' },
+      })
+      render(<DevicePanel />, {
+        initialStoreState: { devices: [device], deviceStates: { [device.device_id]: ds } },
+      })
+
+      await userEvent.click(screen.getByText('Remind me later'))
+      expect(screen.queryByText('Firmware update recommended')).not.toBeInTheDocument()
+      expect(sessionStorage.getItem(`rs-fw-dismissed:${device.device_id}:5.17.3.10`)).toBe('1')
+      // permanent store untouched → returns next session
+      expect(localStorage.getItem(`rs-fw-dismissed:${device.device_id}:5.17.3.10`)).toBeNull()
+    })
+
+    it('shows nothing when firmware is up to date', () => {
+      const device = createMockDevice()
+      const ds = createMockDeviceState(device, {
+        firmware: { current: '5.17.3.10', recommended: '5.17.3.10', status: 'up_to_date' },
+      })
+      render(<DevicePanel />, {
+        initialStoreState: { devices: [device], deviceStates: { [device.device_id]: ds } },
+      })
+
+      expect(screen.queryByText('Firmware update recommended')).not.toBeInTheDocument()
+      expect(screen.queryByText('Download firmware →')).not.toBeInTheDocument()
+    })
+
+    it('shows the plain download link when firmware status is unknown', () => {
+      const device = createMockDevice()
+      const ds = createMockDeviceState(device, {
+        firmware: { current: '5.17.0.10', status: 'unknown' },
+      })
+      render(<DevicePanel />, {
+        initialStoreState: { devices: [device], deviceStates: { [device.device_id]: ds } },
+      })
+
+      expect(screen.getByText('Download firmware →')).toBeInTheDocument()
     })
   })
 })

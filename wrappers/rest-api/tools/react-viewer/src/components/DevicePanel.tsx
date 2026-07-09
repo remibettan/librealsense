@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MutableRefObject, ReactElement } from 'react'
+import { X } from 'lucide-react'
 import { useAppStore } from '../store'
 import type { DeviceInfo, SensorInfo, OptionInfo, StreamConfig, DeviceState, FirmwareState, SensorConfig } from '../api/types'
 import { FirmwareProgressModal } from './FirmwareProgressModal'
@@ -99,6 +100,7 @@ export function DevicePanel() {
     stopSensorStreaming,
     checkFirmwareUpdates,
     updateFirmwareFromFile,
+    updateFirmwareFromRecommended,
   } = useAppStore()
 
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -120,9 +122,11 @@ export function DevicePanel() {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }
 
-  const handleFirmwareProgressUpdate = (progress: number) => {
+  const handleFirmwareProgressUpdate = (progress: number, phase?: 'downloading' | 'installing') => {
     setFirmwareProgressState((prev) =>
-      prev ? { ...prev, progress } : { status: 'unknown' as const, is_updating: true, progress }
+      prev
+        ? { ...prev, progress, ...(phase ? { phase } : {}) }
+        : { status: 'unknown' as const, is_updating: true, progress, phase }
     )
   }
 
@@ -174,6 +178,21 @@ export function DevicePanel() {
       last_error: null,
     })
     updateFirmwareFromFile(deviceId, file)
+  }
+
+  const handleUpdateFromRecommended = (device: DeviceInfo) => {
+    const deviceId = device.device_id
+    const fw = deviceStates[deviceId]?.firmware
+    setFirmwareFileName(fw?.recommended ? `Firmware ${fw.recommended}` : 'Recommended firmware')
+    setFirmwareProgressDeviceId(deviceId)
+    const baseFirmware = fw || {
+      current: device.firmware_version,
+      recommended: device.recommended_firmware_version,
+      status: 'unknown' as const,
+      file_available: device.firmware_file_available,
+    }
+    setFirmwareProgressState({ ...baseFirmware, is_updating: true, phase: 'downloading', progress: 0, last_error: null })
+    updateFirmwareFromRecommended(deviceId)
   }
 
   const promptedSetRef = useRef<string>('')
@@ -268,8 +287,9 @@ export function DevicePanel() {
                 }
                 onStartSensorStreaming={(sensorId) => startSensorStreaming(device.device_id, sensorId)}
                 onStopSensorStreaming={(sensorId) => stopSensorStreaming(device.device_id, sensorId)}
-                onCheckFirmwareUpdates={() => checkFirmwareUpdates(device.device_id)}
+                onCheckFirmwareUpdates={() => checkFirmwareUpdates(device.device_id, true)}
                 onUpdateFirmwareFromFile={(file) => handleUpdateFirmwareFromFile(device, file)}
+                onUpdateFromRecommended={() => handleUpdateFromRecommended(device)}
                 onShowToast={addToast}
               />
             )
@@ -325,6 +345,7 @@ interface DeviceCardProps {
   onStopSensorStreaming: (sensorId: string) => void
   onCheckFirmwareUpdates: () => void
   onUpdateFirmwareFromFile: (file: File) => void
+  onUpdateFromRecommended: () => void
   onShowToast: (type: ToastType, message: string) => void
 }
 
@@ -340,6 +361,7 @@ function DeviceCard({
   onStopSensorStreaming,
   onCheckFirmwareUpdates,
   onUpdateFirmwareFromFile,
+  onUpdateFromRecommended,
   onShowToast,
 }: DeviceCardProps) {
   const [showMenu, setShowMenu] = useState(false)
@@ -512,8 +534,8 @@ function DeviceCard({
           </div>
         </div>
 
-        {/* Firmware download link */}
-        <FirmwareBanner device={device} />
+        {/* Firmware update proposal / download link */}
+        <FirmwareBanner deviceId={device.device_id} firmware={deviceState?.firmware} onUpdate={onUpdateFromRecommended} />
 
         {/* Device Details */}
         <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-gray-500">
@@ -596,18 +618,81 @@ function DeviceCard({
 }
 
 interface FirmwareBannerProps {
-  device: DeviceInfo
+  deviceId: string
+  firmware?: FirmwareState
+  onUpdate: () => void
 }
 
-function FirmwareBanner({ device: _device }: FirmwareBannerProps) {
+function FirmwareBanner({ deviceId, firmware, onUpdate }: FirmwareBannerProps) {
+  const downloadHref = firmware?.link || 'https://dev.realsenseai.com/docs/firmware-updates'
+  const isUpdating = firmware?.is_updating ?? false
+
+  // Dismissal is keyed by device + recommended version, so a newer recommendation
+  // later re-surfaces the proposal. Two scopes:
+  //   - permanent (X): localStorage — stays dismissed until a newer FW is recommended.
+  //   - "Remind me later": sessionStorage — re-appears next session.
+  // Computed fresh each render so an explicit "Check for Updates" (which clears these
+  // keys and pushes a new firmware object) revives the proposal without extra wiring.
+  const dismissKey = `rs-fw-dismissed:${deviceId}:${firmware?.recommended ?? ''}`
+  const [, forceRerender] = useState(0)
+  let dismissed = false
+  try {
+    dismissed = localStorage.getItem(dismissKey) === '1' || sessionStorage.getItem(dismissKey) === '1'
+  } catch { dismissed = false }
+
+  const dismiss = (storage: Storage) => {
+    try { storage.setItem(dismissKey, '1') } catch { /* ignore */ }
+    forceRerender((n) => n + 1)
+  }
+
+  // Proposal: the online versions DB recommends a newer firmware than what's installed.
+  if (firmware?.status === 'outdated' && !dismissed) {
+    return (
+      <div className="mt-2 p-2 rounded border border-amber-600/40 bg-amber-500/10 text-xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-amber-400 font-medium">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            Firmware update recommended
+          </div>
+          <button
+            onClick={() => dismiss(localStorage)}
+            title="Dismiss until a newer firmware is released"
+            className="text-gray-400 hover:text-gray-200 ml-2"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <div className="mt-1 text-gray-300 font-mono">
+          {`${firmware.current ?? '?'} → ${firmware.recommended ?? '?'}`}
+        </div>
+        <div className="mt-1.5 flex items-center gap-3">
+          <button
+            onClick={onUpdate}
+            disabled={isUpdating}
+            className="px-2.5 py-1 rounded bg-rs-blue text-white font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isUpdating ? 'Updating…' : 'Update'}
+          </button>
+          <a href={downloadHref} target="_blank" rel="noopener noreferrer" className="text-rs-blue hover:underline">
+            Download firmware →
+          </a>
+          <button onClick={() => dismiss(sessionStorage)} className="text-gray-400 hover:text-gray-200">
+            Remind me later
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Up to date → nothing to offer. The plain download link remains as a fallback for
+  // other states (unknown/offline, missing_file, or a dismissed proposal).
+  if (firmware?.status === 'up_to_date') return null
+
   return (
     <div className="mt-2 text-xs text-gray-400">
-      <a
-        href="https://dev.realsenseai.com/docs/firmware-updates"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-rs-blue hover:underline"
-      >
+      <a href={downloadHref} target="_blank" rel="noopener noreferrer" className="text-rs-blue hover:underline">
         Download firmware →
       </a>
     </div>

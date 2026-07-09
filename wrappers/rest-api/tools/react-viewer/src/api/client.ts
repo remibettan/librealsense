@@ -31,7 +31,7 @@ const getApiBase = () => {
 
 const API_BASE = getApiBase()
 
-type FirmwareProgressCallback = (progress: number) => void
+type FirmwareProgressCallback = (progress: number, phase?: 'downloading' | 'installing') => void
 type FirmwareErrorCallback = (error: string) => void
 type FirmwareSuccessCallback = (firmwareVersion: string | null) => void
 
@@ -52,7 +52,10 @@ class ApiClient {
 
   onFirmwareProgress(deviceId: string, callback: FirmwareProgressCallback): () => void {
     const eventName = `firmware_progress_${deviceId}`
-    const handler = (data: unknown) => callback((data as { progress: number }).progress)
+    const handler = (data: unknown) => {
+      const d = data as { progress: number; phase?: 'downloading' | 'installing' }
+      callback(d.progress, d.phase)
+    }
     socketService.on(eventName, handler as (...args: unknown[]) => void)
     return () => socketService.off(eventName, handler as (...args: unknown[]) => void)
   }
@@ -101,6 +104,7 @@ class ApiClient {
     recommended?: string
     status: string
     file_available?: boolean
+    link?: string
   }> {
     const response = await this.client.get(`/devices/${deviceId}/status`)
     return response.data
@@ -125,6 +129,13 @@ class ApiClient {
       form,
       { headers: { 'Content-Type': undefined as unknown as string } },
     )
+    return response.data
+  }
+
+  async updateFirmwareFromRecommended(
+    deviceId: string
+  ): Promise<{ status: string; firmware_version?: string | null; progress?: number }> {
+    const response = await this.client.post(`/devices/${deviceId}/firmware/update_from_recommended`)
     return response.data
   }
 
