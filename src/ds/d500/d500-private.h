@@ -111,6 +111,7 @@ namespace librealsense
             APM_STROBE_GET           = 0x99, // Query if Laser on constantly or pulse
             SET_HKR_CONFIG_TABLE     = 0xA6, // HKR Set Internal sub calibration table
             GET_HKR_CONFIG_TABLE     = 0xA7, // HKR Get Internal sub calibration table
+            CALIBRESTOREEPROM        = 0xA8, // HKR Store EEPROM Calibration
             RGB_TNR                  = 0xAA, // RGB Temporal Noise Reduction
             GET_FW_LOGS              = 0xB4, // Get FW logs extended format
             SET_CALIB_MODE           = 0xB8, // Set Calibration Mode
@@ -128,6 +129,7 @@ namespace librealsense
                 ENUM2STR(APM_STROBE_GET);
                 ENUM2STR(SET_HKR_CONFIG_TABLE);
                 ENUM2STR(GET_HKR_CONFIG_TABLE);
+                ENUM2STR(CALIBRESTOREEPROM);
                 ENUM2STR(RGB_TNR);
                 ENUM2STR(GET_FW_LOGS);
                 ENUM2STR(SET_CALIB_MODE);

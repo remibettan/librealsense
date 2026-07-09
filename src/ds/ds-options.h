@@ -286,6 +286,10 @@ namespace librealsense
         std::function<void(const option &)> _record_action = [](const option&) {};
         rsutils::lazy< option_range > _range;
         std::weak_ptr<hw_monitor> _hwm;
+        // Stored as raw HWM byte, not fw_cmd: this option is instantiated with
+        // opcodes from more than one family enum (ds::LASERONCONST for D400 vs
+        // d500_fw_cmd::APM_STROBE_SET/GET for D500), and unscoped enums don't
+        // cross-convert. The underlying byte is what the HWM cares about.
         uint8_t _hmc_get_opcode, _hmc_set_opcode;
         bool _is_legacy;
     };
