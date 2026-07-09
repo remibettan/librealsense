@@ -566,14 +566,14 @@ namespace librealsense
             {
                 // defining the temperature options
                 auto pvt_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
-                    depth_xu,
-                    DS5_HKR_PVT_TEMPERATURE,
-                    "PVT Temperature");
+                                                                                 depth_xu,
+                                                                                 d500_xu_id::PVT_TEMPERATURE,
+                                                                                 "PVT Temperature");
 
                 auto ohm_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
-                    depth_xu,
-                    DS5_HKR_OHM_TEMPERATURE,
-                    "OHM Temperature");
+                                                                                 depth_xu,
+                                                                                 d500_xu_id::OHM_TEMPERATURE,
+                                                                                 "OHM Temperature");
 
                 // registering the temperature options
                 depth_sensor.register_option(RS2_OPTION_SOC_PVT_TEMPERATURE, pvt_temperature);
@@ -582,9 +582,9 @@ namespace librealsense
                 if (d500_projector_temperature_pids.count(_pid))
                 {
                     auto proj_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
-                        depth_xu,
-                        DS5_HKR_PROJECTOR_TEMPERATURE,
-                        "Projector Temperature");
+                                                                                      depth_xu,
+                                                                                      d500_xu_id::PROJECTOR_TEMPERATURE,
+                                                                                      "Projector Temperature");
                     depth_sensor.register_option(RS2_OPTION_PROJECTOR_TEMPERATURE, proj_temperature);
                 }
             }
