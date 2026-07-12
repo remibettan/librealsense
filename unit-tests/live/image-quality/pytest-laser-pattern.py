@@ -37,6 +37,7 @@ MAX_DOT_AREA_PX = 50  # above this, treat it as a brightness blob, not a laser d
 MIN_DOT_COUNT = 30  # need at least this many dot-sized blobs in the diff image
 GRID_SIZE = 4  # frame divided into GRID_SIZE x GRID_SIZE cells to check spread
 MIN_GRID_CELLS_COVERED = 6  # dots must be spread across at least this many cells (of GRID_SIZE**2)
+EXPOSURE_FRACTION = 6.0  # manual exposure = 1/EXPOSURE_FRACTION of frame time, short enough to avoid saturation
 
 
 def capture_avg_ir(pipeline):
@@ -85,9 +86,9 @@ def draw_debug(off_img, on_img, diff_mask, dots):
 def test_laser_pattern_visible(test_device_wrapped):
     dev, ctx = test_device_wrapped
     product_name = dev.get_info(rs.camera_info.name)
-    sensor = dev.first_depth_sensor()
+    pre_sensor = dev.first_depth_sensor()
 
-    if not sensor.supports(rs.option.emitter_enabled):
+    if not pre_sensor.supports(rs.option.emitter_enabled):
         pytest.skip(f"{product_name} does not support emitter_enabled")
 
     cfg = rs.config()
@@ -114,8 +115,8 @@ def test_laser_pattern_visible(test_device_wrapped):
         if sensor.supports(rs.option.exposure):
             # Fix exposure so the OFF/ON images differ only by the laser's own light,
             # not by auto-exposure compensating for it -- otherwise the diff isn't a clean A/B.
-            fps = profile.get_stream(rs.stream.infrared).fps()
-            sensor.set_option(rs.option.exposure, (1_000_000.0 / fps) / 6.0)
+            fps = profile.get_stream(rs.stream.infrared, 1).fps()
+            sensor.set_option(rs.option.exposure, (1_000_000.0 / fps) / EXPOSURE_FRACTION)
 
         sensor.set_option(rs.option.emitter_enabled, 0)
         off_img = capture_avg_ir(pipeline)
