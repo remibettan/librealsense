@@ -152,11 +152,11 @@ def test_set_during_streaming_is_nacked(hwm_and_sensor):
     try:
         with pytest.raises(Exception):
             _set_params(hwm, {k: original[k] for k in FIELDS_RW})
-        # Values must not have moved
-        assert _get_params(hwm) == original
     finally:
         depth_sensor.stop()
         depth_sensor.close()
+    # GET after stop so it can't be gated by streaming (FW spec only documents SET gating)
+    assert _get_params(hwm) == original
 
 
 def test_no_rs2_option_registered(test_device_wrapped):
