@@ -32,9 +32,11 @@ namespace librealsense
         _ds_active_common->register_options();
 
         // Emitter Always On (Laser Always On) - projector control common to all D500 active SKUs.
-        // Newer 5x5 / D585 SKUs use the APM_STROBE opcodes; D555 uses the legacy LASERONCONST opcode.
-        fw_cmd emitter_get_opcode = APM_STROBE_GET;
-        fw_cmd emitter_set_opcode = APM_STROBE_SET;
+        // Newer 5x5 / D585 SKUs use the APM_STROBE opcodes (ds::d500_fw_cmd); D555 uses the legacy
+        // LASERONCONST (ds::fw_cmd). uint8_t is the common underlying type — the two enums live in
+        // different families and don't cross-convert.
+        uint8_t emitter_get_opcode = APM_STROBE_GET;
+        uint8_t emitter_set_opcode = APM_STROBE_SET;
         if( get_pid() == D555_PID )
         {
             emitter_get_opcode = LASERONCONST;
