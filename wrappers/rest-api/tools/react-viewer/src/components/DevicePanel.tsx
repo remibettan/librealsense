@@ -945,22 +945,20 @@ function SensorOptionsPanel({ sensor, options, isExpanded, onToggle, onSetOption
         onClick={onToggle}
         className="w-full flex items-center justify-between p-1.5 bg-gray-800/50 rounded hover:bg-gray-700 transition-colors text-xs"
       >
-        <span className="font-medium">{sensor.name}</span>
-        <div className="flex items-center gap-1">
-          {modifiedCount > 0 && (
-            <span className="px-1.5 py-0.5 bg-rs-blue/20 text-rs-blue rounded text-[10px]">
-              {modifiedCount} modified
-            </span>
-          )}
+        <span className="flex items-center gap-1.5 font-medium min-w-0">
           <svg
-            className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+            className={`w-3.5 h-3.5 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-        </div>
+          <span className="truncate">{sensor.name}</span>
+        </span>
+        {modifiedCount > 0 && (
+          <span className="px-1.5 py-0.5 bg-rs-blue/20 text-rs-blue rounded text-[10px]">
+            {modifiedCount} modified
+          </span>
+        )}
       </button>
 
       {isExpanded && (
@@ -1035,17 +1033,15 @@ function CategorySection({ category, options, isExpanded, onToggle, onRestoreDef
       <div className="flex items-center bg-gray-750 hover:bg-gray-700 transition-colors">
         <button
           onClick={onToggle}
-          className="flex-1 flex items-center justify-between p-1.5"
+          className="flex-1 flex items-center gap-1.5 p-1.5"
         >
-          <span className="text-xs font-medium text-gray-300">{category}</span>
           <svg
-            className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+            className={`w-3 h-3 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
+          <span className="text-xs font-medium text-gray-300">{category}</span>
         </button>
         {hasModifiedOptions && (
           <button
@@ -1120,17 +1116,15 @@ function PostProcessingSection({ options, isExpanded, onToggle, onRestoreDefault
       <div className="flex items-center bg-gray-750 hover:bg-gray-700 transition-colors">
         <button
           onClick={onToggle}
-          className="flex-1 flex items-center justify-between p-1.5"
+          className="flex-1 flex items-center gap-1.5 p-1.5"
         >
-          <span className="text-xs font-medium text-gray-300">Post-Processing</span>
           <svg
-            className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+            className={`w-3 h-3 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
+          <span className="text-xs font-medium text-gray-300">Post-Processing</span>
         </button>
         {hasModifiedOptions && (
           <button
