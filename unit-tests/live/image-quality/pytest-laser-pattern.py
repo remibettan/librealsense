@@ -82,8 +82,8 @@ def draw_debug(off_img, on_img, diff_mask, dots):
     return np.hstack([off_bgr, on_bgr, mask_bgr])
 
 
-def test_laser_pattern_visible(test_device):
-    dev, ctx = test_device
+def test_laser_pattern_visible(test_device_wrapped):
+    dev, ctx = test_device_wrapped
     product_name = dev.get_info(rs.camera_info.name)
     sensor = dev.first_depth_sensor()
 
