@@ -1,12 +1,13 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 #
-# Terminal-only utility for the Accelerated AE tuning HWM command (RSDSO-21571).
+# Terminal-only utility for the AE_ACCEL_PARAMS Hardware-Monitor command that
+# exposes the Accelerated AE tuning parameters on D400.
 #
-# Opcode:   AE_ACCEL_PARAMS = 0x95 (D400 family; must match FW-side RSDSO-21570)
-# Applies:  All D400 SKUs except D415 family, FW >= 5.17.3.20.
+# Opcode:  AE_ACCEL_PARAMS = 0x95 (D400 family; must match the FW-side handler)
+# Applies: D400 SKUs where the FW supports Accelerated AE, FW >= 5.17.3.20.
 #
-# ASSUMED PROTOCOL (aligned with the RSDSO-21571 ticket; adjust once FW ships):
+# Wire protocol (subject to FW confirmation):
 #   GET: param1 = 0, no data payload.
 #     Response: 4-byte opcode echo + 7 IEEE-754 floats (28 bytes), in order:
 #         score_setpoint, score_deadband, saturation_weight,
@@ -35,7 +36,7 @@ PARAM1_SET = 1
 # D400-family only. On D500, opcode 0x95 is SAFETY_PRESET_WRITE - running
 # this against a D500 would be destructive, hence the strict product-line gate.
 REQUIRED_PRODUCT_LINE = "D400"
-MIN_FW_VERSION = (5, 17, 3, 20)  # RSDSO-21358 shipped Accelerated AE on D40x/D43x in R58.3b
+MIN_FW_VERSION = (5, 17, 3, 20)  # First FW to ship Accelerated AE on D40x/D43x (R58.3b)
 
 FIELDS_RW = ["setpoint", "deadband", "saturation_weight", "saturation_value", "stability"]
 FIELDS_RO = ["score_low_th", "score_high_th"]
@@ -119,7 +120,7 @@ def guard_device(device):
     fw_tuple = parse_fw_version(fw_str)
     if fw_tuple is None or fw_tuple < MIN_FW_VERSION:
         sys.exit(f"FW {fw_str} is below minimum {'.'.join(map(str, MIN_FW_VERSION))} "
-                 f"required for AE_ACCEL_PARAMS (RSDSO-21358).")
+                 f"required for AE_ACCEL_PARAMS.")
 
 
 def print_params(label, params):
@@ -144,7 +145,7 @@ def parse_set_args(pairs):
 
 
 def main():
-    p = argparse.ArgumentParser(description="AE_ACCEL_PARAMS HWM tuning utility (RSDSO-21571)")
+    p = argparse.ArgumentParser(description="AE_ACCEL_PARAMS HWM tuning utility")
     p.add_argument("--serial", help="Target a device by serial number")
     p.add_argument("--set", nargs="+", metavar="name=value",
                    help=f"Set one or more writable params ({', '.join(FIELDS_RW)})")

@@ -2,21 +2,21 @@
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 #
 # Validates the AE_ACCEL_PARAMS Hardware-Monitor command (opcode 0x95) on D400
-# devices (RSDSO-21571 / FW RSDSO-21570). The command exposes 7 IEEE-754 float
-# tuning parameters for the Accelerated AE algorithm:
+# devices. The command exposes 7 IEEE-754 float tuning parameters for the
+# Accelerated AE algorithm:
 #   R/W: score_setpoint, score_deadband, saturation_weight,
 #        saturation_value, stability_factor
 #   R:   score_low_th, score_high_th   (auto-recomputed by FW from setpoint/deadband)
 #
 # Coverage:
-#   1. GET returns 7 floats with values inside the ticket-documented ranges
+#   1. GET returns 7 floats with values inside the documented ranges
 #   2. SET applies R/W fields; a re-GET reflects the new values; low/high_th get
 #      recomputed as (setpoint - deadband/2, setpoint + deadband/2) with clamps
 #      at 0.08 and 0.45
 #   3. SET while the depth sensor is streaming is NACK'd
 #
-# Skipped until the FW side (RSDSO-21570) lands - matches the pattern used by
-# pytest-depth-ae-toggle.py / pytest-depth-ae-metadata.py.
+# Skipped until the FW side ships an AE_ACCEL_PARAMS handler — matches the
+# pattern used by pytest-depth-ae-toggle.py / pytest-depth-ae-metadata.py.
 
 import struct
 import pytest
@@ -45,13 +45,13 @@ RANGES = {
     "score_high_th":     (0.13, 0.45),
 }
 
-# D415 family does not implement Accelerated AE (RSDSO-21571). The rest of the
-# D400 SKUs on FW >= 5.17.3.20 do (RSDSO-21358, R58.3b).
+# D415 family does not implement Accelerated AE. The rest of the D400 SKUs
+# support it starting from FW 5.17.3.20 (R58.3b).
 MIN_FW = rsutils.version(5, 17, 3, 20)
 
 pytestmark = [
     pytest.mark.device_each("D400*"),
-    pytest.mark.skip(reason="until RSDSO-21570 FW ships AE_ACCEL_PARAMS handler"),
+    pytest.mark.skip(reason="until FW ships AE_ACCEL_PARAMS handler"),
 ]
 
 
