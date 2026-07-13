@@ -199,18 +199,14 @@ class UniFiSwitch(device_hub.device_hub):
         """
         return "enabled" if self.is_port_enabled(port) else "disabled"
 
-    def _force_close(self):
-        # Watchdog callback: closing the socket from another thread interrupts a
-        # wedged send/read on any OS (paramiko's channel timeouts don't cover the send).
-        try:
-            if self.client is not None:
-                self.client.close()
-        except Exception:
-            pass
-
     def _exec(self, command, timeout):
-        # One command, guarded by a watchdog that force-closes the transport if it wedges.
-        watchdog = threading.Timer(timeout, self._force_close)
+        # One command, guarded by a watchdog that force-closes the transport if it
+        # wedges. Closing the socket from another thread interrupts a stalled send/read
+        # on any OS (paramiko's channel timeouts don't cover the send). Close the
+        # paramiko client directly, not via a self method (device_hub wraps methods to
+        # re-register signal handlers, which fails off the main thread).
+        client = self.client
+        watchdog = threading.Timer(timeout, lambda: client.close())
         watchdog.start()
         stdin = stdout = stderr = None
         try:
