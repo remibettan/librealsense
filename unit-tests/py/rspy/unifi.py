@@ -75,12 +75,13 @@ def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH
            # stops ACKing and the send hangs ~15min (tcp_retries2) instead of
            # failing fast so the reconnect/retry below can recover.
            sock = client.get_transport().sock
-           try:
-               tcp_user_timeout = getattr(socket, "TCP_USER_TIMEOUT", 18)
-               sock.setsockopt(socket.IPPROTO_TCP, tcp_user_timeout, CHANNEL_TIMEOUT * 1000)
-           except (OSError, AttributeError):
-               pass  # non-Linux / unsupported
            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+           # TCP_USER_TIMEOUT is Linux-only; on other platforms this cleanly no-ops.
+           if hasattr(socket, "TCP_USER_TIMEOUT"):
+               try:
+                   sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, CHANNEL_TIMEOUT * 1000)
+               except OSError:
+                   pass
            log.debug_indent()
            log.d("...", f"connected to {ip} via SSH")
            log.debug_unindent()
