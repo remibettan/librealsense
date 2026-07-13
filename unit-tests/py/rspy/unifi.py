@@ -257,7 +257,7 @@ class UniFiSwitch(device_hub.device_hub):
         """
         Reboot the switch and wait for its SSH to accept connections again.
         """
-        log.w("rebooting UniFi switch to clear a wedged CLI...")
+        log.d("rebooting UniFi switch...")
         try:
             self._exec("reboot", timeout=10)
         except Exception:
