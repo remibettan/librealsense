@@ -69,19 +69,14 @@ def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH
            client.connect(hostname=ip, username=ssh_username,
                                 password=ssh_password, timeout=10,
                                 channel_timeout=CHANNEL_TIMEOUT)
-           # Bound a send stalled under TCP retransmit: exec_command(timeout=) and
-           # settimeout only guard the reply read, not the send. Without this, a
-           # switch whose CLI wedges mid-command (e.g. PoE inrush on enable-all)
-           # stops ACKing and the send hangs ~15min (tcp_retries2) instead of
-           # failing fast so the reconnect/retry below can recover.
+           # Bound a send stalled under TCP retransmit; paramiko's timeouts guard
+           # only the reply read, not the send (else a wedged switch hangs ~15min).
            sock = client.get_transport().sock
-           sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-           # TCP_USER_TIMEOUT is Linux-only; on other platforms this cleanly no-ops.
-           if hasattr(socket, "TCP_USER_TIMEOUT"):
+           if hasattr(socket, "TCP_USER_TIMEOUT"):  # Linux-only; no-ops elsewhere
                try:
                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, CHANNEL_TIMEOUT * 1000)
-               except OSError:
-                   pass
+               except OSError as e:
+                   log.d(f"TCP_USER_TIMEOUT setsockopt failed: {e}")
            log.debug_indent()
            log.d("...", f"connected to {ip} via SSH")
            log.debug_unindent()
