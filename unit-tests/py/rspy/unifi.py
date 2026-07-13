@@ -153,10 +153,8 @@ class UniFiSwitch(device_hub.device_hub):
     def connect(self, reset=False, retries=0):
         if self.client is None:
             self.client = discover(self.ip, self.username, self.password, retries=retries)
-
-        if reset and self.client is not None:
-            # reboot each hub-reset (like the Acroname) to clear a wedged CLI proactively
-            self._reboot()
+        # reset is a no-op here: a wedged CLI is recovered on demand in _run_command
+        # (reboot-on-failure), not by rebooting the switch on every hub-reset.
 
     def is_connected(self):
         if self.client is None:
@@ -221,12 +219,14 @@ class UniFiSwitch(device_hub.device_hub):
             log.f(f"Error running command '{command}': {err}")
         return out
 
-    def _run_command(self, command, timeout=CHANNEL_TIMEOUT, retries=1):
+    def _run_command(self, command, timeout=CHANNEL_TIMEOUT, retries=1, reboot_on_failure=True):
         """
-        Run a command on the switch, retrying with a reconnect on failure.
+        Run a command on the switch, retrying with a reconnect on failure and, as a
+        last resort, rebooting the switch to clear a persistently wedged CLI.
         :param command: the command to run
         :param timeout: seconds to wait for a response before retrying
-        :param retries: number of reconnect+retry attempts
+        :param retries: number of reconnect+retry attempts before escalating
+        :param reboot_on_failure: reboot the switch and retry once if all attempts fail
         :return: the output of the command
         """
         last_exc = None
@@ -240,6 +240,13 @@ class UniFiSwitch(device_hub.device_hub):
                 last_exc = e
                 log.w(f"Command '{command}' failed: {e}")
                 self._reconnect()
+        if reboot_on_failure:
+            log.w(f"Command '{command}' still failing; rebooting switch to recover...")
+            try:
+                self._reboot()
+                return self._exec(command, timeout)
+            except Exception as e:
+                last_exc = e
         if isinstance(last_exc, socket.timeout):
             raise TimeoutError(f"Command '{command}' timed out after {retries + 1} attempts") from last_exc
         raise RuntimeError(f"Command '{command}' failed after {retries + 1} attempts: {last_exc}") from last_exc
