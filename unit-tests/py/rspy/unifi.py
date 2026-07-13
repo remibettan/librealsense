@@ -154,15 +154,9 @@ class UniFiSwitch(device_hub.device_hub):
         if self.client is None:
             self.client = discover(self.ip, self.username, self.password, retries=retries)
 
-        if reset:
-            # rebooting the switch takes over a minute, so the reboot code is commented out
-            # log.w("reset flag passed to unifi switch, ignoring it")
-            return
-            # self._run_command("reboot")
-            # time.sleep(5)
-            # # we need to reconnect to the device after it's rebooted, might take several tries
-            # self.disconnect()
-            # self.client = discover(retries=5)
+        if reset and self.client is not None:
+            # reboot each hub-reset (like the Acroname) to clear a wedged CLI proactively
+            self._reboot()
 
     def is_connected(self):
         if self.client is None:
@@ -227,14 +221,12 @@ class UniFiSwitch(device_hub.device_hub):
             log.f(f"Error running command '{command}': {err}")
         return out
 
-    def _run_command(self, command, timeout=CHANNEL_TIMEOUT, retries=1, reboot_on_failure=True):
+    def _run_command(self, command, timeout=CHANNEL_TIMEOUT, retries=1):
         """
-        Run a command on the switch, retrying on failure and, as a last resort,
-        rebooting the switch to clear a persistently wedged CLI.
+        Run a command on the switch, retrying with a reconnect on failure.
         :param command: the command to run
         :param timeout: seconds to wait for a response before retrying
-        :param retries: number of reconnect+retry attempts before escalating
-        :param reboot_on_failure: reboot the switch and retry once if all attempts fail
+        :param retries: number of reconnect+retry attempts
         :return: the output of the command
         """
         last_exc = None
@@ -248,16 +240,9 @@ class UniFiSwitch(device_hub.device_hub):
                 last_exc = e
                 log.w(f"Command '{command}' failed: {e}")
                 self._reconnect()
-        if reboot_on_failure:
-            log.w(f"Command '{command}' still failing; rebooting switch to recover...")
-            try:
-                self._reboot()
-                return self._exec(command, timeout)
-            except Exception as e:
-                last_exc = e
         if isinstance(last_exc, socket.timeout):
-            raise TimeoutError(f"Command '{command}' timed out") from last_exc
-        raise RuntimeError(f"Command '{command}' failed: {last_exc}") from last_exc
+            raise TimeoutError(f"Command '{command}' timed out after {retries + 1} attempts") from last_exc
+        raise RuntimeError(f"Command '{command}' failed after {retries + 1} attempts: {last_exc}") from last_exc
 
     def _reconnect(self):
         """
