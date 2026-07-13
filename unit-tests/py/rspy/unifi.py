@@ -69,6 +69,18 @@ def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH
            client.connect(hostname=ip, username=ssh_username,
                                 password=ssh_password, timeout=10,
                                 channel_timeout=CHANNEL_TIMEOUT)
+           # Bound a send stalled under TCP retransmit: exec_command(timeout=) and
+           # settimeout only guard the reply read, not the send. Without this, a
+           # switch whose CLI wedges mid-command (e.g. PoE inrush on enable-all)
+           # stops ACKing and the send hangs ~15min (tcp_retries2) instead of
+           # failing fast so the reconnect/retry below can recover.
+           sock = client.get_transport().sock
+           try:
+               tcp_user_timeout = getattr(socket, "TCP_USER_TIMEOUT", 18)
+               sock.setsockopt(socket.IPPROTO_TCP, tcp_user_timeout, CHANNEL_TIMEOUT * 1000)
+           except (OSError, AttributeError):
+               pass  # non-Linux / unsupported
+           sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
            log.debug_indent()
            log.d("...", f"connected to {ip} via SSH")
            log.debug_unindent()
