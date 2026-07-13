@@ -198,7 +198,7 @@ class UniFiSwitch(device_hub.device_hub):
         # paramiko client directly, not via a self method (device_hub wraps methods to
         # re-register signal handlers, which fails off the main thread).
         client = self.client
-        watchdog = threading.Timer(timeout, lambda: client.close())
+        watchdog = threading.Timer(timeout, lambda: client.close() if client is not None else None)
         watchdog.start()
         stdin = stdout = stderr = None
         try:
@@ -239,7 +239,10 @@ class UniFiSwitch(device_hub.device_hub):
             except (socket.timeout, socket.error, EOFError, paramiko.SSHException, OSError) as e:
                 last_exc = e
                 log.w(f"Command '{command}' failed: {e}")
-                self._reconnect()
+                try:
+                    self._reconnect()
+                except Exception as re:  # reconnect can raise; keep retrying / escalate to reboot
+                    last_exc = re
         if reboot_on_failure:
             log.w(f"Command '{command}' still failing; rebooting switch to recover...")
             try:
