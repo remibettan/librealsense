@@ -8,9 +8,11 @@ Mirrors fps-single-stream but disables auto-exposure and sets exposure to half f
 
 import pytest
 import pyrealsense2 as rs
+import pyrsutils as rsutils
 import fps_helper
 import platform
 import logging
+from rspy.pytest.device_helpers import require_min_fw_version
 log = logging.getLogger(__name__)
 
 pytestmark = [
@@ -109,6 +111,8 @@ def test_color_fps_manual_exposure(test_device):
     product_line = dev.get_info(rs.camera_info.product_line)
     product_name = dev.get_info(rs.camera_info.name)
     os_name = platform.system()
+
+    require_min_fw_version(dev, rsutils.version(5, 17, 4, 6), "color manual exposure FPS")
 
     log.info(f"Testing color fps (manual exposure) {product_line} device - {os_name} OS")
 
