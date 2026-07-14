@@ -8,7 +8,6 @@ sys.path.append(parent_dir)
 from rspy import log
 import time
 import platform, re
-import threading
 from rspy import device_hub
 
 if __name__ == '__main__':
@@ -72,12 +71,11 @@ def discover(ip=SWITCH_IP, ssh_username=SWITCH_SSH_USER, ssh_password=SWITCH_SSH
            client.connect(hostname=ip, username=ssh_username,
                                 password=ssh_password, timeout=10,
                                 channel_timeout=CHANNEL_TIMEOUT)
-           # Bound a send stalled under TCP retransmit; paramiko's timeouts guard
-           # only the reply read, not the send (else a wedged switch hangs ~15min).
-           sock = client.get_transport().sock
-           if hasattr(socket, "TCP_USER_TIMEOUT"):  # Linux-only; no-ops elsewhere
+           # Bound a send stalled under TCP retransmit (Linux); paramiko's timeouts
+           # guard the reply read, not the send, so a wedged switch would hang ~15min.
+           if hasattr(socket, "TCP_USER_TIMEOUT"):
                try:
-                   sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, CHANNEL_TIMEOUT * 1000)
+                   client.get_transport().sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, CHANNEL_TIMEOUT * 1000)
                except OSError as e:
                    log.d(f"TCP_USER_TIMEOUT setsockopt failed: {e}")
            log.debug_indent()
@@ -153,8 +151,25 @@ class UniFiSwitch(device_hub.device_hub):
     def connect(self, reset=False, retries=0):
         if self.client is None:
             self.client = discover(self.ip, self.username, self.password, retries=retries)
-        # reset is a no-op here: a wedged CLI is recovered on demand in _run_command
-        # (reboot-on-failure), not by rebooting the switch on every hub-reset.
+
+        if reset and self.client is not None:
+            # --hub-reset: reboot the switch (like the Acroname) to clear a wedged CLI
+            self._reboot()
+
+    def _reboot(self):
+        """
+        Reboot the switch and wait for its SSH to accept connections again.
+        """
+        log.d("rebooting UniFi switch...")
+        try:
+            self.client.exec_command("reboot", timeout=10)
+        except Exception:
+            pass  # the connection drops as the switch goes down
+        self.disconnect()
+        time.sleep(REBOOT_WAIT)
+        self.client = discover(self.ip, self.username, self.password, retries=REBOOT_RETRIES)
+        if self.client is None:
+            raise RuntimeError("UniFi switch did not come back after reboot")
 
     def is_connected(self):
         if self.client is None:
@@ -191,68 +206,45 @@ class UniFiSwitch(device_hub.device_hub):
         """
         return "enabled" if self.is_port_enabled(port) else "disabled"
 
-    def _exec(self, command, timeout):
-        # One command, guarded by a watchdog that force-closes the transport if it
-        # wedges. Closing the socket from another thread interrupts a stalled send/read
-        # on any OS (paramiko's channel timeouts don't cover the send). Close the
-        # paramiko client directly, not via a self method (device_hub wraps methods to
-        # re-register signal handlers, which fails off the main thread).
-        client = self.client
-        watchdog = threading.Timer(timeout, lambda: client.close() if client is not None else None)
-        watchdog.start()
-        stdin = stdout = stderr = None
-        try:
-            stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
-            stdout.channel.settimeout(timeout)
-            stderr.channel.settimeout(timeout)
-            out = stdout.read().decode().strip()
-            err = stderr.read().decode().strip()
-        finally:
-            watchdog.cancel()
-            for s in (stdin, stdout, stderr):
-                try:
-                    if s is not None:
-                        s.close()
-                except Exception:
-                    pass
-        if err:
-            log.f(f"Error running command '{command}': {err}")
-        return out
-
-    def _run_command(self, command, timeout=CHANNEL_TIMEOUT, retries=1, reboot_on_failure=True):
+    def _run_command(self, command, timeout=CHANNEL_TIMEOUT, retries=1):
         """
-        Run a command on the switch, retrying with a reconnect on failure and, as a
-        last resort, rebooting the switch to clear a persistently wedged CLI.
+        Run a command on the switch.
+        exec_command(timeout=) + settimeout protect the read/write phase.
         :param command: the command to run
         :param timeout: seconds to wait for a response before retrying
-        :param retries: number of reconnect+retry attempts before escalating
-        :param reboot_on_failure: reboot the switch and retry once if all attempts fail
+        :param retries: number of times to retry on timeout before raising TimeoutError
         :return: the output of the command
         """
-        last_exc = None
         for attempt in range(retries + 1):
             if not self.is_connected():
                 log.w( f"SSH not connected, reconnecting (attempt {attempt + 1}/{retries + 1})..." )
                 self._reconnect()
+            stdin = stdout = stderr = None
             try:
-                return self._exec(command, timeout)
+                stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
+                stdout.channel.settimeout(timeout)
+                stderr.channel.settimeout(timeout)
+                out = stdout.read().decode().strip()
+                err = stderr.read().decode().strip()
             except (socket.timeout, socket.error, EOFError, paramiko.SSHException, OSError) as e:
-                last_exc = e
                 log.w(f"Command '{command}' failed: {e}")
                 try:
-                    self._reconnect()
-                except Exception as re:  # reconnect can raise; keep retrying / escalate to reboot
-                    last_exc = re
-        if reboot_on_failure:
-            log.w(f"Command '{command}' still failing; rebooting switch to recover...")
-            try:
-                self._reboot()
-                return self._exec(command, timeout)
-            except Exception as e:
-                last_exc = e
-        if isinstance(last_exc, socket.timeout):
-            raise TimeoutError(f"Command '{command}' timed out after {retries + 1} attempts") from last_exc
-        raise RuntimeError(f"Command '{command}' failed after {retries + 1} attempts: {last_exc}") from last_exc
+                    for s in (stdin, stdout, stderr):
+                        if s is not None:
+                            s.close()
+                except Exception:
+                    pass
+                self._reconnect()
+                if attempt < retries:
+                    log.w(f"Retrying ({attempt + 1}/{retries})...")
+                    continue
+                # Raise TimeoutError only for actual timeouts; use RuntimeError for other SSH/socket failures
+                if isinstance(e, socket.timeout):
+                    raise TimeoutError(f"Command '{command}' timed out after {retries + 1} attempts") from e
+                raise RuntimeError(f"Command '{command}' failed after {retries + 1} attempts: {e}") from e
+            if err:
+                log.f(f"Error running command '{command}': {err}")
+            return out
 
     def _reconnect(self):
         """
@@ -262,21 +254,6 @@ class UniFiSwitch(device_hub.device_hub):
         self.connect(retries=2)
         if self.client is None:
             raise RuntimeError("Failed to reconnect to UniFi switch")
-
-    def _reboot(self):
-        """
-        Reboot the switch and wait for its SSH to accept connections again.
-        """
-        log.d("rebooting UniFi switch...")
-        try:
-            self._exec("reboot", timeout=10)
-        except Exception:
-            pass  # the connection drops as the switch goes down
-        self.disconnect()
-        time.sleep(REBOOT_WAIT)
-        self.client = discover(self.ip, self.username, self.password, retries=REBOOT_RETRIES)
-        if self.client is None:
-            raise RuntimeError("UniFi switch did not come back after reboot")
 
     def enable_ports(self, ports=None, disable_other_ports=False, sleep_on_change=0):
         log.d(f"Enabling ports {ports if ports is not None else 'all'} on Unifi Switch"
