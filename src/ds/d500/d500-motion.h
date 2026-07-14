@@ -8,13 +8,10 @@
 
 namespace librealsense
 {
-    class d500_motion : public virtual d500_device
+    class d500_motion_base : public virtual d500_device
     {
     public:
-        std::shared_ptr<synthetic_sensor> create_hid_device( std::shared_ptr<context> ctx,
-                                                             const std::vector<platform::hid_device_info>& all_hid_infos );
-
-        d500_motion( std::shared_ptr< const d500_info > const & );
+        d500_motion_base( std::shared_ptr< const d500_info > const & );
 
         rs2_motion_device_intrinsic get_motion_intrinsics(rs2_stream) const;
 
@@ -26,16 +23,37 @@ namespace librealsense
         friend class ds_motion_sensor;
 
         std::shared_ptr<ds_motion_common> _ds_motion_common;
-        // Set when HID motion-sensor construction failed and the partial device
+        // Set when motion-sensor construction failed and the partial device
         // was allowed by the `partial-device-allowed` setting. Callers that
         // access `_ds_motion_common` (e.g. derived create_matcher) must gate on
         // this flag because `_ds_motion_common` remains null in the partial
         // case. Mirrors the same flag in d400_motion_base.
         bool _has_motion_module_failed = false;
 
+        optional_value<uint8_t> _motion_module_device_idx;
+
     private:
         void register_stream_to_extrinsic_group(const stream_interface& stream, uint32_t group_index);
+    };
 
-        optional_value<uint8_t> _motion_module_device_idx;
+    // HID-based motion (USB devices).
+    class d500_motion : public d500_motion_base
+    {
+    public:
+        std::shared_ptr<synthetic_sensor> create_hid_device( std::shared_ptr<context> ctx,
+                                                             const std::vector<platform::hid_device_info>& all_hid_infos );
+
+        d500_motion( std::shared_ptr< const d500_info > const & );
+    };
+
+    // UVC-based motion (MIPI/GMSL devices): the IMU is a V4L2 node at mi=4, not a HID device.
+    class d500_motion_uvc : public d500_motion_base
+    {
+    public:
+        d500_motion_uvc( std::shared_ptr< const d500_info > const & );
+
+        std::shared_ptr<synthetic_sensor> create_uvc_device( std::shared_ptr<context> ctx,
+            const std::vector<platform::uvc_device_info>& all_uvc_infos,
+            const firmware_version& camera_fw_version );
     };
 }

@@ -1010,6 +1010,7 @@ namespace librealsense
             const uint8_t GVD_PID_D401_GMSL = 0x13;
             const uint8_t GVD_PID_D430_GMSL = 0x0F;
             const uint8_t GVD_PID_D415_GMSL = 0x06;
+            const uint8_t GVD_PID_D585      = 0x25;
 
             // device PID
             uint16_t device_pid = 0;
@@ -1067,6 +1068,10 @@ namespace librealsense
 
                         case(GVD_PID_D401_GMSL):
                             device_pid = D401_GMSL_PID;
+                            break;
+
+                        case(GVD_PID_D585):
+                            device_pid = D585_GMSL_PID;
                             break;
 
                         default:
@@ -1128,6 +1133,8 @@ namespace librealsense
 
             get_mipi_device_info(dev_name, bus_info, card);
 
+            vid = 0x8086;
+
             // find device PID from depth video node
             static uint16_t device_pid = 0;
             try
@@ -1143,8 +1150,10 @@ namespace librealsense
                 device_pid = 0;
             }
 
-            vid = 0x8086;
             pid = device_pid;
+            if (pid == D585_GMSL_PID)
+                vid = 0x38e5; // D585 GMSL uses RealSense VID
+            
 
 //          std::cout << "video_path:" << video_path << ", name:" << dev_name << ", pid=" << std::hex << (int) pid << std::endl;
 

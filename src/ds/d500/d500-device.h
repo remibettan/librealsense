@@ -173,5 +173,6 @@ namespace librealsense
         std::shared_ptr< rsutils::lazy< rs2_extrinsics > > _color_extrinsic;
         bool _is_locked = true;
         bool _is_symmetrization_enabled = true;
+        bool _is_mipi_device = false;
     };
 }

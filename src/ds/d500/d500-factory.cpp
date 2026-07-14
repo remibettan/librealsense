@@ -155,6 +155,59 @@ namespace librealsense
     };
 
 
+    // D585 GMSL (MIPI) variant with dedicated color sensor. On MIPI the color and IMU are exposed as
+    // separate V4L2 nodes, so this uses the single-color (d500_color) and UVC-motion (d500_motion_uvc)
+    // paths rather than the USB dual-color / HID-motion paths of rs5x5_device.
+    class rs5x5_gmsl_device
+        : public d500_active
+        , public d500_color
+        , public d500_motion_uvc
+        , public ds_advanced_mode_base
+        , public extended_firmware_logger_device
+    {
+    public:
+        rs5x5_gmsl_device( std::shared_ptr< const d500_info > const & dev_info )
+            : device( dev_info )
+            , backend_device( dev_info )
+            , d500_device( dev_info )
+            , d500_active( dev_info )
+            , d500_color( dev_info, RS2_FORMAT_YUYV )
+            , d500_motion_uvc( dev_info )
+            , ds_advanced_mode_base()
+            , extended_firmware_logger_device( dev_info, d500_device::_hw_monitor, get_firmware_logs_command() )
+        {
+            ds_advanced_mode_base::initialize_advanced_mode( this );
+
+            // Improved Close Range Depth - USB toggle
+            // Disabled on D585 GMSL: the MIPI V4L2 backend has no CID for the close-range depth-XU selector (0x14).
+            //register_feature( std::make_shared< close_range_filter_feature >(
+            //        dynamic_cast< d500_depth_sensor & >( get_depth_sensor() ) ) );
+        }
+
+        std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override
+        {
+
+            std::vector< std::shared_ptr< stream_interface > > streams = { _depth_stream, _left_ir_stream, _right_ir_stream, _color_stream,
+                                                                           _ds_motion_common->get_accel_stream(),
+                                                                           _ds_motion_common->get_gyro_stream() };
+            return create_default_matcher( streams );
+        }
+
+        std::vector<tagged_profile> get_profiles_tags() const override
+        {
+            std::vector<tagged_profile> tags;
+
+            tags.push_back({ RS2_STREAM_COLOR, -1, 1280, 720, RS2_FORMAT_RGB8, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_DEPTH, -1, 1280, 720, RS2_FORMAT_Z16, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_INFRARED, -1, 1280, 720, RS2_FORMAT_Y8, 30, profile_tag::PROFILE_TAG_SUPERSET });
+            tags.push_back({ RS2_STREAM_GYRO, -1, 0, 0, RS2_FORMAT_MOTION_XYZ32F, (int)odr::IMU_FPS_200, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_ACCEL, -1, 0, 0, RS2_FORMAT_MOTION_XYZ32F, (int)odr::IMU_FPS_100, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+
+            return tags;
+        };
+    };
+
+
     // D585 or D535 with dedicated color sensor. Can be with IR filter on lens or without.
     class rs5x5_dedicated_color_device
         : public d500_active
@@ -432,6 +485,8 @@ namespace librealsense
             case ds::D585_2C_PID:
             case ds::D585_2C_PROTO_PID:
                 return std::make_shared< rs5x5_device >( dev_info );
+            case ds::D585_GMSL_PID:
+                return std::make_shared< rs5x5_gmsl_device >( dev_info );
             case ds::D535_3C_PID:
             case ds::D535F_PID:
             case ds::D585_3C_PID:
