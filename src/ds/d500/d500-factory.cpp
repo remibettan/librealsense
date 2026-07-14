@@ -158,7 +158,7 @@ namespace librealsense
     // D585 GMSL (MIPI) variant with dedicated color sensor. On MIPI the color and IMU are exposed as
     // separate V4L2 nodes, so this uses the single-color (d500_color) and UVC-motion (d500_motion_uvc)
     // paths rather than the USB dual-color / HID-motion paths of rs5x5_device.
-    class rs5x5_gmsl_device
+    class rs5x5_gmsl_dedicated_color_device
         : public d500_active
         , public d500_color
         , public d500_motion_uvc
@@ -166,7 +166,7 @@ namespace librealsense
         , public extended_firmware_logger_device
     {
     public:
-        rs5x5_gmsl_device( std::shared_ptr< const d500_info > const & dev_info )
+        rs5x5_gmsl_dedicated_color_device( std::shared_ptr< const d500_info > const & dev_info )
             : device( dev_info )
             , backend_device( dev_info )
             , d500_device( dev_info )
@@ -200,8 +200,10 @@ namespace librealsense
             tags.push_back({ RS2_STREAM_COLOR, -1, 1280, 720, RS2_FORMAT_RGB8, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
             tags.push_back({ RS2_STREAM_DEPTH, -1, 1280, 720, RS2_FORMAT_Z16, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
             tags.push_back({ RS2_STREAM_INFRARED, -1, 1280, 720, RS2_FORMAT_Y8, 30, profile_tag::PROFILE_TAG_SUPERSET });
+            // UVC motion requires accel and gyro at equal fps (see uvc_sensor::verify_supported_requests),
+            // so both defaults must match or the viewer fails to start the motion module.
             tags.push_back({ RS2_STREAM_GYRO, -1, 0, 0, RS2_FORMAT_MOTION_XYZ32F, (int)odr::IMU_FPS_200, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
-            tags.push_back({ RS2_STREAM_ACCEL, -1, 0, 0, RS2_FORMAT_MOTION_XYZ32F, (int)odr::IMU_FPS_100, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+            tags.push_back({ RS2_STREAM_ACCEL, -1, 0, 0, RS2_FORMAT_MOTION_XYZ32F, (int)odr::IMU_FPS_200, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
 
             return tags;
         };
@@ -486,7 +488,7 @@ namespace librealsense
             case ds::D585_2C_PROTO_PID:
                 return std::make_shared< rs5x5_device >( dev_info );
             case ds::D585_GMSL_PID:
-                return std::make_shared< rs5x5_gmsl_device >( dev_info );
+                return std::make_shared< rs5x5_gmsl_dedicated_color_device >( dev_info );
             case ds::D535_3C_PID:
             case ds::D535F_PID:
             case ds::D585_3C_PID:

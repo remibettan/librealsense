@@ -1010,7 +1010,6 @@ namespace librealsense
             const uint8_t GVD_PID_D401_GMSL = 0x13;
             const uint8_t GVD_PID_D430_GMSL = 0x0F;
             const uint8_t GVD_PID_D415_GMSL = 0x06;
-            const uint8_t GVD_PID_D585      = 0x25;
 
             // device PID
             uint16_t device_pid = 0;
@@ -1050,6 +1049,16 @@ namespace librealsense
                         opcode_ok = true;
                     }
 
+                    // d500 MIPI (e.g. D585 GMSL) uses a different GVD layout than d400 GMSL:
+                    // byte 8 holds the CRC32, and the RealSense VID/PID are embedded at bytes 16-19.
+                    // TODO - temp WA for D585 GMSL, until the GVD layout is fixed to match the D400 GMSL layout
+                    uint16_t embedded_vid = gvd[16] | ( gvd[17] << 8 );
+                    if( embedded_vid == 0x38e5 ) // RealSense VID identifies the d500 GMSL family
+                    {
+                        device_pid = D585_GMSL_PID;
+                        continue;
+                    }
+
                     uint8_t product_pid = gvd[4 + GVD_PID_OFFSET];
 
                     switch(product_pid)
@@ -1068,10 +1077,6 @@ namespace librealsense
 
                         case(GVD_PID_D401_GMSL):
                             device_pid = D401_GMSL_PID;
-                            break;
-
-                        case(GVD_PID_D585):
-                            device_pid = D585_GMSL_PID;
                             break;
 
                         default:

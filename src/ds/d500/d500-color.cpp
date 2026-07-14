@@ -180,7 +180,16 @@ namespace librealsense
 
         _ds_color_common->register_color_options();
 
-        std::map< float, std::string > description_per_value = std::map<float, std::string>{ 
+        // The D585 GMSL MIPI V4L2 backend has no working control for these color PUs
+        // (querying them fails), so drop them from the shared set rather than expose dead controls.
+        if( _is_mipi_device )
+        {
+            color_ep.unregister_option( RS2_OPTION_BRIGHTNESS );
+            color_ep.unregister_option( RS2_OPTION_CONTRAST );
+            color_ep.unregister_option( RS2_OPTION_GAMMA );
+        }
+
+        std::map< float, std::string > description_per_value = std::map<float, std::string>{
             { 0.f, "Disabled"},
             { 1.f, "50Hz" },
             { 2.f, "60Hz" } };
@@ -193,7 +202,8 @@ namespace librealsense
 
         _ds_color_common->register_standard_options();
 
-        color_ep.register_pu(RS2_OPTION_HUE);
+        if( ! _is_mipi_device ) // no V4L2 MIPI CID mapping for Hue
+            color_ep.register_pu(RS2_OPTION_HUE);
 
         if( _thermal_monitor )
             _thermal_monitor->add_observer( [&]( float ) { _color_calib_table_raw.reset(); } );
