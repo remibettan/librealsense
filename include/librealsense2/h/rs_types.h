@@ -217,6 +217,7 @@ typedef enum rs2_extension
     RS2_EXTENSION_OBJECT_DETECTION_FRAME,
     RS2_EXTENSION_PERCEPTION_SENSOR,
     RS2_EXTENSION_PERCEPTION_PROFILE,
+    RS2_EXTENSION_GPU_FRAME,
     RS2_EXTENSION_COUNT
 } rs2_extension;
 const char* rs2_extension_type_to_string(rs2_extension type);

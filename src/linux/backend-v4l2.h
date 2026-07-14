@@ -151,6 +151,7 @@ namespace librealsense
             v4l2_buffer _buf;
             std::mutex _mutex;
             bool _must_enqueue = false;
+            bool _zc_registered = false;  // this mmap buffer is registered with CUDA for zero-copy GPU access
         };
 
         enum supported_kernel_buf_types : uint8_t

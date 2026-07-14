@@ -217,6 +217,8 @@ void align_cuda_helper::align_depth_to_other(unsigned char* h_aligned_out, const
     if (!_d_other_intrinsics) _d_other_intrinsics = make_device_copy(h_other_intrin);
     if (!_d_depth_other_extrinsics) _d_depth_other_extrinsics = make_device_copy(h_depth_to_other);
 
+    // Device scratch + copies (see align_other_to_depth): align's atomicMin / scatter must
+    // run on cached device memory, not uncached mapped pinned memory.
     if (!_d_depth_in) _d_depth_in = alloc_dev<uint16_t>(depth_pixel_count);
     cudaMemcpy(_d_depth_in.get(), h_depth_in, depth_byte_size, cudaMemcpyHostToDevice);
 
