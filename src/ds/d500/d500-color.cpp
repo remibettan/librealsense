@@ -76,7 +76,17 @@ namespace librealsense
         environment::get_instance().get_extrinsics_graph().register_extrinsics(*_color_stream, *_depth_stream, _color_extrinsic);
         register_stream_to_extrinsic_group(*_color_stream, 0);
 
-        std::vector<platform::uvc_device_info> color_devs_info = filter_by_mi(group.uvc_devices, 3);
+        std::vector<platform::uvc_device_info> color_devs_info;
+        if( _is_mipi_device )
+        {
+            // On MIPI the color is a dedicated video node enumerated at mi=0 (depth/color/ir all share
+            // mi=0, ordered depth, color, ir), not a separate mi=3 node as on USB.
+            auto mi0_infos = filter_by_mi( group.uvc_devices, 0 );
+            if( mi0_infos.size() >= 2 )
+                color_devs_info = { mi0_infos[1] };
+        }
+        else
+            color_devs_info = filter_by_mi( group.uvc_devices, 3 );
 
         if ( color_devs_info.empty() )
         {

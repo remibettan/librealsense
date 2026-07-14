@@ -511,11 +511,14 @@ namespace librealsense
         const uint16_t D415_GMSL_PID = 0xABCF;
         const uint16_t D401_GMSL_PID = 0xABCC;
 
+        const uint16_t D585_GMSL_PID = 0xBAAA;
+
         static const std::set<std::uint16_t> mipi_devices_pid = {
             D457_PID,
             D430_GMSL_PID,
             D415_GMSL_PID,
-            D401_GMSL_PID
+            D401_GMSL_PID,
+            D585_GMSL_PID
         };
 
         // D457 Development. To be merged into underlying class
