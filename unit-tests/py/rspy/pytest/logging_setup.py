@@ -86,12 +86,10 @@ def install_rs_log_bridge(rs):
     rs_log.setLevel(logging.DEBUG)
     _rs_log_callback = _callback
     try:
-        # Asynchronous dispatch: the emitting LibRS thread never acquires the GIL, so a
-        # LOG_DEBUG issued under an internal mutex cannot AB-BA deadlock against the main
-        # thread (seen as an unkillable pytest holding the Acroname hub after an abort)
+        # Async: the emitting LibRS thread never takes the GIL, so a LOG under an internal
+        # mutex cannot deadlock against the main thread; messages arrive as plain str
         rs.log_to_callback(rs.log_severity.debug, _callback, asynchronous=True)
-    except TypeError:
-        # Older pyrealsense2 build without the asynchronous flag
+    except TypeError:  # older pyrealsense2 build without the flag
         rs.log_to_callback(rs.log_severity.debug, _callback)
 
 

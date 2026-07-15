@@ -7,45 +7,31 @@ import pyrealsense2 as rs
 import log_helpers as common
 
 
-def wait_for_messages(n, timeout=5.0):
-    """Async dispatch: the callback fires on a worker thread shortly after rs.log()."""
+def wait_for(predicate, timeout=5.0):
     deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if common.n_messages >= n:
-            return
+    while time.monotonic() < deadline and not predicate():
         time.sleep(0.05)
 
 
 def test_async_callback_receives_messages(reset_logger):
-    rs.log_to_callback(rs.log_severity.warn, common.message_counter, asynchronous=True)
-    assert common.n_messages == 0
-    common.log_all()
-    wait_for_messages(2)
-    assert common.n_messages == 2  # warning, error
-
-
-def test_async_message_content(reset_logger):
     received = []
-
-    def collect(severity, message):
-        received.append((severity, message.raw(), message.full(), message.line_number(), message.filename()))
-
-    rs.log_to_callback(rs.log_severity.error, collect, asynchronous=True)
-    rs.log(rs.log_severity.error, "async content check")
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline and not received:
-        time.sleep(0.05)
-    assert len(received) == 1
-    severity, raw, full, line, filename = received[0]
-    assert severity == rs.log_severity.error
-    assert raw == "async content check"
-    assert raw in full
+    rs.log_to_callback(rs.log_severity.warn,
+                       lambda severity, message: received.append((severity, message)),
+                       asynchronous=True)
+    common.log_all()
+    wait_for(lambda: len(received) >= 2)
+    assert len(received) == 2  # warning, error
+    assert received[0] == (rs.log_severity.warn, "warn message")
+    assert received[1] == (rs.log_severity.error, "error message")
 
 
 def test_async_and_sync_coexist(reset_logger):
-    rs.log_to_callback(rs.log_severity.error, common.message_counter, asynchronous=True)
+    received = []
+    rs.log_to_callback(rs.log_severity.error,
+                       lambda severity, message: received.append(message),
+                       asynchronous=True)
     rs.log_to_callback(rs.log_severity.error, common.message_counter_2)  # sync
     common.log_all()
-    assert common.n_messages_2 == 1  # sync path: already delivered
-    wait_for_messages(1)
-    assert common.n_messages == 1
+    assert common.n_messages_2 == 1  # sync path: delivered before log_all returns
+    wait_for(lambda: len(received) >= 1)
+    assert received == ["error message"]

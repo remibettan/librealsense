@@ -118,44 +118,21 @@ PYBIND11_MODULE(NAME, m) {
                 super::release();
         }
     };
-    // The synchronous callback above acquires the GIL on whatever librealsense thread
-    // emitted the log line. If that thread holds an internal mutex while the Python main
-    // thread holds the GIL and blocks on that same mutex, the process deadlocks (AB-BA)
-    // and even SIGTERM cannot kill it. The asynchronous path below breaks the cycle:
-    // on_log only copies the message into a bounded queue (never touching the GIL), and a
-    // dedicated worker thread -- which never holds librealsense locks -- acquires the GIL
-    // and dispatches to Python. The cost: callbacks fire slightly after the log call, so
-    // it is opt-in (asynchronous=True) and used by test infrastructure (--rslog).
-    struct queued_log_message
-    {
-        unsigned _line;
-        std::string _filename, _raw, _full;
-    };
-    py::class_< queued_log_message >( m, "queued_log_message",
-                                      "Detached copy of a log_message, dispatched asynchronously" )
-        .def( "line_number", []( queued_log_message const & self ) { return self._line; } )
-        .def( "filename", []( queued_log_message const & self ) { return self._filename; } )
-        .def( "raw", []( queued_log_message const & self ) { return self._raw; } )
-        .def( "full", []( queued_log_message const & self ) { return self._full; } )
-        .def( "__str__", []( queued_log_message const & self ) { return self._raw; } )
-        .def( "__repr__", []( queued_log_message const & self ) { return self._full; } );
-
+    // asynchronous=True: on_log never acquires the GIL on the emitting librealsense thread
+    // (which may hold internal locks -- sync dispatch can AB-BA deadlock against the main
+    // thread); messages queue and a worker thread dispatches (severity, raw_text) to Python.
     class py_async_log_callback : public rs2_log_callback
     {
-        typedef std::function< void( rs2_log_severity, queued_log_message const & ) > log_fn;
-
-        log_fn _fn;
+        py::function _fn;
         std::mutex _mx;
         std::condition_variable _cv;
-        std::deque< std::pair< rs2_log_severity, queued_log_message > > _queue;
+        std::deque< std::pair< rs2_log_severity, std::string > > _queue;  // bounded; excess dropped
         bool _stop = false;
         std::thread _worker;
-
-        // Bound so a Python-side stall cannot grow memory without limit; excess is dropped
         enum : size_t { MAX_PENDING = 4096 };
 
     public:
-        explicit py_async_log_callback( log_fn && fn )
+        explicit py_async_log_callback( py::function fn )
             : _fn( std::move( fn ) )
             , _worker( [this] { run(); } )
         {
@@ -163,47 +140,27 @@ PYBIND11_MODULE(NAME, m) {
 
         void on_log( rs2_log_severity severity, rs2_log_message const & msg ) noexcept override
         {
-            // May run on any librealsense thread, possibly under internal locks: must not
-            // block and must not touch the GIL. rs2::log_message's ctor is private, so
-            // copy the fields out through the C API (ignoring per-field errors).
             try
             {
-                auto get_str = []( const char * s ) { return std::string( s ? s : "" ); };
                 rs2_error * e = nullptr;
-                unsigned line = rs2_get_log_message_line_number( &msg, &e );
-                if( e ) { rs2_free_error( e ); e = nullptr; line = 0; }
-                std::string filename = get_str( rs2_get_log_message_filename( &msg, &e ) );
-                if( e ) { rs2_free_error( e ); e = nullptr; }
-                std::string raw = get_str( rs2_get_raw_log_message( &msg, &e ) );
-                if( e ) { rs2_free_error( e ); e = nullptr; }
-                std::string full = get_str( rs2_get_full_log_message( &msg, &e ) );
-                if( e ) { rs2_free_error( e ); e = nullptr; }
-                queued_log_message copy{ line,
-                                         std::move( filename ),
-                                         std::move( raw ),
-                                         std::move( full ) };
+                char const * raw = rs2_get_raw_log_message( &msg, &e );
+                if( e ) { rs2_free_error( e ); return; }
                 {
                     std::lock_guard< std::mutex > lock( _mx );
                     if( _queue.size() >= MAX_PENDING )
                         return;
-                    _queue.emplace_back( severity, std::move( copy ) );
+                    _queue.emplace_back( severity, raw ? raw : "" );
                 }
                 _cv.notify_one();
             }
-            catch( ... )
-            {
-            }
+            catch( ... ) {}
         }
 
-        // Called from a Python atexit handler, while the interpreter is still alive, so the
-        // worker never tries to acquire the GIL after finalization. Caller must NOT hold the
-        // GIL (the worker may need it to finish its current dispatch).
+        // Called via Python atexit (interpreter still alive); caller must not hold the GIL
         void stop()
         {
             {
                 std::lock_guard< std::mutex > lock( _mx );
-                if( _stop )
-                    return;
                 _stop = true;
             }
             _cv.notify_one();
@@ -211,24 +168,19 @@ PYBIND11_MODULE(NAME, m) {
                 _worker.join();
         }
 
-        void release() override
-        {
-            // Like py_log_callback: librealsense releases us at static destruction, when the
-            // Python thread state may already be gone -- intentionally leak instead (the
-            // worker was already stopped via atexit)
-        }
+        void release() override {}  // leaked at exit, same as py_log_callback above
 
     private:
         void run()
         {
             while( true )
             {
-                std::pair< rs2_log_severity, queued_log_message > item;
+                std::pair< rs2_log_severity, std::string > item;
                 {
                     std::unique_lock< std::mutex > lock( _mx );
                     _cv.wait( lock, [this] { return _stop || ! _queue.empty(); } );
                     if( _queue.empty() )
-                        return;  // only when stopping: flush whatever was queued first
+                        return;  // stopping, and pending messages were flushed
                     item = std::move( _queue.front() );
                     _queue.pop_front();
                 }
@@ -255,15 +207,11 @@ PYBIND11_MODULE(NAME, m) {
                rs2_error * e = nullptr;
                if( asynchronous )
                {
-                   auto cb = new py_async_log_callback(
-                       [callback]( rs2_log_severity severity, queued_log_message const & msg )
-                       { callback( severity, msg ); } );
-                   // Stop the worker while the interpreter is still alive; release the GIL
-                   // around the join so the worker can finish an in-flight dispatch
+                   auto cb = new py_async_log_callback( std::move( callback ) );
                    py::module_::import( "atexit" ).attr( "register" )( py::cpp_function(
                        [cb]()
                        {
-                           py::gil_scoped_release gil;
+                           py::gil_scoped_release gil;  // let the worker finish an in-flight dispatch
                            cb->stop();
                        } ) );
                    py::gil_scoped_release gil;
