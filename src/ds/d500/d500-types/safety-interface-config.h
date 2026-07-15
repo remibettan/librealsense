@@ -411,10 +411,6 @@ namespace librealsense
     class calibration_monitor_params
     {
     public:
-        // Default-constructed instances are zero-filled placeholders (e.g. as an
-        // uninitialized member of a default-constructed safety_interface_config).
-        // Zeros are outside the ranges enforced by validate_json — do not round-trip
-        // through to_json() / from-json until the object has been populated.
         calibration_monitor_params() = default;
 
         calibration_monitor_params(const json &j)
@@ -449,6 +445,9 @@ namespace librealsense
             {
                 throw librealsense::invalid_value_exception("Invalid calibration_monitor_params format");
             }
+            // Flash 0.96 spec (draft) does not pin numeric ranges for these fields, so
+            // validation is intentionally limited to presence and numeric type — matching
+            // sibling classes (occupancy_grid_params, smcu_arbitration_params).
             static constexpr const char *fields[] = {
                 "alpha_rect", "c_min_rect_threshold", "rect_err_max_limit_abs",
                 "alpha_scale", "c_min_scale_threshold",
@@ -464,21 +463,6 @@ namespace librealsense
                     throw librealsense::invalid_value_exception(std::string("Invalid calibration_monitor_params format: field must be numeric: ") + field);
                 }
             }
-            // Range checks: smoothing factors alpha_* are in (0, 1]; thresholds must be positive; scale low < high.
-            auto in_open_unit_interval = [](float v) { return v > 0.0f && v <= 1.0f; };
-            if (!in_open_unit_interval(j.at("alpha_rect").get<float>()))
-                throw librealsense::invalid_value_exception("Invalid calibration_monitor_params: alpha_rect must be in (0, 1]");
-            if (!in_open_unit_interval(j.at("alpha_scale").get<float>()))
-                throw librealsense::invalid_value_exception("Invalid calibration_monitor_params: alpha_scale must be in (0, 1]");
-            for (const auto &field : {"c_min_rect_threshold", "rect_err_max_limit_abs",
-                                      "c_min_scale_threshold",
-                                      "scale_low_limit_threshold", "scale_high_limit_threshold"})
-            {
-                if (j.at(field).get<float>() <= 0.0f)
-                    throw librealsense::invalid_value_exception(std::string("Invalid calibration_monitor_params: field must be positive: ") + field);
-            }
-            if (j.at("scale_low_limit_threshold").get<float>() >= j.at("scale_high_limit_threshold").get<float>())
-                throw librealsense::invalid_value_exception("Invalid calibration_monitor_params: scale_low_limit_threshold must be < scale_high_limit_threshold");
         }
 
         // Calib Rectification Error params

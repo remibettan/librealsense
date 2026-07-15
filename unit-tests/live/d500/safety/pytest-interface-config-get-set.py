@@ -289,22 +289,3 @@ def test_calibration_monitor_wrong_type_rejected(test_device):
             safety_sensor.set_safety_interface_config(bad)
     finally:
         tw.stop_wrapper(dev)
-
-
-def test_calibration_monitor_invalid_range_rejected(test_device):
-    dev, _ = test_device
-    safety_sensor = dev.first_safety_sensor()
-    tw.start_wrapper(dev)
-    try:
-        # alpha out of (0, 1]
-        with pytest.raises(Exception):
-            safety_sensor.set_safety_interface_config(_sic_with_calib_mon(overrides={"alpha_rect": -0.1}))
-        # non-positive threshold
-        with pytest.raises(Exception):
-            safety_sensor.set_safety_interface_config(_sic_with_calib_mon(overrides={"c_min_rect_threshold": 0.0}))
-        # scale low >= scale high
-        with pytest.raises(Exception):
-            safety_sensor.set_safety_interface_config(_sic_with_calib_mon(
-                overrides={"scale_low_limit_threshold": 1.2, "scale_high_limit_threshold": 1.1}))
-    finally:
-        tw.stop_wrapper(dev)
