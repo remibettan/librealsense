@@ -5,10 +5,6 @@ Copyright(c) 2017 RealSense, Inc. All Rights Reserved. */
 #include <librealsense2/rs.hpp>
 #include <librealsense2/hpp/rs_export.hpp>
 #include <src/types.h>
-#include <condition_variable>
-#include <deque>
-#include <mutex>
-#include <thread>
 
 PYBIND11_MODULE(NAME, m) {
     m.doc() = R"pbdoc(
@@ -120,22 +116,17 @@ PYBIND11_MODULE(NAME, m) {
     };
     // asynchronous=True: on_log never acquires the GIL on the emitting librealsense thread
     // (which may hold internal locks -- sync dispatch can AB-BA deadlock against the main
-    // thread); messages queue and a worker thread dispatches (severity, raw_text) to Python.
+    // thread); a dispatcher thread delivers (severity, raw_text) to Python instead.
     class py_async_log_callback : public rs2_log_callback
     {
         py::function _fn;
-        std::mutex _mx;
-        std::condition_variable _cv;
-        std::deque< std::pair< rs2_log_severity, std::string > > _queue;  // bounded; excess dropped
-        bool _stop = false;
-        std::thread _worker;
-        enum : size_t { MAX_PENDING = 4096 };
+        dispatcher _dispatcher{ 4096 };  // bounded; oldest dropped on overflow
 
     public:
         explicit py_async_log_callback( py::function fn )
             : _fn( std::move( fn ) )
-            , _worker( [this] { run(); } )
         {
+            _dispatcher.start();  // constructed stopped, despite what the header says
         }
 
         void on_log( rs2_log_severity severity, rs2_log_message const & msg ) noexcept override
@@ -145,13 +136,24 @@ PYBIND11_MODULE(NAME, m) {
                 rs2_error * e = nullptr;
                 char const * raw = rs2_get_raw_log_message( &msg, &e );
                 if( e ) { rs2_free_error( e ); return; }
-                {
-                    std::lock_guard< std::mutex > lock( _mx );
-                    if( _queue.size() >= MAX_PENDING )
-                        return;
-                    _queue.emplace_back( severity, raw ? raw : "" );
-                }
-                _cv.notify_one();
+                std::string text( raw ? raw : "" );
+                _dispatcher.invoke(
+                    [this, severity, text]( dispatcher::cancellable_timer )
+                    {
+                        try
+                        {
+                            py::gil_scoped_acquire gil;
+                            _fn( severity, text );
+                        }
+                        catch( std::exception const & e )
+                        {
+                            std::cerr << "EXCEPTION in " SNAME ".log_to_callback (async): " << e.what() << std::endl;
+                        }
+                        catch( ... )
+                        {
+                            std::cerr << "UNKNOWN EXCEPTION in " SNAME ".log_to_callback (async)" << std::endl;
+                        }
+                    } );
             }
             catch( ... ) {}
         }
@@ -159,46 +161,11 @@ PYBIND11_MODULE(NAME, m) {
         // Called via Python atexit (interpreter still alive); caller must not hold the GIL
         void stop()
         {
-            {
-                std::lock_guard< std::mutex > lock( _mx );
-                _stop = true;
-            }
-            _cv.notify_one();
-            if( _worker.joinable() )
-                _worker.join();
+            _dispatcher.flush();  // deliver what's pending -- stop() discards the queue
+            _dispatcher.stop();
         }
 
         void release() override {}  // leaked at exit, same as py_log_callback above
-
-    private:
-        void run()
-        {
-            while( true )
-            {
-                std::pair< rs2_log_severity, std::string > item;
-                {
-                    std::unique_lock< std::mutex > lock( _mx );
-                    _cv.wait( lock, [this] { return _stop || ! _queue.empty(); } );
-                    if( _queue.empty() )
-                        return;  // stopping, and pending messages were flushed
-                    item = std::move( _queue.front() );
-                    _queue.pop_front();
-                }
-                try
-                {
-                    py::gil_scoped_acquire gil;
-                    _fn( item.first, item.second );
-                }
-                catch( std::exception const & e )
-                {
-                    std::cerr << "EXCEPTION in " SNAME ".log_to_callback (async): " << e.what() << std::endl;
-                }
-                catch( ... )
-                {
-                    std::cerr << "UNKNOWN EXCEPTION in " SNAME ".log_to_callback (async)" << std::endl;
-                }
-            }
-        }
     };
 
     m.def( "log_to_callback",
