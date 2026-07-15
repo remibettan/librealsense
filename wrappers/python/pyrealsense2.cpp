@@ -5,6 +5,10 @@ Copyright(c) 2017 RealSense, Inc. All Rights Reserved. */
 #include <librealsense2/rs.hpp>
 #include <librealsense2/hpp/rs_export.hpp>
 #include <src/types.h>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
 
 PYBIND11_MODULE(NAME, m) {
     m.doc() = R"pbdoc(
@@ -114,14 +118,168 @@ PYBIND11_MODULE(NAME, m) {
                 super::release();
         }
     };
+    // The synchronous callback above acquires the GIL on whatever librealsense thread
+    // emitted the log line. If that thread holds an internal mutex while the Python main
+    // thread holds the GIL and blocks on that same mutex, the process deadlocks (AB-BA)
+    // and even SIGTERM cannot kill it. The asynchronous path below breaks the cycle:
+    // on_log only copies the message into a bounded queue (never touching the GIL), and a
+    // dedicated worker thread -- which never holds librealsense locks -- acquires the GIL
+    // and dispatches to Python. The cost: callbacks fire slightly after the log call, so
+    // it is opt-in (asynchronous=True) and used by test infrastructure (--rslog).
+    struct queued_log_message
+    {
+        unsigned _line;
+        std::string _filename, _raw, _full;
+    };
+    py::class_< queued_log_message >( m, "queued_log_message",
+                                      "Detached copy of a log_message, dispatched asynchronously" )
+        .def( "line_number", []( queued_log_message const & self ) { return self._line; } )
+        .def( "filename", []( queued_log_message const & self ) { return self._filename; } )
+        .def( "raw", []( queued_log_message const & self ) { return self._raw; } )
+        .def( "full", []( queued_log_message const & self ) { return self._full; } )
+        .def( "__str__", []( queued_log_message const & self ) { return self._raw; } )
+        .def( "__repr__", []( queued_log_message const & self ) { return self._full; } );
+
+    class py_async_log_callback : public rs2_log_callback
+    {
+        typedef std::function< void( rs2_log_severity, queued_log_message const & ) > log_fn;
+
+        log_fn _fn;
+        std::mutex _mx;
+        std::condition_variable _cv;
+        std::deque< std::pair< rs2_log_severity, queued_log_message > > _queue;
+        bool _stop = false;
+        std::thread _worker;
+
+        // Bound so a Python-side stall cannot grow memory without limit; excess is dropped
+        enum : size_t { MAX_PENDING = 4096 };
+
+    public:
+        explicit py_async_log_callback( log_fn && fn )
+            : _fn( std::move( fn ) )
+            , _worker( [this] { run(); } )
+        {
+        }
+
+        void on_log( rs2_log_severity severity, rs2_log_message const & msg ) noexcept override
+        {
+            // May run on any librealsense thread, possibly under internal locks: must not
+            // block and must not touch the GIL. rs2::log_message's ctor is private, so
+            // copy the fields out through the C API (ignoring per-field errors).
+            try
+            {
+                auto get_str = []( const char * s ) { return std::string( s ? s : "" ); };
+                rs2_error * e = nullptr;
+                unsigned line = rs2_get_log_message_line_number( &msg, &e );
+                if( e ) { rs2_free_error( e ); e = nullptr; line = 0; }
+                std::string filename = get_str( rs2_get_log_message_filename( &msg, &e ) );
+                if( e ) { rs2_free_error( e ); e = nullptr; }
+                std::string raw = get_str( rs2_get_raw_log_message( &msg, &e ) );
+                if( e ) { rs2_free_error( e ); e = nullptr; }
+                std::string full = get_str( rs2_get_full_log_message( &msg, &e ) );
+                if( e ) { rs2_free_error( e ); e = nullptr; }
+                queued_log_message copy{ line,
+                                         std::move( filename ),
+                                         std::move( raw ),
+                                         std::move( full ) };
+                {
+                    std::lock_guard< std::mutex > lock( _mx );
+                    if( _queue.size() >= MAX_PENDING )
+                        return;
+                    _queue.emplace_back( severity, std::move( copy ) );
+                }
+                _cv.notify_one();
+            }
+            catch( ... )
+            {
+            }
+        }
+
+        // Called from a Python atexit handler, while the interpreter is still alive, so the
+        // worker never tries to acquire the GIL after finalization. Caller must NOT hold the
+        // GIL (the worker may need it to finish its current dispatch).
+        void stop()
+        {
+            {
+                std::lock_guard< std::mutex > lock( _mx );
+                if( _stop )
+                    return;
+                _stop = true;
+            }
+            _cv.notify_one();
+            if( _worker.joinable() )
+                _worker.join();
+        }
+
+        void release() override
+        {
+            // Like py_log_callback: librealsense releases us at static destruction, when the
+            // Python thread state may already be gone -- intentionally leak instead (the
+            // worker was already stopped via atexit)
+        }
+
+    private:
+        void run()
+        {
+            while( true )
+            {
+                std::pair< rs2_log_severity, queued_log_message > item;
+                {
+                    std::unique_lock< std::mutex > lock( _mx );
+                    _cv.wait( lock, [this] { return _stop || ! _queue.empty(); } );
+                    if( _queue.empty() )
+                        return;  // only when stopping: flush whatever was queued first
+                    item = std::move( _queue.front() );
+                    _queue.pop_front();
+                }
+                try
+                {
+                    py::gil_scoped_acquire gil;
+                    _fn( item.first, item.second );
+                }
+                catch( std::exception const & e )
+                {
+                    std::cerr << "EXCEPTION in " SNAME ".log_to_callback (async): " << e.what() << std::endl;
+                }
+                catch( ... )
+                {
+                    std::cerr << "UNKNOWN EXCEPTION in " SNAME ".log_to_callback (async)" << std::endl;
+                }
+            }
+        }
+    };
+
     m.def( "log_to_callback",
-           []( rs2_log_severity min_severity, py_log_callback::log_fn callback )
+           []( rs2_log_severity min_severity, py::function callback, bool asynchronous )
            {
                rs2_error * e = nullptr;
-               py::gil_scoped_release gil;
-               rs2_log_to_callback_cpp( min_severity, new py_log_callback( std::move( callback ) ), &e );
+               if( asynchronous )
+               {
+                   auto cb = new py_async_log_callback(
+                       [callback]( rs2_log_severity severity, queued_log_message const & msg )
+                       { callback( severity, msg ); } );
+                   // Stop the worker while the interpreter is still alive; release the GIL
+                   // around the join so the worker can finish an in-flight dispatch
+                   py::module_::import( "atexit" ).attr( "register" )( py::cpp_function(
+                       [cb]()
+                       {
+                           py::gil_scoped_release gil;
+                           cb->stop();
+                       } ) );
+                   py::gil_scoped_release gil;
+                   rs2_log_to_callback_cpp( min_severity, cb, &e );
+               }
+               else
+               {
+                   py_log_callback::log_fn fn
+                       = [callback]( rs2_log_severity severity, rs2::log_message const & msg )
+                       { callback( severity, msg ); };
+                   py::gil_scoped_release gil;
+                   rs2_log_to_callback_cpp( min_severity, new py_log_callback( std::move( fn ) ), &e );
+               }
                rs2::error::handle( e );
-           } );
+           },
+           "min_severity"_a, "callback"_a, "asynchronous"_a = false );
 #endif
 
     // A call to rs.log() will cause a callback to get called! We should already own the GIL, but
