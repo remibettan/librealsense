@@ -1,7 +1,7 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-from app.services.rs_manager import (
+from app.services.firmware import (
     firmware_update_status,
     _pick_recommended_fw,
     FW_STATUS_OUTDATED,

@@ -10,6 +10,11 @@ describe('AppStore', () => {
   })
 
   describe('Firmware dismissal', () => {
+    afterEach(() => {
+      localStorage.clear()
+      sessionStorage.clear()
+    })
+
     it('explicit checkFirmwareUpdates clears both dismissals for the device', async () => {
       localStorage.setItem('rs-fw-dismissed:dev1:5.17.3.10', '1')
       sessionStorage.setItem('rs-fw-dismissed:dev1:5.17.3.10', '1')
@@ -23,7 +28,6 @@ describe('AppStore', () => {
       localStorage.setItem('rs-fw-dismissed:dev1:5.17.3.10', '1')
       await useAppStore.getState().checkFirmwareUpdates('dev1').catch(() => {})
       expect(localStorage.getItem('rs-fw-dismissed:dev1:5.17.3.10')).toBe('1')
-      localStorage.clear()
     })
   })
 

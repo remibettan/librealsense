@@ -260,6 +260,17 @@ async function performFirmwareUpdate(
       const next: FirmwareState = { ...prev, status: prev.status ?? 'unknown', is_updating: false, progress: 1 }
       return { deviceStates: { ...state.deviceStates, [deviceId]: { ...ds, firmware: next } } }
     })
+    // After a flash the device re-enumerates de-activated (it was removed during DFU).
+    // Auto-initialize a lone camera, same as first-load, so the user needn't click it;
+    // toggleDeviceActive also re-checks firmware, refreshing the proposal. For multi-camera
+    // (or an already-active device) just re-check the flashed device's firmware status.
+    const st = get()
+    const active = Object.values(st.deviceStates).filter((d) => d.isActive)
+    if (st.devices.length === 1 && active.length === 0) {
+      await get().toggleDeviceActive(st.devices[0])
+    } else {
+      get().checkFirmwareUpdates(deviceId)
+    }
   } catch (error) {
     // Prefer FastAPI's detail string when available.
     const axiosDetail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -409,9 +420,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
         }
       })
     } catch (error) {
-      set({
-        error: `Failed to check firmware updates: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      })
+      // The on-activate check is best-effort — a transient versions-DB outage
+      // shouldn't raise the global error banner. Only surface it for an explicit
+      // user-triggered "Check for Firmware Updates".
+      if (explicit) {
+        set({
+          error: `Failed to check firmware updates: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        })
+      }
     }
   },
 
