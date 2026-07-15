@@ -8,19 +8,14 @@ signal_handler = lambda: log.d("Signal handler not set")
 _cleanup_in_progress = False
 _watchdog = None
 
-# Grace period the watchdog gives this process to clean up and exit after a
-# SIGTERM/SIGINT before force-killing it (must exceed a normal hub/device cleanup)
+# Grace the watchdog gives this process to clean up after SIGTERM/SIGINT before
+# force-killing it (must exceed a normal hub/device cleanup)
 WATCHDOG_GRACE_S = 60
 
-# The Python-level handlers below only run when the main thread returns to the
-# interpreter loop. If the main thread is stuck in a native call that never returns
-# (e.g. a C++ mutex/GIL deadlock), a Jenkins abort's SIGTERM is never processed, the
-# process survives as an orphan, and its open BrainStem USB fd keeps the Acroname hub
-# unreachable for every subsequent run on that agent.
-# The watchdog is a separate process, so it is immune to this: it receives the same
-# SIGTERM/SIGINT (same process group), waits out the grace period, then SIGKILLs us.
-# The kernel then closes our fds, releasing the hub. It exits on its own when we
-# exit normally (its stdin pipe hits EOF).
+# Separate watchdog process: the handlers below never run if the main thread is stuck
+# in a native call (e.g. mutex/GIL deadlock), so a Jenkins abort would leave an orphan
+# holding the device hub. The watchdog gets the same signal, waits out the grace, then
+# SIGKILLs us; it exits on its own when our end of its stdin pipe closes.
 _WATCHDOG_CODE = '''
 import os, signal, sys, time
 ppid, grace = int(sys.argv[1]), float(sys.argv[2])

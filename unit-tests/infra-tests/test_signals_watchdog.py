@@ -2,12 +2,8 @@
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 """
-Tests for rspy/signals.py abort watchdog.
-
-The watchdog is a separate process that force-kills a run whose Python-level signal
-handler can never execute (main thread stuck in a native call — e.g. a C++ mutex/GIL
-deadlock). Without it, a Jenkins abort leaves an orphan pytest holding the Acroname
-BrainStem USB link, and every later run on that agent fails to connect (result=25).
+Tests for the rspy/signals.py abort watchdog: a separate process that force-kills a run
+whose signal handler can never execute (main thread stuck in a native call).
 """
 
 import os
