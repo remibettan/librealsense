@@ -134,9 +134,11 @@ def test_color_fps_manual_exposure(test_device):
             cs.set_option(rs.option.auto_exposure_priority, 0)
 
     failures = []
+    tested_count = 0
     for i in range(len(TESTED_FPS)):
         requested_fps = TESTED_FPS[i]
         try:
+            # Pick the first matching profile; resolution does not affect FPS accuracy
             cp = next(p for p in cs.profiles
                       if p.fps() == requested_fps
                       and p.stream_type() == rs.stream.color
@@ -145,6 +147,7 @@ def test_color_fps_manual_exposure(test_device):
             log.info(f"Requested fps: {requested_fps:.1f} [Hz], not supported")
             continue
 
+        tested_count += 1
         exposure_val = set_exposure_half_frame_time(cs, requested_fps)
         fps_helper.TIME_TO_COUNT_FRAMES = TIME_TO_TEST_FPS[i]
         fps_dict = fps_helper.measure_fps({cs: [cp]})
@@ -154,4 +157,5 @@ def test_color_fps_manual_exposure(test_device):
         if not (fps >= requested_fps - delta_Hz and fps <= requested_fps + delta_Hz):
             failures.append(f"Color {requested_fps}Hz: got {fps:.1f}Hz")
 
+    assert tested_count > 0, f"No color profiles found on {product_name} — test ran no FPS checks"
     assert not failures, "Color FPS out of tolerance:\n" + "\n".join(failures)
