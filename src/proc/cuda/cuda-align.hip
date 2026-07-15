@@ -176,14 +176,14 @@ void align_cuda_helper::align_other_to_depth(unsigned char* h_aligned_out, const
     if (!_d_depth_other_extrinsics) _d_depth_other_extrinsics = make_device_copy(h_depth_to_other);
 
     if (!_d_depth_in) _d_depth_in = alloc_dev<uint16_t>(aligned_pixel_count);
-    hipMemcpy(_d_depth_in.get(), h_depth_in, depth_size, hipMemcpyHostToDevice);
+    RS_CUDA_CHECK(hipMemcpy(_d_depth_in.get(), h_depth_in, depth_size, hipMemcpyHostToDevice));
 
     if (!_d_other_in) _d_other_in = alloc_dev<unsigned char>(other_size);
-    hipMemcpy(_d_other_in.get(), h_other_in, other_size, hipMemcpyHostToDevice);
+    RS_CUDA_CHECK(hipMemcpy(_d_other_in.get(), h_other_in, other_size, hipMemcpyHostToDevice));
 
     if (!_d_aligned_out)
         _d_aligned_out = alloc_dev<unsigned char>(aligned_size);
-    hipMemset(_d_aligned_out.get(), 0, aligned_size);
+    RS_CUDA_CHECK(hipMemset(_d_aligned_out.get(), 0, aligned_size));
 
     if (!_d_pixel_map) _d_pixel_map = alloc_dev<int2>(depth_pixel_count * 2);
 
@@ -203,9 +203,9 @@ void align_cuda_helper::align_other_to_depth(unsigned char* h_aligned_out, const
     case 4: kernel_other_to_depth<4> <<<depth_blocks,threads>>> (_d_aligned_out.get(), _d_other_in.get(), _d_pixel_map.get(), _d_depth_intrinsics.get(), _d_other_intrinsics.get()); break;
     }
 
-    hipStreamSynchronize(0);
+    RS_CUDA_CHECK(hipStreamSynchronize(0));
 
-    hipMemcpy(h_aligned_out, _d_aligned_out.get(), aligned_size, hipMemcpyDeviceToHost);
+    RS_CUDA_CHECK(hipMemcpy(h_aligned_out, _d_aligned_out.get(), aligned_size, hipMemcpyDeviceToHost));
 }
 
 void align_cuda_helper::align_depth_to_other(unsigned char* h_aligned_out, const uint16_t* h_depth_in,
@@ -225,10 +225,10 @@ void align_cuda_helper::align_depth_to_other(unsigned char* h_aligned_out, const
     if (!_d_depth_other_extrinsics) _d_depth_other_extrinsics = make_device_copy(h_depth_to_other);
 
     if (!_d_depth_in) _d_depth_in = alloc_dev<uint16_t>(depth_pixel_count);
-    hipMemcpy(_d_depth_in.get(), h_depth_in, depth_byte_size, hipMemcpyHostToDevice);
+    RS_CUDA_CHECK(hipMemcpy(_d_depth_in.get(), h_depth_in, depth_byte_size, hipMemcpyHostToDevice));
 
     if (!_d_aligned_out) _d_aligned_out = alloc_dev<unsigned char>(aligned_byte_size);
-    hipMemset(_d_aligned_out.get(), 0xff, aligned_byte_size);
+    RS_CUDA_CHECK(hipMemset(_d_aligned_out.get(), 0xff, aligned_byte_size));
 
     if (!_d_pixel_map) _d_pixel_map = alloc_dev<int2>(depth_pixel_count * 2);
 
@@ -246,9 +246,9 @@ void align_cuda_helper::align_depth_to_other(unsigned char* h_aligned_out, const
 
     kernel_replace_to_zero <<<other_blocks, threads>>> ((uint16_t*)_d_aligned_out.get(), _d_other_intrinsics.get());
 
-    hipStreamSynchronize(0);
+    RS_CUDA_CHECK(hipStreamSynchronize(0));
 
-    hipMemcpy(h_aligned_out, _d_aligned_out.get(), aligned_pixel_count * 2, hipMemcpyDeviceToHost);
+    RS_CUDA_CHECK(hipMemcpy(h_aligned_out, _d_aligned_out.get(), aligned_pixel_count * 2, hipMemcpyDeviceToHost));
 }
 
 #endif //RS2_USE_CUDA

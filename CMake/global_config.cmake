@@ -135,15 +135,11 @@ macro(global_target_config)
     target_link_libraries(${LRS_TARGET} PRIVATE realsense-file ${CMAKE_THREAD_LIBS_INIT})
 
     if (BUILD_WITH_HIP)
-        # hip::device is the imported target produced by find_package(hip)
-        # in CMake/hip_config.cmake.  It transitively provides:
-        #   - the correct linker flag for libamdhip64 (so we no longer need
-        #     a hard-coded "amdhip64" / "amdhip64.lib")
-        #   - the HIP include directories (so a separate
-        #     target_include_directories on HIP_INCLUDE_DIRS is unnecessary)
-        #   - the link search path on Windows (so target_link_directories
-        #     on ${ROCM_PATH}/lib is unnecessary)
-        target_link_libraries(${LRS_TARGET} PRIVATE hip::device)
+        target_include_directories(${LRS_TARGET} PRIVATE ${HIP_INCLUDE_DIRS})
+        target_link_libraries(${LRS_TARGET} PRIVATE amdhip64)
+        if(WIN32)
+            target_link_directories(${LRS_TARGET} PRIVATE "${ROCM_PATH}/lib")
+        endif()
     endif()
 
     set_target_properties (${LRS_TARGET} PROPERTIES FOLDER Library)

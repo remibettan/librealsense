@@ -101,12 +101,6 @@ namespace rsutils {
         return have_device;
     }
 
-    bool rs2_is_cuda_available()
-    {
-        static bool const cached = probe_cuda_driver();
-        return cached;
-    }
-
     // Probe whether the first CUDA device is an integrated GPU (unified memory / Tegra).
     //
     // Uses the CUDA Driver API attribute CU_DEVICE_ATTRIBUTE_INTEGRATED (value 18 - we
@@ -182,6 +176,104 @@ namespace rsutils {
     {
         static bool const cached = probe_cuda_integrated();
         return cached;
+    }
+
+    //
+    // Probe whether a HIP-capable AMD GPU is usable on this machine.
+    //
+    // Mirrors probe_cuda_driver() but loads the AMD HIP runtime
+    // (libamdhip64.so.7 / amdhip64.dll) at runtime, with the same goals:
+    //   - No link-time dependency on libamdhip64; an AMD-less host still loads
+    //     this binary cleanly.
+    //   - A build with RS2_USE_HIP off can still detect an AMD GPU and surface
+    //     a "rebuild for GPU acceleration" hint.
+    //
+    // HIP exposes a C ABI with the platform default calling convention on both
+    // Windows and Linux (no __stdcall shim), so the function pointer types are
+    // simpler than the CUDA side.  hipSuccess == 0, matching the CUDA check.
+    //
+    // We try the SONAME-versioned libamdhip64.so.7 first (ROCm 6.x/7.x ships
+    // that as the canonical link target) and fall back to the unversioned
+    // libamdhip64.so for older / dev installs.
+    static bool probe_hip_driver()
+    {
+#ifdef _WIN32
+        using hip_init_t         = int ( * )( unsigned int );
+        using hip_device_count_t = int ( * )( int * );
+        HMODULE handle = LoadLibraryA( "amdhip64.dll" );
+        if( ! handle )
+        {
+            LOG_INFO( "HIP runtime library (amdhip64.dll) not found - AMD GPU acceleration unavailable." );
+            return false;
+        }
+        auto hip_init  = reinterpret_cast< hip_init_t         >( GetProcAddress( handle, "hipInit" ) );
+        auto hip_count = reinterpret_cast< hip_device_count_t >( GetProcAddress( handle, "hipGetDeviceCount" ) );
+#else
+        using hip_init_t         = int ( * )( unsigned int );
+        using hip_device_count_t = int ( * )( int * );
+        void * handle = dlopen( "libamdhip64.so.7", RTLD_LAZY );
+        if( ! handle )
+            handle = dlopen( "libamdhip64.so", RTLD_LAZY );
+        if( ! handle )
+        {
+            LOG_INFO( "HIP runtime library (libamdhip64.so.7) not found - AMD GPU acceleration unavailable." );
+            return false;
+        }
+        auto hip_init  = reinterpret_cast< hip_init_t         >( dlsym( handle, "hipInit" ) );
+        auto hip_count = reinterpret_cast< hip_device_count_t >( dlsym( handle, "hipGetDeviceCount" ) );
+#endif
+
+        int init_rc  = -1;
+        int count_rc = -1;
+        int count    = 0;
+
+        if( hip_init )
+            init_rc = hip_init( 0 );
+        if( init_rc == 0 && hip_count )
+            count_rc = hip_count( &count );
+
+#ifdef _WIN32
+        FreeLibrary( handle );
+#else
+        dlclose( handle );
+#endif
+
+        bool have_device = ( init_rc == 0 && count_rc == 0 && count > 0 );
+
+        if( have_device )
+            LOG_INFO( "HIP runtime detected with " << count << " visible AMD device(s) - GPU acceleration available." );
+        else if( ! hip_init )
+            LOG_INFO( "HIP runtime loaded but hipInit symbol not found - AMD GPU acceleration unavailable." );
+        else if( init_rc != 0 )
+            LOG_INFO( "hipInit returned hipError_t " << init_rc << " - AMD GPU acceleration unavailable." );
+        else if( ! hip_count )
+            LOG_INFO( "HIP runtime initialised but hipGetDeviceCount symbol not found - AMD GPU acceleration unavailable." );
+        else if( count_rc != 0 )
+            LOG_INFO( "hipGetDeviceCount returned hipError_t " << count_rc << " - AMD GPU acceleration unavailable." );
+        else
+            LOG_INFO( "HIP runtime initialised but zero visible devices - AMD GPU acceleration unavailable." );
+        return have_device;
+    }
+
+    bool rs2_is_hip_available()
+    {
+        static bool const cached = probe_hip_driver();
+        return cached;
+    }
+
+    bool rs2_is_cuda_available()
+    {
+        static bool const cached = probe_cuda_driver();
+        return cached;
+    }
+
+    // Vendor-agnostic entry point used by the 12 frame-conversion call sites in
+    // librealsense (align.cpp, pointcloud.cpp, the *-formats-converter.cpp files,
+    // backend-v4l2.cpp, backend-hid.cpp).  True if either probe finds a device;
+    // each probe caches internally so this is two cheap atomic loads after warm-up.
+    bool rs2_is_gpu_available()
+    {
+        return rs2_is_cuda_available() || rs2_is_hip_available();
     }
 
 } // namespace rsutils
