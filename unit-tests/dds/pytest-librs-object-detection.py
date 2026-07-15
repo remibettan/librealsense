@@ -130,8 +130,8 @@ else:
             assert dev is not None, 'Test OD Device not found among SW devices'
             sensors = dev.query_sensors()
             assert len( sensors ) == 3
-            sensor = next( (s for s in sensors if s.get_info( rs.camera_info.name ) == 'Person Detection Camera'), None )
-            assert sensor is not None, 'Person Detection Camera not found'
+            sensor = next( (s for s in sensors if s.get_info( rs.camera_info.name ) == 'Perception Sensor'), None )
+            assert sensor is not None, 'Perception Sensor not found'
             color_sensor = next( (s for s in sensors if s.get_info( rs.camera_info.name ) == 'RGB Camera'), None )
             assert color_sensor is not None, 'RGB Camera sensor not found'
 
@@ -141,8 +141,8 @@ else:
             assert len( od_profiles ) == 1
             od_profile = od_profiles[0]
             assert od_profile.fps() == 30
-            assert od_profile.stream_name() == 'Person Detection', \
-                f'Expected stream name "Person Detection", got "{od_profile.stream_name()}"'
+            assert od_profile.stream_name() == 'Object Detection', \
+                f'Expected stream name "Object Detection", got "{od_profile.stream_name()}"'
 
             # Open sensor and start streaming
             sensor.open( [od_profile] )
