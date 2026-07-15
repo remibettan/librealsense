@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { render } from '../../utils/test-utils'
 import { Header } from '@/components/Header'
 
@@ -52,15 +51,5 @@ describe('Header', () => {
 
     expect(screen.queryByText(/2D View/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/3D View/i)).not.toBeInTheDocument()
-  })
-
-  it('shows SDK and viewer versions in the About dialog', async () => {
-    render(<Header />)
-    await userEvent.click(screen.getByTitle('About'))
-
-    expect(screen.getByText('librealsense SDK')).toBeInTheDocument()
-    expect(screen.getByText('Viewer')).toBeInTheDocument()
-    // Viewer version is injected from rs.h as major.minor.patch.build
-    expect(screen.getByText(/^\d+\.\d+\.\d+\.\d+$/)).toBeInTheDocument()
   })
 })

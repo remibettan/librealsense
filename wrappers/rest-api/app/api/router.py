@@ -14,7 +14,9 @@ def _get_sdk_version() -> str:
     """
     try:
         import pyrealsense2 as rs
-        # `from .pyrealsense2 import *` drops dunders, so they live on the inner module.
+        # Distributions differ: the source-built wrapper re-exports __version__/__full_version__
+        # on the package, while the PyPI wheel exposes them only on the extension submodule.
+        # Check the inner module first, then the package.
         inner = getattr(rs, "pyrealsense2", rs)
         v = (getattr(inner, "__full_version__", None) or getattr(inner, "__version__", None)
              or getattr(rs, "__full_version__", None) or getattr(rs, "__version__", None))

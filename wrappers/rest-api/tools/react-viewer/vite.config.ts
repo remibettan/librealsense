@@ -3,7 +3,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { viewerVersion } from './version.config'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -11,9 +10,6 @@ const __dirname = dirname(__filename)
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  define: {
-    __VIEWER_VERSION__: JSON.stringify(viewerVersion()),
-  },
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
