@@ -18,7 +18,7 @@ pytestmark = [
 
 
 def test_deadlock_after_hw_reset(test_device):
-    dev, ctx = test_device
+    ctx = rs.context({"dds": {"enabled": False}})  # the original deadlock is in the non-DDS path
 
     device_list = ctx.query_devices()
     log.info("%d RealSense devices connected", len(device_list))
