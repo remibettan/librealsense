@@ -36,7 +36,10 @@ signal.signal(signal.SIGTERM, _abort)
 signal.signal(signal.SIGINT, _abort)
 os.write(1, b'R')  # handshake: handlers armed, parent may proceed
 while True:
-    if not os.read(0, 1):  # EOF: parent exited (or crashed) without a signal
+    try:
+        if not os.read(0, 1):  # EOF: parent exited (or crashed) without a signal
+            os._exit(0)
+    except OSError:
         os._exit(0)
 '''
 
@@ -52,11 +55,16 @@ def start_abort_watchdog(grace=None):
     if grace is None:
         grace = WATCHDOG_GRACE_S
     try:
-        _watchdog = subprocess.Popen([sys.executable, '-c', _WATCHDOG_CODE, str(os.getpid()), str(grace)],
-                                     stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.DEVNULL)
-        _watchdog.stdout.read(1)  # wait until its signal handlers are armed
+        proc = subprocess.Popen([sys.executable, '-c', _WATCHDOG_CODE, str(os.getpid()), str(grace)],
+                                stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL)
+        ack = proc.stdout.read(1)  # wait until its signal handlers are armed
+        proc.stdout.close()
+        if ack != b'R':
+            log.w('abort watchdog died during startup')
+            return
+        _watchdog = proc
         log.d('abort watchdog started, pid', _watchdog.pid)
     except Exception as e:
         log.w('failed to start abort watchdog:', e)

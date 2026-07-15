@@ -88,8 +88,16 @@ print('READY', flush=True)
 print('WATCHDOG_PID', signals._watchdog.pid, flush=True)
 ''')
     wait_for_ready(child)
-    line = child.stdout.readline()
-    watchdog_pid = int(line.split()[1])
+    watchdog_pid = None
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        line = child.stdout.readline()
+        if line.startswith('WATCHDOG_PID'):
+            watchdog_pid = int(line.split()[1])
+            break
+        if line == '' and child.poll() is not None:
+            break
+    assert watchdog_pid is not None, 'child never reported a live watchdog pid'
     wait_for_exit(child, timeout=15)
     # give the watchdog a moment to notice the pipe EOF
     deadline = time.monotonic() + 10
