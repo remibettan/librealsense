@@ -22,7 +22,7 @@ class object_detection_sensor : public virtual inference_sensor
 {
 public:
     // Shared names for the OD sensor and stream profile, used by both the USB (d500) and DDS paths
-    static constexpr const char * SENSOR_NAME = "Perception Sensor";
+    static constexpr const char * SENSOR_NAME = "Perception";
     static constexpr const char * STREAM_NAME = "Object Detection";
 
     virtual ~object_detection_sensor() = default;
