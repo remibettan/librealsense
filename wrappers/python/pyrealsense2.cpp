@@ -175,14 +175,17 @@ PYBIND11_MODULE(NAME, m) {
                if( asynchronous )
                {
                    auto cb = new py_async_log_callback( std::move( callback ) );
+                   {
+                       py::gil_scoped_release gil;
+                       rs2_log_to_callback_cpp( min_severity, cb, &e );
+                   }
+                   rs2::error::handle( e );  // register atexit only for a live callback
                    py::module_::import( "atexit" ).attr( "register" )( py::cpp_function(
                        [cb]()
                        {
                            py::gil_scoped_release gil;  // let the worker finish an in-flight dispatch
                            cb->stop();
                        } ) );
-                   py::gil_scoped_release gil;
-                   rs2_log_to_callback_cpp( min_severity, cb, &e );
                }
                else
                {
