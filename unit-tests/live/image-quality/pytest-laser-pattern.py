@@ -37,6 +37,8 @@ MAX_DOT_AREA_PX = 50  # above this, treat it as a brightness blob, not a laser d
 MIN_DOT_COUNT = 30  # need at least this many dot-sized blobs in the diff image
 GRID_SIZE = 4  # frame divided into GRID_SIZE x GRID_SIZE cells to check spread
 MIN_GRID_CELLS_COVERED = 6  # dots must be spread across at least this many cells (of GRID_SIZE**2)
+MIN_QUADRANTS_COVERED = 3  # covered cells must span at least this many of the 4 image quadrants,
+                           # so the dots aren't all clustered in one corner
 EXPOSURE_FRACTION = 6.0  # manual exposure = 1/EXPOSURE_FRACTION of frame time, short enough to avoid saturation
 
 
@@ -104,6 +106,7 @@ def test_laser_pattern_visible(test_device_wrapped):
     pattern_visible = False
     dots = []
     covered_cells = set()
+    covered_quadrants = set()
     profile = pipeline.start(cfg)
     
     try:
@@ -138,10 +141,17 @@ def test_laser_pattern_visible(test_device_wrapped):
             for (cx, cy), _ in dots
         }
 
-        log.info(f"{product_name}: {len(dots)} dot-sized blobs in ON-OFF diff, "
-                 f"spread across {len(covered_cells)}/{GRID_SIZE * GRID_SIZE} grid cells")
+        # Map each covered cell to its image quadrant (2x2 blocks of the grid) to confirm
+        # the dots aren't all clustered in one corner.
+        covered_quadrants = {(col // (GRID_SIZE // 2), row // (GRID_SIZE // 2)) for col, row in covered_cells}
 
-        pattern_visible = len(dots) >= MIN_DOT_COUNT and len(covered_cells) >= MIN_GRID_CELLS_COVERED
+        log.info(f"{product_name}: {len(dots)} dot-sized blobs in ON-OFF diff, "
+                 f"spread across {len(covered_cells)}/{GRID_SIZE * GRID_SIZE} grid cells "
+                 f"in {len(covered_quadrants)}/4 quadrants")
+
+        pattern_visible = (len(dots) >= MIN_DOT_COUNT
+                           and len(covered_cells) >= MIN_GRID_CELLS_COVERED
+                           and len(covered_quadrants) >= MIN_QUADRANTS_COVERED)
 
         if not pattern_visible:
             dbg = draw_debug(off_img, on_img, mask, dots)
@@ -151,5 +161,6 @@ def test_laser_pattern_visible(test_device_wrapped):
 
     assert pattern_visible, (
         f"Laser dot pattern not detected on {product_name}: found {len(dots)} dot-sized blobs "
-        f"(need >={MIN_DOT_COUNT}) across {len(covered_cells)} grid cells (need >={MIN_GRID_CELLS_COVERED})"
+        f"(need >={MIN_DOT_COUNT}) across {len(covered_cells)} grid cells (need >={MIN_GRID_CELLS_COVERED}) "
+        f"in {len(covered_quadrants)} quadrants (need >={MIN_QUADRANTS_COVERED})"
     )
