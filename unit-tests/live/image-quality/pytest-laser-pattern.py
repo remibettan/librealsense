@@ -101,7 +101,11 @@ def test_laser_pattern_visible(test_device_wrapped):
     if not cfg.can_resolve(pipeline):
         pytest.skip(f"{product_name} does not support an IR y8 stream")
 
+    pattern_visible = False
+    dots = []
+    covered_cells = set()
     profile = pipeline.start(cfg)
+    
     try:
         sensor = profile.get_device().first_depth_sensor()
         if sensor.supports(rs.option.laser_power):
