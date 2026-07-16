@@ -30,7 +30,8 @@ on:
   # Allows running this workflow manually from the Actions tab
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -60,5 +61,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #v4
+        with:
+          persist-credentials: false
       - name: industrial_ci
-        uses: ros-industrial/industrial_ci@0f4bd2d1b926eac95fd6bc5bd1fcb3051a6e927d #master as of 2026-03-31
+        # Pinned to master as of 2026-04-30 — first version that knows the
+        # lyrical distro and rolling's retarget to resolute.
+        uses: ros-industrial/industrial_ci@125164b9f1883cdf1858897a7146d1bebf2be5c6
