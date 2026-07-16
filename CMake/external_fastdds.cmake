@@ -42,8 +42,18 @@ function(get_fastdds)
 
     # Set special values for FastDDS sub directory
     set(BUILD_SHARED_LIBS OFF)
-    set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/fastdds/fastdds_install) 
-    set(CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR}/fastdds/fastdds_install)  
+    set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/fastdds/fastdds_install)
+    set(CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR}/fastdds/fastdds_install)
+
+    # GCC 14 / libstdc++-15 (Ubuntu 26.04 "resolute") removed transitive <cstdint>
+    # includes from many std headers. FastDDS 2.10.4 uses uint8_t (e.g. in
+    # DDSFilterCompoundCondition.hpp) without explicitly including <cstdint>,
+    # which fails to compile. Force-include <cstdint> in every FastDDS
+    # translation unit; harmless on older toolchains. Function-scoped, so
+    # librealsense's own compilation is unaffected.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include cstdint")
+    endif()
 
     # Get fastdds
     FetchContent_MakeAvailable(fastdds)
