@@ -43,7 +43,7 @@ jobs:
         ros_distro: [rolling, lyrical, kilted, jazzy, humble]
         include:
         - ros_distro: 'rolling'
-          os: ubuntu-26.04
+          os: ubuntu-latest
         - ros_distro: 'lyrical'
           os: ubuntu-26.04
         - ros_distro: 'kilted'
