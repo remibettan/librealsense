@@ -8,17 +8,17 @@
 namespace librealsense {
 
 
-class inference_sensor
+class perception_sensor
 {
 public:
-    virtual ~inference_sensor() = default;
+    virtual ~perception_sensor() = default;
 };
 
-MAP_EXTENSION( RS2_EXTENSION_INFERENCE_SENSOR, librealsense::inference_sensor );
+MAP_EXTENSION( RS2_EXTENSION_PERCEPTION_SENSOR, librealsense::perception_sensor );
 
 
 
-class object_detection_sensor : public virtual inference_sensor
+class object_detection_sensor : public virtual perception_sensor
 {
 public:
     // Shared names for the OD sensor and stream profile, used by both the USB (d500) and DDS paths

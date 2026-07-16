@@ -92,11 +92,11 @@ public:
 
     format_conversion get_format_conversion() const;
 
-    // Inference and some embedded filters cannot run at the same time. These functions help reject the conflicting combination.
-    bool is_inference_active() const;
-    bool is_inference_blocking_filter_enabled() const;
-    void throw_if_inference_active() const;
-    void throw_if_inference_blocking_filter_enabled() const;
+    // Perception and some embedded filters cannot run at the same time. These functions help reject the conflicting combination.
+    bool is_perception_active() const;
+    bool is_perception_blocking_filter_enabled() const;
+    void throw_if_perception_active() const;
+    void throw_if_perception_blocking_filter_enabled() const;
 
 protected:
     int add_sensor(const std::shared_ptr<sensor_interface>& sensor_base);

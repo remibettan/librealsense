@@ -35,8 +35,8 @@ if rspy.log.nested is not None:
         "product-line": "D400"
     } )
 
-    od = dds.object_detection_stream_server( 'Object Detection', 'Inference Sensor' )
-    od.init_profiles( [dds.inference_stream_profile( 30 )], 0 )
+    od = dds.object_detection_stream_server( 'Object Detection', 'Perception' )
+    od.init_profiles( [dds.perception_stream_profile( 30 )], 0 )
     od.init_options( [] )
 
     depth = dds.depth_stream_server( 'Depth', 'Stereo Module' )  # LibRS expects a depth sensor
@@ -81,7 +81,7 @@ if rspy.log.nested is not None:
             "source_frame_id": 42,
             "version": 1
         }
-        od.publish_inference( json_module.dumps( payload ) )
+        od.publish_perception( json_module.dumps( payload ) )
 
     def publish_single_detection():
         payload = {
@@ -93,7 +93,7 @@ if rspy.log.nested is not None:
             "source_frame_id": 43,
             "version": 1
         }
-        od.publish_inference( json_module.dumps( payload ) )
+        od.publish_perception( json_module.dumps( payload ) )
 
     def publish_zero_detections():
         payload = {
@@ -103,7 +103,7 @@ if rspy.log.nested is not None:
             "source_frame_id": 44,
             "version": 1
         }
-        od.publish_inference( json_module.dumps( payload ) )
+        od.publish_perception( json_module.dumps( payload ) )
 
 else:
     ###############################################################################################################
@@ -230,10 +230,10 @@ else:
     #
     def test_sensor_downcast(remote_and_streaming):
         _, sensor, _, _ = remote_and_streaming
-        check.is_true( sensor.is_inference_sensor(), msg='sensor should be an inference_sensor' )
+        check.is_true( sensor.is_perception_sensor(), msg='sensor should be a perception_sensor' )
         check.is_true( sensor.is_object_detection_sensor(), msg='sensor should be an object_detection_sensor' )
-        inference_s = sensor.as_inference_sensor()
-        check.is_true( inference_s, msg='as_inference_sensor() should return truthy' )
+        perception_s = sensor.as_perception_sensor()
+        check.is_true( perception_s, msg='as_perception_sensor() should return truthy' )
         od_s = sensor.as_object_detection_sensor()
         check.is_true( od_s, msg='as_object_detection_sensor() should return truthy' )
 
@@ -263,14 +263,14 @@ else:
     #############################################################################################
     #
     def test_downcast_failure_color_sensor(remote_and_streaming):
-        """Downcast failure: color sensor is not an inference sensor."""
+        """Downcast failure: color sensor is not a perception sensor."""
         _, _, color_sensor, _ = remote_and_streaming
-        check.is_true( not color_sensor.is_inference_sensor(),
-                       msg='RGB Camera should not be an inference_sensor' )
+        check.is_true( not color_sensor.is_perception_sensor(),
+                       msg='RGB Camera should not be a perception_sensor' )
         check.is_true( not color_sensor.is_object_detection_sensor(),
                        msg='RGB Camera should not be an object_detection_sensor' )
-        non_inf = color_sensor.as_inference_sensor()
-        check.is_true( not non_inf, msg='as_inference_sensor() on color sensor should return falsy' )
+        non_inf = color_sensor.as_perception_sensor()
+        check.is_true( not non_inf, msg='as_perception_sensor() on color sensor should return falsy' )
         non_od = color_sensor.as_object_detection_sensor()
         check.is_true( not non_od, msg='as_object_detection_sensor() on color sensor should return falsy' )
 

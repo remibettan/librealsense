@@ -4,7 +4,7 @@
 #pragma once
 
 #include "d500-device.h"
-#include <src/inference-sensor.h>
+#include <src/perception-sensor.h>
 #include "core/video.h"
 
 namespace librealsense

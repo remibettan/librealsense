@@ -4,35 +4,35 @@
 #pragma once
 
 #include "rs-dds-sensor-proxy.h"
-#include <src/inference-sensor.h>
+#include <src/perception-sensor.h>
 
 
 namespace librealsense {
 
-// For cases when checking if this is< inference_sensor >
-class dds_inference_sensor_proxy
+// For cases when checking if this is< perception_sensor >
+class dds_perception_sensor_proxy
     : public dds_sensor_proxy
-    , public virtual inference_sensor
+    , public virtual perception_sensor
 {
 public:
-    dds_inference_sensor_proxy( std::string const & sensor_name,
-                                software_device * owner,
-                                std::shared_ptr< realdds::dds_device > const & dev )
+    dds_perception_sensor_proxy( std::string const & sensor_name,
+                                 software_device * owner,
+                                 std::shared_ptr< realdds::dds_device > const & dev )
         : dds_sensor_proxy( sensor_name, owner, dev )
     {
     }
 };
 
-// For cases when checking if this is< object_detection_sensor > or is< inference_sensor >
+// For cases when checking if this is< object_detection_sensor > or is< perception_sensor >
 class dds_object_detection_sensor_proxy
-    : public dds_inference_sensor_proxy
+    : public dds_perception_sensor_proxy
     , public object_detection_sensor
 {
 public:
     dds_object_detection_sensor_proxy( std::string const & sensor_name,
                                        software_device * owner,
                                        std::shared_ptr< realdds::dds_device > const & dev )
-        : dds_inference_sensor_proxy( sensor_name, owner, dev )
+        : dds_perception_sensor_proxy( sensor_name, owner, dev )
     {
     }
 };

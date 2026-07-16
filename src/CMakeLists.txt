@@ -179,7 +179,7 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/composite-frame.h"
         "${CMAKE_CURRENT_LIST_DIR}/points.h"
         "${CMAKE_CURRENT_LIST_DIR}/labeled-points.h"
-        "${CMAKE_CURRENT_LIST_DIR}/inference-frame.h"
+        "${CMAKE_CURRENT_LIST_DIR}/perception-frame.h"
         "${CMAKE_CURRENT_LIST_DIR}/object-detection-frame.h"
         "${CMAKE_CURRENT_LIST_DIR}/depth-sensor.h"
         "${CMAKE_CURRENT_LIST_DIR}/color-sensor.h"

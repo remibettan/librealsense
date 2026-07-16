@@ -119,8 +119,8 @@ namespace librealsense
 
     void d500_object_detection_sensor::open( const stream_profiles & requests )
     {
-        // Inference and some embedded filters cannot run together. Reject here before the device is touched.
-        _owner->throw_if_inference_blocking_filter_enabled();
+        // Perception and some embedded filters cannot run together. Reject here before the device is touched.
+        _owner->throw_if_perception_blocking_filter_enabled();
         synthetic_sensor::open( requests );
     }
 

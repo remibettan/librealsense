@@ -787,13 +787,13 @@ namespace rs2
         operator bool() const { return _sensor.get() != nullptr; }
     };
 
-    class inference_sensor : public sensor
+    class perception_sensor : public sensor
     {
     public:
-        inference_sensor(sensor s) : sensor(s.get())
+        perception_sensor(sensor s) : sensor(s.get())
         {
             rs2_error* e = nullptr;
-            if (rs2_is_sensor_extendable_to(_sensor.get(), RS2_EXTENSION_INFERENCE_SENSOR, &e) == 0 && !e)
+            if (rs2_is_sensor_extendable_to(_sensor.get(), RS2_EXTENSION_PERCEPTION_SENSOR, &e) == 0 && !e)
             {
                 _sensor.reset();
             }
@@ -802,10 +802,10 @@ namespace rs2
         operator bool() const { return _sensor.get() != nullptr; }
     };
 
-    class object_detection_sensor : public inference_sensor
+    class object_detection_sensor : public perception_sensor
     {
     public:
-        object_detection_sensor(sensor s) : inference_sensor(s)
+        object_detection_sensor(sensor s) : perception_sensor(s)
         {
             if (*this)
             {
