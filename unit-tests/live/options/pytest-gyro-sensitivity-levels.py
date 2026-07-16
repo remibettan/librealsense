@@ -30,8 +30,10 @@ def test_gyro_sensitivity_all_levels(test_device):
         cfg.enable_stream(rs.stream.accel)
         cfg.enable_stream(rs.stream.gyro)
 
-        profile = pipe.start(cfg)
-        sensor = profile.get_device().first_motion_sensor()
-        readback = sensor.get_option(rs.option.gyro_sensitivity)
-        assert readback == expected, f"level {value}: readback {readback}"
-        pipe.stop()
+        try:
+            profile = pipe.start(cfg)
+            sensor = profile.get_device().first_motion_sensor()
+            readback = sensor.get_option(rs.option.gyro_sensitivity)
+            assert readback == expected, f"level {value}: readback {readback}"
+        finally:
+            pipe.stop()

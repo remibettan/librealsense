@@ -26,9 +26,6 @@ namespace librealsense
         std::shared_ptr<synthetic_sensor> create_uvc_device( std::shared_ptr<context> ctx,
                                                              const std::vector<platform::uvc_device_info>& all_uvc_infos );
 
-        ds_motion_sensor & get_motion_sensor();
-        std::shared_ptr< hid_sensor > get_raw_motion_sensor();
-
     protected:
         friend class ds_motion_common;
         friend class ds_fisheye_sensor;
@@ -42,6 +39,8 @@ namespace librealsense
         // case. Mirrors the same flag in d400_motion_base.
         bool _has_motion_module_failed = false;
 
+        ds_motion_sensor & get_motion_sensor();
+        std::shared_ptr< hid_sensor > get_raw_motion_sensor();
         void register_gyro_sensitivity();
 
     private:
