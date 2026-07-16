@@ -74,7 +74,7 @@ from rspy.pytest.plugins import check_required_plugins
 
 log = logging.getLogger('librealsense')
 
-# D585-family FW accel bring-up window (RSDEV-13011): seconds to wait after powering the
+# D585 Prototype FW accel bring-up window (RSDEV-13011): seconds to wait after powering the
 # device on before letting tests stream. Threshold measured at ~3s; +1s margin.
 D585_BRINGUP_SETTLE_SEC = 4
 
@@ -799,10 +799,11 @@ def module_device_setup(request, _test_device_serial, __pytest_repeat_step_numbe
     teardown_disable = not no_reset
 
     def _bringup_settle(serials):
-        # D585 family FW: the accelerometer produces no data if streaming starts within the
+        # D585 Prototype FW: the accelerometer produces no data if streaming starts within the
         # first ~5-7 seconds after power-on (RSDEV-13011), failing any test whose config
         # includes it. Wait out the bring-up window after enabling such a device.
-        if any('D585' in ((devices.get(sn).name if devices.get(sn) else '') or '') for sn in serials):
+        # Matches "D585 Prototype" / "D585 Proto Dual RGB" only — D585S is not affected.
+        if any('D585 Proto' in ((devices.get(sn).name if devices.get(sn) else '') or '') for sn in serials):
             log.debug(f"D585 bring-up settle: waiting {D585_BRINGUP_SETTLE_SEC}s before tests")
             time.sleep(D585_BRINGUP_SETTLE_SEC)
 
