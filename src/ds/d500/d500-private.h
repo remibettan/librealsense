@@ -54,6 +54,19 @@ namespace librealsense
             D585_3C_PROTO_PID
         };
 
+        // d500 PIDs that expose the projector temperature via HKR selector 0x16
+        static const std::set<std::uint16_t> d500_projector_temperature_pids = {
+            D585S_PID,
+            D535_2C_PID,
+            D535_3C_PID,
+            D535F_PID,
+            D585_2C_PID,
+            D585_3C_PID,
+            D585F_PID,
+            D585_2C_PROTO_PID,
+            D585_3C_PROTO_PID
+        };
+
         static const std::map< std::uint16_t, std::string > rs500_sku_names = {
             { D555_PID,               "RealSense D555" },
             { D555_RECOVERY_PID,      "RealSense D555 Recovery" },

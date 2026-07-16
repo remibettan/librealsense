@@ -117,6 +117,13 @@ namespace librealsense
         catch( ... )                       { LOG_WARNING( "Align_Depth XU: unknown exception" ); }
     }
 
+    void d500_object_detection_sensor::open( const stream_profiles & requests )
+    {
+        // Inference and some embedded filters cannot run together. Reject here before the device is touched.
+        _owner->throw_if_inference_blocking_filter_enabled();
+        synthetic_sensor::open( requests );
+    }
+
     void d500_object_detection_sensor::start( rs2_frame_callback_sptr callback )
     {
         // TODO: FW does not yet support the Align_Depth XU — re-enable once FW is ready.

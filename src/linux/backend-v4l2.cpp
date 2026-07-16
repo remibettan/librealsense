@@ -93,6 +93,7 @@ constexpr uint32_t RS_CAMERA_CID_WHITE_BALANCE_MODE         = (RS_CAMERA_CID_BAS
 constexpr uint32_t RS_CAMERA_CID_PRESET                     = (RS_CAMERA_CID_BASE+21);
 constexpr uint32_t RS_CAMERA_CID_EMITTER_FREQUENCY          = (RS_CAMERA_CID_BASE+22); // [MIPI - Select projector frequency values: 0->57[KHZ], 1->91[KHZ]
 constexpr uint32_t RS_CAMERA_CID_HWMC                       = (RS_CAMERA_CID_BASE+32);
+constexpr uint32_t RS_CAMERA_CID_READOUT_SHAPING            = (RS_CAMERA_CID_BASE+34);
 
 /* refe4rence for kernel 4.9 to be removed
 #define UVC_CID_GENERIC_XU          (V4L2_CID_PRIVATE_BASE+15)
@@ -2997,6 +2998,7 @@ namespace librealsense
         const uint8_t RS_EMITTER_FREQUENCY               = 0x10; // Match to DS5_EMITTER_FREQUENCY
         const uint8_t RS_DEPTH_AUTO_EXPOSURE_MODE        = 0x11;
         const uint8_t RS_EXTERNAL_SYNC                   = 0x12;
+        const uint8_t RS_READOUT_SHAPING                 = 0x13;
 
 
         bool v4l_mipi_device::get_pu(rs2_option opt, int32_t& value) const
@@ -3201,6 +3203,7 @@ namespace librealsense
                     case RS_HARDWARE_PRESET : return RS_CAMERA_CID_PRESET;
                     case RS_EMITTER_FREQUENCY : return RS_CAMERA_CID_EMITTER_FREQUENCY;
                     case RS_EXTERNAL_SYNC : return RS_CAMERA_CID_SYNC_MODE;
+                    case RS_READOUT_SHAPING : return RS_CAMERA_CID_READOUT_SHAPING;
                     // D457 Missing functionality
                     //case RS_ERROR_REPORTING: TBD;
                     //case RS_EXT_TRIGGER: TBD;

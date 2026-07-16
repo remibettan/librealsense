@@ -47,6 +47,7 @@ namespace librealsense
         }
 
         stream_profiles init_stream_profiles() override;
+        void open( const stream_profiles & requests ) override;
         void start( rs2_frame_callback_sptr callback ) override;
         void stop() override;
 

@@ -319,6 +319,14 @@ realdds::dds_stream_profiles dds_sensor_proxy::find_dds_profiles( const libreals
 
 void dds_sensor_proxy::open( const stream_profiles & profiles )
 {
+    if( Is< inference_sensor >( this ) )
+    {
+        auto dev = dynamic_cast< device * >( &get_device() );
+        if( ! dev )
+            throw invalid_value_exception( "inference sensor's owner is not a device" );
+        dev->throw_if_inference_blocking_filter_enabled();
+    }
+
     _active_converted_profiles = profiles;
     auto source_profiles = profiles; // Start with user requested profiles
     if( get_format_conversion() != format_conversion::raw )
@@ -993,7 +1001,7 @@ void dds_sensor_proxy::add_embedded_filter( std::shared_ptr< realdds::dds_embedd
     std::shared_ptr< embedded_filter_interface > rs_embedded_filter = nullptr;
     if (auto decimation_filter = std::dynamic_pointer_cast< dds_decimation_filter >(embedded_filter) )
     {
-        rs_embedded_filter = std::make_shared< rs_dds_embedded_decimation_filter >(
+        auto filter = std::make_shared< rs_dds_embedded_decimation_filter >(
             embedded_filter,
             [=](json options_value)
             {
@@ -1004,10 +1012,16 @@ void dds_sensor_proxy::add_embedded_filter( std::shared_ptr< realdds::dds_embedd
             {
                 return _dev->query_embedded_filter(embedded_filter);
             });
+        // Capture the owning device (which outlives this sensor, hence the filter) rather than 'this'.
+        auto owning_device = dynamic_cast< device * >( &get_device() );
+        if( ! owning_device )
+            throw invalid_value_exception( "embedded filter's owner is not a device" );
+        filter->set_activation_guard( [owning_device]() { owning_device->throw_if_inference_active(); } );
+        rs_embedded_filter = filter;
     }
     else if (auto temporal_filter = std::dynamic_pointer_cast< dds_temporal_filter >(embedded_filter))
     {
-        rs_embedded_filter = std::make_shared< rs_dds_embedded_temporal_filter >(
+        auto filter = std::make_shared< rs_dds_embedded_temporal_filter >(
             embedded_filter,
             [=](json options_value)
             {
@@ -1018,6 +1032,12 @@ void dds_sensor_proxy::add_embedded_filter( std::shared_ptr< realdds::dds_embedd
             {
                 return _dev->query_embedded_filter(embedded_filter);
             });
+        // Capture the owning device (which outlives this sensor, hence the filter) rather than 'this'.
+        auto owning_device = dynamic_cast< device * >( &get_device() );
+        if( ! owning_device )
+            throw invalid_value_exception( "embedded filter's owner is not a device" );
+        filter->set_activation_guard( [owning_device]() { owning_device->throw_if_inference_active(); } );
+        rs_embedded_filter = filter;
     }
     else if (auto close_range_filter = std::dynamic_pointer_cast< dds_close_range_filter >(embedded_filter))
     {

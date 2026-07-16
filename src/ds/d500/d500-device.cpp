@@ -153,8 +153,27 @@ namespace librealsense
             uvc->set_frame_metadata_modifier(callback);
     }
 
+    void d500_depth_sensor::color_stream_allowed_or_throw( const stream_profiles & requests ) const
+    {
+        bool color_requested = false;
+        for( auto & p : requests )
+            if( p && p->get_stream_type() == RS2_STREAM_COLOR )
+                color_requested = true;
+        if( ! color_requested )
+            return;  // color only lives on this sensor for dual-color devices
+
+        for( auto & f : _embedded_filters )
+            if( f && f->get_type() == RS2_EMBEDDED_FILTER_TYPE_CLOSE_RANGE
+                && f->supports_option( RS2_OPTION_EMBEDDED_FILTER_ENABLED )
+                && f->get_option( RS2_OPTION_EMBEDDED_FILTER_ENABLED ).query() != 0.f )
+                throw wrong_api_call_sequence_exception(
+                    "Color streams cannot be activated while Improved Close Range Depth is enabled" );
+    }
+
     void d500_depth_sensor::open( const stream_profiles & requests )
     {
+        color_stream_allowed_or_throw( requests );
+
         group_multiple_fw_calls(*this, [&]() {
             _depth_units = get_option(RS2_OPTION_DEPTH_UNITS).query();
             set_frame_metadata_modifier([&](frame_additional_data& data) {data.depth_units = _depth_units.load(); });
@@ -572,7 +591,7 @@ namespace librealsense
             depth_sensor.register_option(RS2_OPTION_SOC_PVT_TEMPERATURE, pvt_temperature);
             depth_sensor.register_option(RS2_OPTION_OHM_TEMPERATURE, ohm_temperature);
 
-            if (_pid == D585S_PID)
+            if (d500_projector_temperature_pids.count(_pid))
             {
                 auto proj_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
                     depth_xu,

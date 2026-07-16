@@ -29,6 +29,16 @@ using namespace rs2::sw_update;
 
 namespace rs2
 {
+    // RAII guard pairing BeginDisabled/EndDisabled: keeps them balanced even if an exception is
+    // thrown between begin and the explicit end() call (which runs before the tooltip hover check).
+    struct disable_guard
+    {
+        bool active, ended;
+        disable_guard( bool a ) : active( a ), ended( false ) { if( active ) ImGui::BeginDisabled( true ); }
+        void end() { if( active && !ended ) { ended = true; ImGui::EndDisabled(); } }
+        ~disable_guard() { end(); }
+    };
+
     void imgui_easy_theming(ImFont*& font_dynamic, ImFont*& font_18, ImFont*& monofont, int& font_size)
     {
         ImGuiStyle& style = ImGui::GetStyle();
@@ -333,7 +343,7 @@ namespace rs2
         }
     }
 
-    bool device_model::subdevice_has_inference_stream_enabled( const subdevice_model & sub )
+    bool device_model::subdevice_has_inference_stream_enabled( const subdevice_model & sub ) const
     {
         for( auto const & kv : sub.stream_enabled )
         {
@@ -371,6 +381,27 @@ namespace rs2
             if( sub->streaming && subdevice_has_inference_stream_enabled( *sub ) )
                 sub->stop( viewer.not_model );
         }
+    }
+
+    bool device_model::is_inference_streaming() const
+    {
+        for( auto const & sub : subdevices )
+            if( sub->streaming && subdevice_has_inference_stream_enabled( *sub ) )
+                return true;
+        return false;
+    }
+
+    bool device_model::is_inference_blocking_filter_enabled() const
+    {
+        for( auto const & sub : subdevices )
+            for( auto const & ef : sub->embedded_filters )
+            {
+                auto type = ef->get_filter()->get_type();
+                if( ( type == RS2_EMBEDDED_FILTER_TYPE_DECIMATION || type == RS2_EMBEDDED_FILTER_TYPE_TEMPORAL )
+                    && ef->is_enabled() )
+                    return true;
+            }
+        return false;
     }
 
     void device_model::play_defaults(viewer_model& viewer)
@@ -2428,11 +2459,6 @@ namespace rs2
                 ImGui::SetCursorPos({ rc.x, rc.y + line_h });
             }
 
-            rc = ImGui::GetCursorPos();
-            ImGui::SetCursorPos({ rc.x + 12, rc.y + 4 });
-            std::string download_label = rsutils::string::from() << "Download firmware...##" << id;
-            hyperlink(window, download_label.c_str(), fw_download_url());
-
             ImGui::SetCursorPos({ rc.x + 225, rc.y - 107 });
             ImGui::PopFont();
         }
@@ -2513,8 +2539,11 @@ namespace rs2
                         }
                         if (can_stream)
                         {
-                            // Disable the start button for inference streams unless color and depth are already streaming.
-                            bool disable_inference = subdevice_has_inference_stream_enabled( *sub ) && ! are_color_and_depth_streaming();
+                            // Disable the start button for inference streams unless color and depth are already
+                            // streaming, and while a decimation/temporal embedded filter is enabled (mutually exclusive).
+                            bool sub_has_inference = subdevice_has_inference_stream_enabled( *sub );
+                            bool blocking_filter_enabled = sub_has_inference && is_inference_blocking_filter_enabled();
+                            bool disable_inference = ( sub_has_inference && ! are_color_and_depth_streaming() ) || blocking_filter_enabled;
                             if( disable_inference )
                                 ImGui::BeginDisabled();
 
@@ -2555,7 +2584,9 @@ namespace rs2
                             {
                                 ImGui::EndDisabled();
                                 if( ImGui::IsItemHovered( ImGuiHoveredFlags_AllowWhenDisabled ) )
-                                    RsImGui::CustomTooltip( "Color and Depth streams must be streaming before starting inference" );
+                                    RsImGui::CustomTooltip( blocking_filter_enabled
+                                        ? "Disable the decimation/temporal embedded filter before starting inference (cannot run together)"
+                                        : "Color and Depth streams must be streaming before starting inference" );
                             }
                             else if (ImGui::IsItemHovered())
                             {
@@ -2881,15 +2912,7 @@ namespace rs2
                         ImGui::SetCursorPos({ windows_width - 42, pos.y - 3 });
 
                         const bool pb_available = pb->is_available();
-                        // RAII guard pairing BeginDisabled/EndDisabled: keeps them balanced
-                        // even if an exception is thrown between begin and the explicit end()
-                        // call below (which runs before the tooltip hover check).
-                        struct disable_guard {
-                            bool active, ended;
-                            disable_guard( bool a ) : active( a ), ended( false ) { if( active ) ImGui::BeginDisabled( true ); }
-                            void end() { if( active && !ended ) { ended = true; ImGui::EndDisabled(); } }
-                            ~disable_guard() { end(); }
-                        } dg( !pb_available );
+                        disable_guard dg( !pb_available );
                         try
                         {
                             ImGui::PushFont(window.get_font());
@@ -3028,6 +3051,14 @@ namespace rs2
                     draw_later.push_back([windows_width, &window, sub, pos, &viewer, this, pb]() {
                         ImGui::SetCursorPos({ windows_width - 42, pos.y - 3 });
 
+                        const bool pb_available = pb->is_available();
+                        // Block turning a decimation/temporal filter on while inference streams (mutually exclusive).
+                        auto ef_type = pb->get_filter()->get_type();
+                        const bool block_enable_while_inference = !pb->is_enabled()
+                            && ( ef_type == RS2_EMBEDDED_FILTER_TYPE_DECIMATION
+                              || ef_type == RS2_EMBEDDED_FILTER_TYPE_TEMPORAL )
+                            && is_inference_streaming();
+                        disable_guard dg( !pb_available || block_enable_while_inference );
                         try
                         {
                             ImGui::PushFont(window.get_font());
@@ -3080,6 +3111,13 @@ namespace rs2
                                     window.link_hovered();
                                 }
                             }
+
+                            dg.end();
+                            if( !pb_available && !pb->unavailable_tooltip.empty()
+                                && ImGui::IsItemHovered( ImGuiHoveredFlags_AllowWhenDisabled ) )
+                                RsImGui::CustomTooltip( "%s", pb->unavailable_tooltip.c_str() );
+                            else if( block_enable_while_inference && ImGui::IsItemHovered( ImGuiHoveredFlags_AllowWhenDisabled ) )
+                                RsImGui::CustomTooltip( "Stop the inference stream before enabling this filter (cannot run together)" );
 
                             ImGui::PopStyleColor(5);
                             ImGui::PopFont();

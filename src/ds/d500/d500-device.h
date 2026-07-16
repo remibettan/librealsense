@@ -51,6 +51,10 @@ namespace librealsense
         embedded_filters get_supported_embedded_filters() const override { return _embedded_filters; }
         void add_embedded_filter( std::shared_ptr< embedded_filter_interface > filter ) { _embedded_filters.push_back( filter ); }
 
+        // Throws if a color stream in 'requests' cannot start now. Dual-color: color shares this sensor
+        // and close-range works on depth only, so color is blocked while close-range is enabled.
+        void color_stream_allowed_or_throw( const stream_profiles & requests ) const;
+
         // Streams contributed by feature mixins (e.g. dual-color) that this sensor physically carries. They are
         // assigned to matching profiles (by stream type + index) during init_stream_profiles.
         void add_stream( std::shared_ptr< stream_interface > stream ) { _extra_streams.push_back( stream ); }
