@@ -282,7 +282,6 @@ dds_device_proxy::dds_device_proxy( std::shared_ptr< const device_info > const &
             auto perception_stream = std::dynamic_pointer_cast< realdds::dds_perception_stream >( stream );
             auto & profiles = stream->profiles();
             auto const & default_profile = profiles[stream->default_profile_index()];
-            // OD stream is renamed to match the USB side (see object_detection_sensor::STREAM_NAME)
             std::string const profile_name = ( stream_type == RS2_STREAM_OBJECT_DETECTION ) ? object_detection_sensor::STREAM_NAME : stream->name();
             for( auto & profile : profiles )
             {
@@ -629,7 +628,7 @@ std::shared_ptr< dds_sensor_proxy > dds_device_proxy::create_sensor( const std::
     case RS2_STREAM_MOTION:
         return std::make_shared< dds_motion_sensor_proxy >( sensor_name, this, _dds_dev );
     case RS2_STREAM_OBJECT_DETECTION:
-        // OD sensor is renamed to match the USB side; the caller-supplied `sensor_name` is intentionally overridden.
+        // Temporary override until FW advertises the canonical name; drop this branch's hardcode once FW is updated.
         return std::make_shared< dds_object_detection_sensor_proxy >( object_detection_sensor::SENSOR_NAME, this, _dds_dev );
     case RS2_STREAM_ANY:
         // Generic: no type

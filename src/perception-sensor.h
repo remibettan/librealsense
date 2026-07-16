@@ -21,7 +21,7 @@ MAP_EXTENSION( RS2_EXTENSION_PERCEPTION_SENSOR, librealsense::perception_sensor 
 class object_detection_sensor : public virtual perception_sensor
 {
 public:
-    // Shared names for the OD sensor and stream profile, used by both the USB (d500) and DDS paths
+    // Shared names for the OD sensor and stream profile, used by both the USB and DDS paths
     static constexpr const char * SENSOR_NAME = "Perception";
     static constexpr const char * STREAM_NAME = "Object Detection";
 

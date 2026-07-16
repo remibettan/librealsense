@@ -850,7 +850,8 @@ namespace librealsense
 
     bool ros2_reader::is_perception_module_sensor(const std::string& sensor_name)
     {
-        return (sensor_name.compare("Perception") == 0);
+        // "Inference Sensor" kept for backward compat with bags recorded before the perception rename.
+        return sensor_name == "Perception" || sensor_name == "Inference Sensor";
     }
 
     bool ros2_reader::is_object_detection_sensor(const std::string& sensor_name)
