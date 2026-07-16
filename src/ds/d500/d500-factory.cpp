@@ -187,9 +187,12 @@ namespace librealsense
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override
         {
 
-            std::vector< std::shared_ptr< stream_interface > > streams = { _depth_stream, _left_ir_stream, _right_ir_stream, _color_stream,
-                                                                           _ds_motion_common->get_accel_stream(),
-                                                                           _ds_motion_common->get_gyro_stream() };
+            std::vector< std::shared_ptr< stream_interface > > streams = { _depth_stream, _left_ir_stream, _right_ir_stream, _color_stream };
+            if( ! _has_motion_module_failed && _ds_motion_common )
+            {
+                streams.push_back( _ds_motion_common->get_accel_stream() );
+                streams.push_back( _ds_motion_common->get_gyro_stream() );
+            }
             return create_default_matcher( streams );
         }
 

@@ -580,7 +580,7 @@ namespace librealsense
             // Temperature depth-XU selectors (PVT 0x15, OHM 0x17, Projector 0x16) have no CID in the
             // MIPI V4L2 backend, so skip them on D585 GMSL.
             // TODO - to be solved XU
-            if (_pid != D585_GMSL_PID)
+            if (!_is_mipi_device)
             {
                 // defining the temperature options
                 auto pvt_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
@@ -609,7 +609,7 @@ namespace librealsense
 
             // Error-reporting depth-XU selector (0x07) has no CID in the MIPI V4L2 backend, so skip it on D585 GMSL.
             // TODO - to be solved XU
-            if (_pid != D585_GMSL_PID)
+            if (!_is_mipi_device)
             {
                 auto error_control = std::make_shared< uvc_xu_option< uint8_t > >( raw_depth_sensor,
                                                                                    depth_xu,
