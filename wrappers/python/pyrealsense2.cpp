@@ -6,6 +6,12 @@ Copyright(c) 2017 RealSense, Inc. All Rights Reserved. */
 #include <librealsense2/hpp/rs_export.hpp>
 #include <src/types.h>
 
+#if defined( BUILD_EASYLOGGINGPP ) && defined( BUILD_SHARED_LIBS )
+// A shared realsense2 doesn't export ELPP's storage, so rsutils objects linked into this
+// module (e.g. dispatcher) need our own -- see rsutils/easylogging/easyloggingpp.h
+INITIALIZE_EASYLOGGINGPP
+#endif
+
 PYBIND11_MODULE(NAME, m) {
     m.doc() = R"pbdoc(
         Librealsense Python Bindings
