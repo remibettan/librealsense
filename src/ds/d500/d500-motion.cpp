@@ -23,6 +23,8 @@
 #include "proc/auto-exposure-processor.h"
 #include "backend.h"
 #include <src/metadata-parser.h>
+#include <src/hid-sensor.h>
+#include <src/ds/features/gyro-sensitivity-feature.h>
 
 #include <rsutils/type/fourcc.h>
 using rsutils::type::fourcc;
@@ -168,6 +170,33 @@ namespace librealsense
         });
 
         return motion_ep;
+    }
+
+    ds_motion_sensor & d500_motion::get_motion_sensor()
+    {
+#if defined(__APPLE__)
+        throw std::runtime_error( "Motion sensors are not supported on macOS" );
+#else
+        return dynamic_cast< ds_motion_sensor & >( get_sensor( _motion_module_device_idx.value() ) );
+#endif
+    }
+
+    std::shared_ptr< hid_sensor > d500_motion::get_raw_motion_sensor()
+    {
+#if defined(__APPLE__)
+        return nullptr;
+#else
+        auto raw_sensor = get_motion_sensor().get_raw_sensor();
+        return std::dynamic_pointer_cast< hid_sensor >( raw_sensor );
+#endif
+    }
+
+    void d500_motion::register_gyro_sensitivity()
+    {
+        // FW gate matches the D500 version that added Gyro Sensitivity support (first seen exposed via DDS/PoE on D555).
+        if( _fw_version >= firmware_version( "7.58.38066.8032" ) && ! _has_motion_module_failed )
+            register_feature(
+                std::make_shared< gyro_sensitivity_feature >( get_raw_motion_sensor(), get_motion_sensor() ) );
     }
 
     void d500_motion::register_stream_to_extrinsic_group(const stream_interface& stream, uint32_t group_index)
