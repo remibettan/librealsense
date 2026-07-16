@@ -22,9 +22,6 @@ namespace librealsense
 
         double get_gyro_default_scale() const override;
 
-        ds_motion_sensor & get_motion_sensor();
-        std::shared_ptr< hid_sensor > get_raw_motion_sensor();
-
     protected:
         friend class ds_motion_common;
         friend class ds_fisheye_sensor;
@@ -38,6 +35,8 @@ namespace librealsense
         // case. Mirrors the same flag in d400_motion_base.
         bool _has_motion_module_failed = false;
 
+        ds_motion_sensor & get_motion_sensor();
+        std::shared_ptr< hid_sensor > get_raw_motion_sensor();
         void register_gyro_sensitivity();
 
     private:

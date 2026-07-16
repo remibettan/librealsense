@@ -114,7 +114,6 @@ namespace librealsense
 
     void d500_motion::register_gyro_sensitivity()
     {
-        // FW gate matches the D500 version that added Gyro Sensitivity support (first seen exposed via DDS/PoE on D555).
         if( _fw_version >= firmware_version( "7.58.38066.8032" ) && ! _has_motion_module_failed )
             register_feature(
                 std::make_shared< gyro_sensitivity_feature >( get_raw_motion_sensor(), get_motion_sensor() ) );
