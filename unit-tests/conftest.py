@@ -76,6 +76,7 @@ log = logging.getLogger('librealsense')
 
 # D585 Prototype FW accel bring-up window (RSDEV-13011): seconds to wait after powering the
 # device on before letting tests stream. Threshold measured at ~3s; +1s margin.
+# TODO(RSDEV-13011): remove once the FW fix is deployed (removal tracked in RSDSO-21766).
 D585_BRINGUP_SETTLE_SEC = 4
 
 # Bridge rspy.log → Python logging early, before any test output
@@ -803,8 +804,8 @@ def module_device_setup(request, _test_device_serial, __pytest_repeat_step_numbe
         # first ~5-7 seconds after power-on (RSDEV-13011), failing any test whose config
         # includes it. Wait out the bring-up window after enabling such a device.
         # Matches "D585 Prototype" / "D585 Proto Dual RGB" only — D585S is not affected.
-        if any('D585 Proto' in ((devices.get(sn).name if devices.get(sn) else '') or '') for sn in serials):
-            log.debug(f"D585 bring-up settle: waiting {D585_BRINGUP_SETTLE_SEC}s before tests")
+        if any('D585 Proto' in (getattr(devices.get(sn), 'name', '') or '') for sn in serials):
+            log.info(f"D585 bring-up settle: waiting {D585_BRINGUP_SETTLE_SEC}s before tests")
             time.sleep(D585_BRINGUP_SETTLE_SEC)
 
     def _teardown(serials):
