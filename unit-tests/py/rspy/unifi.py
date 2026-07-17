@@ -116,6 +116,8 @@ class UniFiSwitch(device_hub.device_hub):
 
         self.mac_port_dict = None
 
+        self.log_port_link_speeds()
+
     def _init_mac_port_dict(self):
         """
         Initialize mac_port_dict which maps MAC addresses to port numbers
@@ -141,6 +143,50 @@ class UniFiSwitch(device_hub.device_hub):
             port_stats[port_num] = is_port_up
 
         return port_stats
+
+    # Rate column in 'swctrl port show' looks like "1000F" (1000 Mbps full duplex) or "0H" when down
+    GIGABIT_MBPS = 1000
+
+    def _get_port_link_info(self):
+        """
+        Parse 'swctrl port show' into per-port link state and negotiated speed.
+        :return: {port_num: {'up': bool, 'speed_mbps': int, 'duplex': str}}
+        """
+        cmd_out = self._run_command("swctrl port show")
+        info = {}
+        for line in cmd_out.splitlines():
+            parts = line.split()
+            if len(parts) < 3 or not parts[0].isdigit():
+                continue  # skip headers/separators
+            port = int(parts[0])
+            link = parts[1]  # admin/phys, e.g. "U/U" (up/up) or "U/D" (up/down)
+            rate = parts[2]  # e.g. "1000F", "100F", "0H"
+            up = link.split('/')[-1].upper() == 'U'
+            m = re.match(r'(\d+)([FH])', rate)
+            speed = int(m.group(1)) if m else 0
+            duplex = {'F': 'full', 'H': 'half'}.get(m.group(2), '') if m else ''
+            info[port] = {'up': up, 'speed_mbps': speed, 'duplex': duplex}
+        return info
+
+    def log_port_link_speeds(self):
+        """
+        Log the negotiated link speed of every linked port, and warn on any port
+        that came up below 1 Gbps (a common symptom of a bad cable, crimp, or port
+        that silently starves the D555 video path of jumbo frames).
+        """
+        try:
+            info = self._get_port_link_info()
+        except Exception as e:
+            log.d(f"could not read UniFi port link speeds: {e}")
+            return
+        for port, i in sorted(info.items()):
+            if not i['up']:
+                continue
+            msg = f"UniFi port {port} link: {i['speed_mbps']} Mbps {i['duplex']}".rstrip()
+            if i['speed_mbps'] < self.GIGABIT_MBPS:
+                log.w(f"{msg} -- below 1 Gbps! suspect cable/port/crimp on this link")
+            else:
+                log.d(msg)
 
     def get_name(self):
         """
