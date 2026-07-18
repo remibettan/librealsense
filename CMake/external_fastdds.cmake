@@ -45,20 +45,26 @@ function(get_fastdds)
     set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/fastdds/fastdds_install)
     set(CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR}/fastdds/fastdds_install)
 
+    # Get fastdds
+    FetchContent_MakeAvailable(fastdds)
+
     # GCC 14 / libstdc++-15 (Ubuntu 26.04 "resolute") removed transitive <cstdint>
     # includes from many std headers. FastDDS 2.10.4 uses uint8_t (e.g. in
     # DDSFilterCompoundCondition.hpp) without explicitly including <cstdint>,
-    # which fails to compile. Force-include <cstdint> in every FastDDS
-    # translation unit; harmless on older toolchains. add_compile_options is
-    # directory-scoped, so only targets added below (FastDDS via FetchContent)
-    # inherit it -- librealsense's own compilation is unaffected.
+    # which fails to compile. Force-include <cstdint> ONLY on FastDDS's own
+    # targets, and only for their C++ translation units: <cstdint> is a C++
+    # header, so applying it directory-wide (add_compile_options) breaks C
+    # compilation elsewhere in the tree (e.g. third-party/glad/glad.c in
+    # realsense2-gl fatal-errors with "cstdint: No such file"). PRIVATE keeps it
+    # off consumers; harmless on older toolchains.
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        add_compile_options(-include cstdint)
+        foreach(_fastdds_tgt fastcdr fastrtps foonathan_memory)
+            if(TARGET ${_fastdds_tgt})
+                target_compile_options(${_fastdds_tgt} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-include cstdint>)
+            endif()
+        endforeach()
     endif()
 
-    # Get fastdds
-    FetchContent_MakeAvailable(fastdds)
-    
     # Mark new options from FetchContent as advanced options
     mark_as_advanced(FETCHCONTENT_SOURCE_DIR_FASTDDS)
     mark_as_advanced(FETCHCONTENT_UPDATES_DISCONNECTED_FASTDDS)
