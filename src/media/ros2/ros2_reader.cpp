@@ -746,14 +746,6 @@ namespace librealsense
         void update(std::shared_ptr< extension_snapshot > ext) override {}
     };
 
-    class object_detection_sensor_snapshot
-        : public virtual object_detection_sensor
-        , public perception_sensor_snapshot
-    {
-    public:
-        void update(std::shared_ptr< extension_snapshot > ext) override {}
-    };
-
     }  // namespace
 
 
@@ -801,11 +793,6 @@ namespace librealsense
         {
             sensor_extensions[RS2_EXTENSION_DEPTH_MAPPING_SENSOR] = std::make_shared<depth_mapping_sensor_snapshot>();
         }
-        else if (is_object_detection_sensor(sensor_name))
-        {
-            sensor_extensions[RS2_EXTENSION_OBJECT_DETECTION_SENSOR] = std::make_shared<object_detection_sensor_snapshot>();
-            sensor_extensions[RS2_EXTENSION_PERCEPTION_SENSOR] = std::make_shared<perception_sensor_snapshot>();
-        }
         else if (is_perception_module_sensor(sensor_name))
         {
             sensor_extensions[RS2_EXTENSION_PERCEPTION_SENSOR] = std::make_shared<perception_sensor_snapshot>();
@@ -850,13 +837,10 @@ namespace librealsense
 
     bool ros2_reader::is_perception_module_sensor(const std::string& sensor_name)
     {
-        // "Inference Sensor" kept for backward compat with bags recorded before the perception rename.
-        return sensor_name == "Perception" || sensor_name == "Inference Sensor";
-    }
-
-    bool ros2_reader::is_object_detection_sensor(const std::string& sensor_name)
-    {
-        return (sensor_name.compare("Object Detection Sensor") == 0);
+        // Old names kept for backward compat with bags recorded before the perception rename.
+        return sensor_name == "Perception"
+            || sensor_name == "Inference Sensor"
+            || sensor_name == "Object Detection Sensor";
     }
 
     // Helpers ---------------------------------------------------------------------

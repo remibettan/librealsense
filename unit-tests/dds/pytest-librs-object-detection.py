@@ -231,11 +231,8 @@ else:
     def test_sensor_downcast(remote_and_streaming):
         _, sensor, _, _ = remote_and_streaming
         check.is_true( sensor.is_perception_sensor(), msg='sensor should be a perception_sensor' )
-        check.is_true( sensor.is_object_detection_sensor(), msg='sensor should be an object_detection_sensor' )
         perception_s = sensor.as_perception_sensor()
         check.is_true( perception_s, msg='as_perception_sensor() should return truthy' )
-        od_s = sensor.as_object_detection_sensor()
-        check.is_true( od_s, msg='as_object_detection_sensor() should return truthy' )
 
     #
     #############################################################################################
@@ -267,12 +264,8 @@ else:
         _, _, color_sensor, _ = remote_and_streaming
         check.is_true( not color_sensor.is_perception_sensor(),
                        msg='RGB Camera should not be a perception_sensor' )
-        check.is_true( not color_sensor.is_object_detection_sensor(),
-                       msg='RGB Camera should not be an object_detection_sensor' )
-        non_inf = color_sensor.as_perception_sensor()
-        check.is_true( not non_inf, msg='as_perception_sensor() on color sensor should return falsy' )
-        non_od = color_sensor.as_object_detection_sensor()
-        check.is_true( not non_od, msg='as_object_detection_sensor() on color sensor should return falsy' )
+        non_perception = color_sensor.as_perception_sensor()
+        check.is_true( not non_perception, msg='as_perception_sensor() on color sensor should return falsy' )
 
     #
     #############################################################################################

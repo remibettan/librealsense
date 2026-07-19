@@ -1967,7 +1967,6 @@ int rs2_is_sensor_extendable_to(const rs2_sensor* sensor, rs2_extension extensio
     case RS2_EXTENSION_SAFETY_SENSOR           : return VALIDATE_INTERFACE_NO_THROW(sensor->sensor, librealsense::safety_sensor)          != nullptr;
     case RS2_EXTENSION_DEPTH_MAPPING_SENSOR    : return VALIDATE_INTERFACE_NO_THROW(sensor->sensor, librealsense::depth_mapping_sensor)   != nullptr;
     case RS2_EXTENSION_PERCEPTION_SENSOR       : return VALIDATE_INTERFACE_NO_THROW(sensor->sensor, librealsense::perception_sensor)       != nullptr;
-    case RS2_EXTENSION_OBJECT_DETECTION_SENSOR : return VALIDATE_INTERFACE_NO_THROW(sensor->sensor, librealsense::object_detection_sensor) != nullptr;
 
     default:
         return false;
@@ -1995,7 +1994,6 @@ int rs2_is_device_extendable_to(const rs2_device* dev, rs2_extension extension, 
         case RS2_EXTENSION_ADVANCED_MODE         : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::ds_advanced_mode_interface)    != nullptr;
         case RS2_EXTENSION_DEPTH_MAPPING_SENSOR  : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::depth_mapping_sensor)          != nullptr;
         case RS2_EXTENSION_PERCEPTION_SENSOR     : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::perception_sensor)             != nullptr;
-        case RS2_EXTENSION_OBJECT_DETECTION_SENSOR: return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::object_detection_sensor)      != nullptr;
         case RS2_EXTENSION_RECORD                : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::record_device)                 != nullptr;
         case RS2_EXTENSION_PLAYBACK              : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::playback_device)               != nullptr;
         case RS2_EXTENSION_TM2                   : return false;

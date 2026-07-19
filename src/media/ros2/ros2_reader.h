@@ -41,7 +41,6 @@ namespace librealsense
         static bool is_safety_module_sensor(const std::string& sensor_name);
         static bool is_depth_mapping_sensor(const std::string& sensor_name);
         static bool is_perception_module_sensor(const std::string& sensor_name);
-        static bool is_object_detection_sensor(const std::string& sensor_name);
 
         std::shared_ptr<recommended_proccesing_blocks_snapshot> read_proccesing_blocks(device_serializer::sensor_identifier sensor_id,
             std::shared_ptr<options_interface> options);

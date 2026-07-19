@@ -627,7 +627,7 @@ std::shared_ptr< dds_sensor_proxy > dds_device_proxy::create_sensor( const std::
     case RS2_STREAM_MOTION:
         return std::make_shared< dds_motion_sensor_proxy >( sensor_name, this, _dds_dev );
     case RS2_STREAM_OBJECT_DETECTION:
-        return std::make_shared< dds_object_detection_sensor_proxy >( sensor_name, this, _dds_dev );
+        return std::make_shared< dds_perception_sensor_proxy >( sensor_name, this, _dds_dev );
     case RS2_STREAM_ANY:
         // Generic: no type
         return std::make_shared< dds_sensor_proxy >( sensor_name, this, _dds_dev );

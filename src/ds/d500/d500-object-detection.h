@@ -34,14 +34,14 @@ namespace librealsense
     };
 
     class d500_object_detection_sensor : public synthetic_sensor,
-                                         public object_detection_sensor
+                                         public perception_sensor
     {
     public:
         explicit d500_object_detection_sensor( d500_object_detection * owner,
                                                std::shared_ptr< uvc_sensor > uvc_sensor,
                                                std::map< uint32_t, rs2_format > od_fourcc_to_rs2_format,
                                                std::map< uint32_t, rs2_stream > od_fourcc_to_rs2_stream )
-            : synthetic_sensor( object_detection_sensor::SENSOR_NAME, uvc_sensor, owner, od_fourcc_to_rs2_format, od_fourcc_to_rs2_stream )
+            : synthetic_sensor( perception_sensor::SENSOR_NAME, uvc_sensor, owner, od_fourcc_to_rs2_format, od_fourcc_to_rs2_stream )
             , _owner( owner )
         {
         }

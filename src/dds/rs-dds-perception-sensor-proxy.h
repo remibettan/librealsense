@@ -23,18 +23,4 @@ public:
     }
 };
 
-// For cases when checking if this is< object_detection_sensor > or is< perception_sensor >
-class dds_object_detection_sensor_proxy
-    : public dds_perception_sensor_proxy
-    , public object_detection_sensor
-{
-public:
-    dds_object_detection_sensor_proxy( std::string const & sensor_name,
-                                       software_device * owner,
-                                       std::shared_ptr< realdds::dds_device > const & dev )
-        : dds_perception_sensor_proxy( sensor_name, owner, dev )
-    {
-    }
-};
-
 }  // namespace librealsense

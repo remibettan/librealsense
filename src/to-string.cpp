@@ -420,7 +420,6 @@ const char * get_string( rs2_extension value )
     CASE( PERCEPTION_FRAME )
     CASE( OBJECT_DETECTION_FRAME )
     CASE( PERCEPTION_SENSOR )
-    CASE( OBJECT_DETECTION_SENSOR )
     CASE( PERCEPTION_PROFILE )
     default:
         assert( ! is_valid( value ) );
