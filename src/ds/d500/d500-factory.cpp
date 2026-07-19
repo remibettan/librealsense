@@ -156,12 +156,12 @@ namespace librealsense
 
 
     // D585 GMSL (MIPI) variant with dedicated color sensor. On MIPI the color and IMU are exposed as
-    // separate V4L2 nodes, so this uses the single-color (d500_color) and UVC-motion (d500_motion_uvc)
-    // paths rather than the USB dual-color / HID-motion paths of rs5x5_device.
+    // separate V4L2 nodes; d500_motion selects the UVC-motion path at runtime from _is_mipi_device,
+    // so this uses the single-color (d500_color) path rather than the USB dual-color path of rs5x5_device.
     class rs5x5_gmsl_dedicated_color_device
         : public d500_active
         , public d500_color
-        , public d500_motion_uvc
+        , public d500_motion
         , public ds_advanced_mode_base
         , public extended_firmware_logger_device
     {
@@ -171,8 +171,8 @@ namespace librealsense
             , backend_device( dev_info )
             , d500_device( dev_info )
             , d500_active( dev_info )
-            , d500_color( dev_info, RS2_FORMAT_YUYV )
-            , d500_motion_uvc( dev_info )
+            , d500_color( dev_info, RS2_FORMAT_NV12 )
+            , d500_motion( dev_info )
             , ds_advanced_mode_base()
             , extended_firmware_logger_device( dev_info, d500_device::_hw_monitor, get_firmware_logs_command() )
         {
@@ -228,7 +228,7 @@ namespace librealsense
             , backend_device( dev_info )
             , d500_device( dev_info )
             , d500_active( dev_info )
-            , d500_color( dev_info, RS2_FORMAT_M420 )
+            , d500_color( dev_info, RS2_FORMAT_NV12 )
             , d500_motion( dev_info )
             , d500_object_detection( dev_info )
             , ds_advanced_mode_base()
