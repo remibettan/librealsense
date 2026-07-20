@@ -119,8 +119,8 @@ namespace librealsense
 
     void d500_object_detection_sensor::open( const stream_profiles & requests )
     {
-        // Inference and some embedded filters cannot run together. Reject here before the device is touched.
-        _owner->throw_if_inference_blocking_filter_enabled();
+        // Perception and some embedded filters cannot run together. Reject here before the device is touched.
+        _owner->throw_if_perception_blocking_filter_enabled();
         synthetic_sensor::open( requests );
     }
 
@@ -147,7 +147,7 @@ namespace librealsense
             if( p->get_stream_type() == RS2_STREAM_OBJECT_DETECTION )
             {
                 assign_stream( _owner->_object_detection_stream, p );
-                p->set_name( "Person Detection" );
+                p->set_name( perception_sensor::STREAM_NAME );
             }
         }
         return results;

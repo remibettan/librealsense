@@ -341,14 +341,14 @@ namespace rs2
         }
     };
 
-    class inference_stream_profile : public stream_profile
+    class perception_stream_profile : public stream_profile
     {
     public:
-        explicit inference_stream_profile(const stream_profile& sp)
+        explicit perception_stream_profile(const stream_profile& sp)
             : stream_profile(sp)
         {
             rs2_error* e = nullptr;
-            if (!sp || (rs2_stream_profile_is(sp.get(), RS2_EXTENSION_INFERENCE_PROFILE, &e) == 0 && !e))
+            if (!sp || (rs2_stream_profile_is(sp.get(), RS2_EXTENSION_PERCEPTION_PROFILE, &e) == 0 && !e))
             {
                 _profile = nullptr;
             }
@@ -1078,13 +1078,13 @@ namespace rs2
         }
     };
 
-    class inference_frame : public frame
+    class perception_frame : public frame
     {
     public:
         /**
          * Extends the frame class with attributes inferred from the frame content, such as object detection results.
          */
-        inference_frame() : frame()
+        perception_frame() : frame()
         {
         }
 
@@ -1092,10 +1092,10 @@ namespace rs2
          * Extends the frame class with attributes inferred from the frame content, such as object detection results.
          * \param[in] frame - existing frame instance
          */
-        inference_frame( const frame & f ) : frame( f )
+        perception_frame( const frame & f ) : frame( f )
         {
             rs2_error * e = nullptr;
-            if( ! f || ( rs2_is_frame_extendable_to( f.get(), RS2_EXTENSION_INFERENCE_FRAME, &e ) == 0 && ! e ) )
+            if( ! f || ( rs2_is_frame_extendable_to( f.get(), RS2_EXTENSION_PERCEPTION_FRAME, &e ) == 0 && ! e ) )
             {
                 reset();
             }
@@ -1103,20 +1103,20 @@ namespace rs2
         }
     };
 
-    class object_detection_frame : public inference_frame
+    class object_detection_frame : public perception_frame
     {
     public:
         /**
-        * Extends inference_frame class with additional object detection related attributes and functions
+        * Extends perception_frame class with additional object detection related attributes and functions
         */
-        object_detection_frame() : inference_frame() {}
+        object_detection_frame() : perception_frame() {}
 
         /**
-        * Extends inference_frame class with additional object detection related attributes and functions
+        * Extends perception_frame class with additional object detection related attributes and functions
         * \param[in] frame - existing frame instance
         */
         object_detection_frame(const frame& f)
-            : inference_frame(f)
+            : perception_frame(f)
         {
             rs2_error* e = nullptr;
             if (!f || (rs2_is_frame_extendable_to(f.get(), RS2_EXTENSION_OBJECT_DETECTION_FRAME, &e) == 0 && !e))
