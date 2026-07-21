@@ -851,9 +851,9 @@ namespace rs2
                 if (advanced.is_enabled())
                 {
                     std::string dev_name = dev.supports(RS2_CAMERA_INFO_NAME) ? dev.get_info(RS2_CAMERA_INFO_NAME) : "";
-                    bool d457_device = (dev_name.find("D457") != std::string::npos);
+                    bool ae_setpoint_unsupported = (dev_name.find("D457") != std::string::npos) || _is_d500_device;
 
-                    draw_advanced_mode_controls(advanced, amc, get_curr_advanced_controls, was_set, error_message, d457_device);
+                    draw_advanced_mode_controls(advanced, amc, get_curr_advanced_controls, was_set, error_message, ae_setpoint_unsupported);
                 }
                 else
                 {
