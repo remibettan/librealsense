@@ -19,9 +19,9 @@ namespace librealsense
         bool provide_whole_table = (cmd.param4 == 0);
         switch( cmd.cmd)
         {
-        case ds::GET_HKR_CONFIG_TABLE:
+        case ds::d500_fw_cmd::GET_HKR_CONFIG_TABLE:
             return provide_whole_table ? hwm_buffer_type::extended_receive : hwm_buffer_type::standard;
-        case ds::SET_HKR_CONFIG_TABLE:
+        case ds::d500_fw_cmd::SET_HKR_CONFIG_TABLE:
             return provide_whole_table ? hwm_buffer_type::extended_send : hwm_buffer_type::standard;
         default:
             return hwm_buffer_type::standard;

@@ -35,12 +35,12 @@ namespace librealsense
         // Newer 5x5 / D585 SKUs use the APM_STROBE opcodes (ds::d500_fw_cmd); D555 uses the legacy
         // LASERONCONST (ds::fw_cmd). uint8_t is the common underlying type — the two enums live in
         // different families and don't cross-convert.
-        uint8_t emitter_get_opcode = APM_STROBE_GET;
-        uint8_t emitter_set_opcode = APM_STROBE_SET;
+        uint8_t emitter_get_opcode = d500_fw_cmd::APM_STROBE_GET;
+        uint8_t emitter_set_opcode = d500_fw_cmd::APM_STROBE_SET;
         if( get_pid() == D555_PID )
         {
-            emitter_get_opcode = LASERONCONST;
-            emitter_set_opcode = LASERONCONST;
+            emitter_get_opcode = fw_cmd::LASERONCONST;
+            emitter_set_opcode = fw_cmd::LASERONCONST;
         }
         auto emitter_always_on_opt = std::make_shared<emitter_always_on_option>( _hw_monitor, emitter_get_opcode, emitter_set_opcode );
         get_depth_sensor().register_option( RS2_OPTION_EMITTER_ALWAYS_ON, emitter_always_on_opt );
