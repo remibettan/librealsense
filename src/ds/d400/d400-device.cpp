@@ -501,7 +501,7 @@ namespace librealsense
 
         if (depth_devs_info.empty() || depth_devices.empty())
         {
-            throw backend_exception("cannot access depth sensor", RS2_EXCEPTION_TYPE_BACKEND);
+            throw backend_exception("cannot access depth sensor");
         }
 
         std::unique_ptr< frame_timestamp_reader > timestamp_reader_backup( new ds_timestamp_reader() );

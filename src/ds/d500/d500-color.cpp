@@ -90,7 +90,7 @@ namespace librealsense
 
         if ( color_devs_info.empty() )
         {
-            throw backend_exception("cannot access color sensor", RS2_EXCEPTION_TYPE_BACKEND);
+            throw backend_exception("cannot access color sensor");
         }
 
         std::unique_ptr< frame_timestamp_reader > ds_timestamp_reader_backup( new ds_timestamp_reader() );

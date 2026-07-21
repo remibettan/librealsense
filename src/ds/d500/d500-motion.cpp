@@ -127,7 +127,7 @@ namespace librealsense
             imu_devices.push_back( get_backend()->create_uvc_device( info ) );
 
         if (imu_devices.empty())
-            throw backend_exception("cannot access IMU sensor", RS2_EXCEPTION_TYPE_BACKEND);
+            throw backend_exception("cannot access IMU sensor");
 
         std::unique_ptr< frame_timestamp_reader > timestamp_reader_backup( new ds_timestamp_reader() );
         std::unique_ptr<frame_timestamp_reader> timestamp_reader_metadata(new ds_timestamp_reader_from_metadata_mipi_motion(std::move(timestamp_reader_backup)));
