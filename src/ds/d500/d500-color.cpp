@@ -145,11 +145,28 @@ namespace librealsense
         switch( _native_format )
         {
         case RS2_FORMAT_YUYV:
-            color_ep.register_processing_block( processing_block_factory::create_pbf_vector< yuy2_converter >(
-                RS2_FORMAT_YUYV,
-                map_supported_color_formats( RS2_FORMAT_YUYV ),
-                RS2_STREAM_COLOR ) );
+        {
+            auto platform_dev = get_raw_color_sensor()->get_uvc_device();
+            if( _is_mipi_device && platform_dev->is_platform_jetson() )
+            {
+                // On Jetson deserializer bytes are received swapped so YUYV is received as UYVY.
+                color_ep.register_processing_block( processing_block_factory::create_pbf_vector< uyvy_converter >(
+                    RS2_FORMAT_YUYV,
+                    map_supported_color_formats( RS2_FORMAT_YUYV, false ),
+                    RS2_STREAM_COLOR ) );
+                color_ep.register_processing_block( { { RS2_FORMAT_YUYV } },
+                                                    { { RS2_FORMAT_YUYV, RS2_STREAM_COLOR } },
+                                                    []() { return std::make_shared< uyvy_to_yuyv >(); } );
+            }
+            else
+            {
+                color_ep.register_processing_block( processing_block_factory::create_pbf_vector< yuy2_converter >(
+                    RS2_FORMAT_YUYV,
+                    map_supported_color_formats( RS2_FORMAT_YUYV ),
+                    RS2_STREAM_COLOR ) );
+            }
             break;
+            }
         case RS2_FORMAT_M420:
         case RS2_FORMAT_NV12:
             // NV12 registered before M420 so RGB targets resolve to NV12 when present, and to M420 when it is not
