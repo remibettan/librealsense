@@ -76,7 +76,17 @@ namespace librealsense
         environment::get_instance().get_extrinsics_graph().register_extrinsics(*_color_stream, *_depth_stream, _color_extrinsic);
         register_stream_to_extrinsic_group(*_color_stream, 0);
 
-        std::vector<platform::uvc_device_info> color_devs_info = filter_by_mi(group.uvc_devices, 3);
+        std::vector<platform::uvc_device_info> color_devs_info;
+        if( _is_mipi_device )
+        {
+            // On MIPI the color is a dedicated video node enumerated at mi=0 (depth/color/ir all share
+            // mi=0, ordered depth, color, ir), not a separate mi=3 node as on USB.
+            auto mi0_infos = filter_by_mi( group.uvc_devices, 0 );
+            if( mi0_infos.size() >= 2 )
+                color_devs_info = { mi0_infos[1] };
+        }
+        else
+            color_devs_info = filter_by_mi( group.uvc_devices, 3 );
 
         if ( color_devs_info.empty() )
         {
@@ -135,11 +145,28 @@ namespace librealsense
         switch( _native_format )
         {
         case RS2_FORMAT_YUYV:
-            color_ep.register_processing_block( processing_block_factory::create_pbf_vector< yuy2_converter >(
-                RS2_FORMAT_YUYV,
-                map_supported_color_formats( RS2_FORMAT_YUYV ),
-                RS2_STREAM_COLOR ) );
+        {
+            auto platform_dev = get_raw_color_sensor()->get_uvc_device();
+            if( _is_mipi_device && platform_dev->is_platform_jetson() )
+            {
+                // On Jetson deserializer bytes are received swapped so YUYV is received as UYVY.
+                color_ep.register_processing_block( processing_block_factory::create_pbf_vector< uyvy_converter >(
+                    RS2_FORMAT_YUYV,
+                    map_supported_color_formats( RS2_FORMAT_YUYV, false ),
+                    RS2_STREAM_COLOR ) );
+                color_ep.register_processing_block( { { RS2_FORMAT_YUYV } },
+                                                    { { RS2_FORMAT_YUYV, RS2_STREAM_COLOR } },
+                                                    []() { return std::make_shared< uyvy_to_yuyv >(); } );
+            }
+            else
+            {
+                color_ep.register_processing_block( processing_block_factory::create_pbf_vector< yuy2_converter >(
+                    RS2_FORMAT_YUYV,
+                    map_supported_color_formats( RS2_FORMAT_YUYV ),
+                    RS2_STREAM_COLOR ) );
+            }
             break;
+            }
         case RS2_FORMAT_M420:
         case RS2_FORMAT_NV12:
             // NV12 registered before M420 so RGB targets resolve to NV12 when present, and to M420 when it is not
@@ -170,7 +197,16 @@ namespace librealsense
 
         _ds_color_common->register_color_options();
 
-        std::map< float, std::string > description_per_value = std::map<float, std::string>{ 
+        // The D585 GMSL MIPI V4L2 backend has no working control for these color PUs
+        // (querying them fails), so drop them from the shared set rather than expose dead controls.
+        if( _is_mipi_device )
+        {
+            color_ep.unregister_option( RS2_OPTION_BRIGHTNESS );
+            color_ep.unregister_option( RS2_OPTION_CONTRAST );
+            color_ep.unregister_option( RS2_OPTION_GAMMA );
+        }
+
+        std::map< float, std::string > description_per_value = std::map<float, std::string>{
             { 0.f, "Disabled"},
             { 1.f, "50Hz" },
             { 2.f, "60Hz" } };
@@ -183,7 +219,8 @@ namespace librealsense
 
         _ds_color_common->register_standard_options();
 
-        color_ep.register_pu(RS2_OPTION_HUE);
+        if( ! _is_mipi_device ) // no V4L2 MIPI CID mapping for Hue
+            color_ep.register_pu(RS2_OPTION_HUE);
 
         if( _thermal_monitor )
             _thermal_monitor->add_observer( [&]( float ) { _color_calib_table_raw.reset(); } );

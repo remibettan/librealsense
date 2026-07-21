@@ -253,16 +253,14 @@ std::vector< rs2_format > device::map_supported_color_formats( rs2_format source
     // Mapping from source color format to all of the compatible target color formats.
 
     std::vector<rs2_format> target_formats = { RS2_FORMAT_RGB8, RS2_FORMAT_RGBA8, RS2_FORMAT_BGR8, RS2_FORMAT_BGRA8 };
+
     switch (source_format)
     {
     case RS2_FORMAT_M420:
-        target_formats.push_back(RS2_FORMAT_M420);
-        break;
     case RS2_FORMAT_NV12:
-        target_formats.push_back(RS2_FORMAT_NV12);
+        should_map_source_format = true;
         break;
     case RS2_FORMAT_YUYV:
-        break;
     case RS2_FORMAT_UYVY:
         break;
     default:

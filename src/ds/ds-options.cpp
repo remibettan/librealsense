@@ -378,6 +378,9 @@ namespace librealsense
     float depth_scale_option::query() const
     {
         auto table = get_depth_table(ds::GET_VAL);
+        // TODO D585 MIPI: proto FW reports depth_units=0 over GMSL; fall back to 1mm default until FW/HWM is fixed.
+        if( table.depth_units == 0 )
+            return 0.001f;
         return (float)(0.000001 * (float)table.depth_units);
     }
 

@@ -31,7 +31,8 @@ namespace librealsense
         const uint16_t D585F_PID              = 0x0C06; // 3C with IR only L/R cover
         const uint16_t D585_2C_PROTO_PID      = 0x0C07;
         const uint16_t D585_3C_PROTO_PID      = 0x0C08;
-        
+        const uint16_t D585_GMSL_PID          = 0xBAAA; // D585 GMSL (MIPI)
+
         // DS500 depth XU identifiers
         // Note: selector values differ from the D400-family depth_xu selectors in ds-private.h.
         const uint8_t DS5_ALIGN_DEPTH              = 0x10;  // Enable depth-to-RGB alignment for OD distance; must be sent before depth streaming starts
@@ -51,7 +52,14 @@ namespace librealsense
             D585_3C_PID,
             D585F_PID,
             D585_2C_PROTO_PID,
-            D585_3C_PROTO_PID
+            D585_3C_PROTO_PID,
+            D585_GMSL_PID
+        };
+
+        // d500 MIPI (GMSL) devices - color and IMU are exposed as separate V4L2 nodes rather than
+        // the USB layout (color on a dedicated mi=3 node, IMU over HID).
+        static const std::set<std::uint16_t> d500_mipi_device_pid = {
+            D585_GMSL_PID
         };
 
         // d500 PIDs that expose the projector temperature via HKR selector 0x16
@@ -82,7 +90,8 @@ namespace librealsense
             { D585_3C_PID,            "RealSense D585" },
             { D585F_PID,              "RealSense D585F" },
             { D585_2C_PROTO_PID,      "RealSense D585 Proto Dual RGB" },
-            { D585_3C_PROTO_PID,      "RealSense D585 Prototype" }
+            { D585_3C_PROTO_PID,      "RealSense D585 Prototype" },
+            { D585_GMSL_PID,          "RealSense D585 GMSL" }
         };
 
         //TODO

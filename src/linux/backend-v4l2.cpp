@@ -1049,6 +1049,16 @@ namespace librealsense
                         opcode_ok = true;
                     }
 
+                    // d500 MIPI (e.g. D585 GMSL) uses a different GVD layout than d400 GMSL:
+                    // byte 8 holds the CRC32, and the RealSense VID/PID are embedded at bytes 16-19.
+                    // TODO - temp WA for D585 GMSL, until the GVD layout is fixed to match the D400 GMSL layout
+                    uint16_t embedded_vid = gvd[16] | ( gvd[17] << 8 );
+                    if( embedded_vid == 0x38e5 ) // RealSense VID identifies the d500 GMSL family
+                    {
+                        device_pid = D585_GMSL_PID;
+                        continue;
+                    }
+
                     uint8_t product_pid = gvd[4 + GVD_PID_OFFSET];
 
                     switch(product_pid)
@@ -1118,6 +1128,11 @@ namespace librealsense
             ::close(fd);
         }
 
+        // PID of the current MIPI camera: derived from its depth node and inherited by the
+        // camera color/IR/IMU nodes. Reset per-camera in get_mipi_rs_enum_nodes so a camera
+        // without a readable depth node cannot inherit a previous camera PID.
+        static uint16_t s_mipi_camera_pid = 0;
+
         uvc_device_info v4l_uvc_device::get_info_from_mipi_device_path(const std::string& video_path, const std::string& name)
         {
             uint16_t vid{}, pid{}, mi{};
@@ -1128,23 +1143,26 @@ namespace librealsense
 
             get_mipi_device_info(dev_name, bus_info, card);
 
-            // find device PID from depth video node
-            static uint16_t device_pid = 0;
+            vid = 0x8086;
+
+            // find device PID from depth video node (see s_mipi_camera_pid)
             try
             {
                 if (is_device_depth_node(dev_name))
                 {
-                    device_pid = get_mipi_device_pid(dev_name);
+                    s_mipi_camera_pid = get_mipi_device_pid(dev_name);
                 }
             }
             catch(const std::exception & e)
             {
                 LOG_WARNING("MIPI device product id detection issue, device will be skipped: " << e.what());
-                device_pid = 0;
+                s_mipi_camera_pid = 0;
             }
 
-            vid = 0x8086;
-            pid = device_pid;
+            pid = s_mipi_camera_pid;
+            if (pid == D585_GMSL_PID)
+                vid = 0x38e5; // D585 GMSL uses RealSense VID
+            
 
 //          std::cout << "video_path:" << video_path << ", name:" << dev_name << ", pid=" << std::hex << (int) pid << std::endl;
 
@@ -1284,6 +1302,7 @@ namespace librealsense
             const int MAX_V4L2_DEVICES = 8; // assume maximum 8 mipi devices
 
             for ( int i = 0; i < MAX_V4L2_DEVICES; i++ ) {
+                s_mipi_camera_pid = 0; // reset per camera; depth node sets it, siblings inherit
                 for (const auto &vs: video_sensors) {
                     int vfd = -1;
                     std::string device_path = "video-rs-" + vs + "-" + std::to_string(i);
