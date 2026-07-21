@@ -127,6 +127,10 @@ namespace librealsense
             // Improved Close Range Depth - USB toggle
             register_feature( std::make_shared< close_range_filter_feature >(
                     dynamic_cast< d500_depth_sensor & >( get_depth_sensor() ) ) );
+
+#if !defined(__APPLE__)
+            register_gyro_sensitivity();
+#endif
         }
 
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override
@@ -181,6 +185,10 @@ namespace librealsense
             // Improved Close Range Depth - USB toggle
             register_feature( std::make_shared< close_range_filter_feature >(
                     dynamic_cast< d500_depth_sensor & >( get_depth_sensor() ) ) );
+
+#if !defined(__APPLE__)
+            register_gyro_sensitivity();
+#endif
         }
 
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override
@@ -230,6 +238,10 @@ namespace librealsense
             , extended_firmware_logger_device( dev_info, d500_device::_hw_monitor, get_firmware_logs_command() )
         {
             ds_advanced_mode_base::initialize_advanced_mode( this );
+
+#if !defined(__APPLE__)
+            register_gyro_sensitivity();
+#endif
         }
 
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override
@@ -293,6 +305,10 @@ namespace librealsense
             // Note - requirement to gate depth options was removed to allow validation checks. Gated by FW only.
             // This should be last as we wish to protect the depth options setting when not in service safety mode
             // d500_safety::gate_depth_options();
+
+#if !defined(__APPLE__)
+            register_gyro_sensitivity();
+#endif
         }
 
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override
