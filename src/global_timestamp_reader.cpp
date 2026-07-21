@@ -276,6 +276,7 @@ namespace librealsense
         _min_command_delay(initial_min_command_delay_ms),
         _rejections_in_row(0),
         _innovation_rejections_in_row(0),
+        _first_sample_dropped(false),
         _active_object([this](dispatcher::cancellable_timer cancellable_timer)
             {
                 polling(cancellable_timer);
@@ -304,8 +305,9 @@ namespace librealsense
         {
             LOG_DEBUG("time_diff_keeper::stop: stop object.");
             _active_object.stop();
-            _is_ready = false;
             std::lock_guard< std::recursive_mutex > lock( _read_mtx );
+            _is_ready = false;
+            _first_sample_dropped = false;
             _coefs.reset();
             _rejections_in_row = 0;
             _innovation_rejections_in_row = 0;
@@ -330,6 +332,14 @@ namespace librealsense
             double command_delay = (system_time_finish-system_time_start)/2;
 
             std::lock_guard<std::recursive_mutex> lock(_read_mtx);
+            // Drop the first clock read if it's slow - it can skew the few-point fit for ~2s.
+            if( ! _first_sample_dropped )
+            {
+                _first_sample_dropped = true;
+                if( command_delay > 10. )
+                    return false;
+            }
+
             if (command_delay < _min_command_delay)
             {
                 _coefs.add_const_y_coefs(command_delay - _min_command_delay);
