@@ -378,12 +378,6 @@ namespace librealsense
         depth_ep->register_info(RS2_CAMERA_INFO_PHYSICAL_PORT, filter_by_mi(all_device_infos, 0).front().device_path);
 
         depth_ep->register_option(RS2_OPTION_GLOBAL_TIME_ENABLED, enable_global_time_option);
-
-        depth_ep->register_processing_block(processing_block_factory::create_id_pbf(RS2_FORMAT_Y8, RS2_STREAM_INFRARED, 1));
-        depth_ep->register_processing_block(processing_block_factory::create_id_pbf(RS2_FORMAT_Z16, RS2_STREAM_DEPTH));
-
-        depth_ep->register_processing_block({ {RS2_FORMAT_W10} }, { {RS2_FORMAT_RAW10, RS2_STREAM_INFRARED, 1} }, []() { return std::make_shared<w10_converter>(RS2_FORMAT_RAW10); });
-        depth_ep->register_processing_block({ {RS2_FORMAT_W10} }, { {RS2_FORMAT_Y10BPACK, RS2_STREAM_INFRARED, 1} }, []() { return std::make_shared<w10_converter>(RS2_FORMAT_Y10BPACK); });
         
         return depth_ep;
     }
@@ -416,6 +410,7 @@ namespace librealsense
 
         auto raw_sensor = get_raw_depth_sensor();
         _pid = group.uvc_devices.front().pid;
+        _is_mipi_device = ( ds::d500_mipi_device_pid.count( _pid ) > 0 );
 
         _color_calib_table_raw = [this]()
         {
@@ -505,18 +500,6 @@ namespace librealsense
 
             _is_symmetrization_enabled = check_symmetrization_enabled();
 
-            depth_sensor.register_processing_block(
-                { {RS2_FORMAT_Y8I} },
-                { {RS2_FORMAT_Y8, RS2_STREAM_INFRARED, 1} , {RS2_FORMAT_Y8, RS2_STREAM_INFRARED, 2} },
-                []() { return std::make_shared<y8i_to_y8y8>(); }
-            ); // L+R
-
-            depth_sensor.register_processing_block(
-                { RS2_FORMAT_Y16I },
-                { {RS2_FORMAT_Y16, RS2_STREAM_INFRARED, 1}, {RS2_FORMAT_Y16, RS2_STREAM_INFRARED, 2} },
-                []() {return std::make_shared<y16i_10msb_to_y16y16>(); }
-            );
-                
             pid_hex_str = rsutils::string::from() << std::uppercase << rsutils::string::hexdump( _pid );
 
             _is_locked = _ds_device_common->is_locked( gvd_buff.data(), d500_gvd_offsets::is_camera_locked_offset );
@@ -576,44 +559,55 @@ namespace librealsense
                 depth_sensor->register_option(RS2_OPTION_DEPTH_UNITS, depth_scale);
             }
 
-            // defining the temperature options
-            auto pvt_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
-                depth_xu,
-                DS5_HKR_PVT_TEMPERATURE,
-                "PVT Temperature");
-
-            auto ohm_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
-                depth_xu,
-                DS5_HKR_OHM_TEMPERATURE,
-                "OHM Temperature");
-
-            // registering the temperature options
-            depth_sensor.register_option(RS2_OPTION_SOC_PVT_TEMPERATURE, pvt_temperature);
-            depth_sensor.register_option(RS2_OPTION_OHM_TEMPERATURE, ohm_temperature);
-
-            if (d500_projector_temperature_pids.count(_pid))
+            // Temperature depth-XU selectors (PVT 0x15, OHM 0x17, Projector 0x16) have no CID in the
+            // MIPI V4L2 backend, so skip them on D585 GMSL.
+            // TODO - to be solved XU
+            if (!_is_mipi_device)
             {
-                auto proj_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
+                // defining the temperature options
+                auto pvt_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
                     depth_xu,
-                    DS5_HKR_PROJECTOR_TEMPERATURE,
-                    "Projector Temperature");
-                depth_sensor.register_option(RS2_OPTION_PROJECTOR_TEMPERATURE, proj_temperature);
+                    DS5_HKR_PVT_TEMPERATURE,
+                    "PVT Temperature");
+
+                auto ohm_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
+                    depth_xu,
+                    DS5_HKR_OHM_TEMPERATURE,
+                    "OHM Temperature");
+
+                // registering the temperature options
+                depth_sensor.register_option(RS2_OPTION_SOC_PVT_TEMPERATURE, pvt_temperature);
+                depth_sensor.register_option(RS2_OPTION_OHM_TEMPERATURE, ohm_temperature);
+
+                if (d500_projector_temperature_pids.count(_pid))
+                {
+                    auto proj_temperature = std::make_shared< temperature_xu_option >(raw_depth_sensor,
+                        depth_xu,
+                        DS5_HKR_PROJECTOR_TEMPERATURE,
+                        "Projector Temperature");
+                    depth_sensor.register_option(RS2_OPTION_PROJECTOR_TEMPERATURE, proj_temperature);
+                }
             }
 
-            auto error_control = std::make_shared< uvc_xu_option< uint8_t > >( raw_depth_sensor,
-                                                                               depth_xu,
-                                                                               DS5_ERROR_REPORTING,
-                                                                               "Error reporting" );
+            // Error-reporting depth-XU selector (0x07) has no CID in the MIPI V4L2 backend, so skip it on D585 GMSL.
+            // TODO - to be solved XU
+            if (!_is_mipi_device)
+            {
+                auto error_control = std::make_shared< uvc_xu_option< uint8_t > >( raw_depth_sensor,
+                                                                                   depth_xu,
+                                                                                   DS5_ERROR_REPORTING,
+                                                                                   "Error reporting" );
 
-            _polling_error_handler = std::make_shared< polling_error_handler >(
-                1000,
-                error_control,
-                std::weak_ptr<std::atomic<bool>>( _device_alive ),
-                raw_depth_sensor->get_notifications_processor(),
-                std::make_shared< ds_notification_decoder >( d500_fw_error_report ) );
+                _polling_error_handler = std::make_shared< polling_error_handler >(
+                    1000,
+                    error_control,
+                    std::weak_ptr<std::atomic<bool>>( _device_alive ),
+                    raw_depth_sensor->get_notifications_processor(),
+                    std::make_shared< ds_notification_decoder >( d500_fw_error_report ) );
 
-            depth_sensor.register_option( RS2_OPTION_ERROR_POLLING_ENABLED,
-                                          std::make_shared< polling_errors_disable >( _polling_error_handler ) );
+                depth_sensor.register_option( RS2_OPTION_ERROR_POLLING_ENABLED,
+                                              std::make_shared< polling_errors_disable >( _polling_error_handler ) );
+            }
 
         }); //group_multiple_fw_calls
 
@@ -721,6 +715,7 @@ namespace librealsense
         register_info( RS2_CAMERA_INFO_IMU_TYPE, gvd_parsed_fields.imu_type );
 
         register_features();
+        register_converters( depth_sensor );
 
         d500_auto_calibrated::add_depth_write_observer( [this]()
         {
@@ -735,6 +730,32 @@ namespace librealsense
 
         register_feature( std::make_shared< auto_exposure_roi_feature >( get_depth_sensor(), _hw_monitor ) );
     }
+
+    void d500_device::register_converters( synthetic_sensor & depth_sensor )
+    {
+        depth_sensor.register_processing_block( processing_block_factory::create_id_pbf(RS2_FORMAT_Z16, RS2_STREAM_DEPTH) );
+
+        // On MIPI/GMSL only Y8I is functional, Y8 for left IR only is not supported by FW.
+        if( ! _is_mipi_device )
+            depth_sensor.register_processing_block( processing_block_factory::create_id_pbf(RS2_FORMAT_Y8, RS2_STREAM_INFRARED, 1) );
+
+        depth_sensor.register_processing_block( { {RS2_FORMAT_Y8I} },
+                                                { {RS2_FORMAT_Y8, RS2_STREAM_INFRARED, 1} , {RS2_FORMAT_Y8, RS2_STREAM_INFRARED, 2} },
+                                                []() { return std::make_shared<y8i_to_y8y8>(); } ); // L+R
+
+        depth_sensor.register_processing_block( { RS2_FORMAT_Y16I },
+                                                { {RS2_FORMAT_Y16, RS2_STREAM_INFRARED, 1}, {RS2_FORMAT_Y16, RS2_STREAM_INFRARED, 2} },
+                                                []() {return std::make_shared<y16i_10msb_to_y16y16>(); } );
+
+        
+        depth_sensor.register_processing_block( { { RS2_FORMAT_W10 } },
+                                                { { RS2_FORMAT_RAW10, RS2_STREAM_INFRARED, 1 } },
+                                                []() { return std::make_shared< w10_converter >( RS2_FORMAT_RAW10 ); } );
+        depth_sensor.register_processing_block( { { RS2_FORMAT_W10 } },
+                                                { { RS2_FORMAT_Y10BPACK, RS2_STREAM_INFRARED, 1 } },
+                                                []() { return std::make_shared< w10_converter >( RS2_FORMAT_Y10BPACK ); } );
+    }
+
 
     platform::usb_spec d500_device::get_usb_spec() const
     {

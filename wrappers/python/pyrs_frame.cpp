@@ -74,7 +74,7 @@ void init_frame(py::module &m) {
         .def(BIND_DOWNCAST(stream_profile, video_stream_profile))
         .def(BIND_DOWNCAST(stream_profile, motion_stream_profile))
         .def(BIND_DOWNCAST(stream_profile, pose_stream_profile))
-        .def(BIND_DOWNCAST(stream_profile, inference_stream_profile))
+        .def(BIND_DOWNCAST(stream_profile, perception_stream_profile))
         .def("stream_name", &rs2::stream_profile::stream_name, "The stream's human-readable name.")
         .def("is_default", &rs2::stream_profile::is_default, "Checks if the stream profile is marked/assigned as default, "
              "meaning that the profile will be selected when the user requests stream configuration using wildcards.")
@@ -125,8 +125,8 @@ void init_frame(py::module &m) {
     py::class_<rs2::pose_stream_profile, rs2::stream_profile> pose_stream_profile(m, "pose_stream_profile", "Stream profile instance with an explicit pose extension type.");
     pose_stream_profile.def(py::init<const rs2::stream_profile&>(), "sp"_a);
 
-    py::class_<rs2::inference_stream_profile, rs2::stream_profile> inference_stream_profile(m, "inference_stream_profile", "Stream profile for inference streams.");
-    inference_stream_profile.def(py::init<const rs2::stream_profile&>(), "sp"_a);
+    py::class_<rs2::perception_stream_profile, rs2::stream_profile> perception_stream_profile(m, "perception_stream_profile", "Stream profile for perception streams.");
+    perception_stream_profile.def(py::init<const rs2::stream_profile&>(), "sp"_a);
 
     py::class_<rs2::filter_interface> filter_interface(m, "filter_interface", "Interface for frame filtering functionality");
     filter_interface.def("process", &rs2::filter_interface::process, "frame"_a); // No docstring in C++
@@ -160,7 +160,7 @@ void init_frame(py::module &m) {
         .def(BIND_DOWNCAST(frame, depth_frame))
         .def(BIND_DOWNCAST(frame, motion_frame))
         .def(BIND_DOWNCAST(frame, pose_frame))
-        .def(BIND_DOWNCAST(frame, inference_frame))
+        .def(BIND_DOWNCAST(frame, perception_frame))
         .def(BIND_DOWNCAST(frame, object_detection_frame))
         // No apply_filter?
         .def( "__repr__", []( const rs2::frame &self )
@@ -332,10 +332,10 @@ void init_frame(py::module &m) {
                 .def_property_readonly( "height", &rs2::labeled_points::get_height, "labeled point cloud height in pixels. Identical to calling get_height." )
                 .def( "get_bpp", &rs2::labeled_points::get_bits_per_pixel, "Returns labeled point cloud bpp (bits per pixel)." );
 
-    py::class_<rs2::inference_frame, rs2::frame> inference_frame(m, "inference_frame", "Extends the frame class with attributes inferred from the frame content, such as object detection results.");
-    inference_frame.def(py::init<rs2::frame>());
+    py::class_<rs2::perception_frame, rs2::frame> perception_frame(m, "perception_frame", "Extends the frame class with attributes inferred from the frame content, such as object detection results.");
+    perception_frame.def(py::init<rs2::frame>());
 
-    py::class_<rs2::object_detection_frame, rs2::inference_frame> object_detection_frame(m, "object_detection_frame", "Extends inference_frame class with additional object detection related attributes and functions.");
+    py::class_<rs2::object_detection_frame, rs2::perception_frame> object_detection_frame(m, "object_detection_frame", "Extends perception_frame class with additional object detection related attributes and functions.");
     object_detection_frame.def(py::init<rs2::frame>())
         .def("get_detection_count", &rs2::object_detection_frame::get_detection_count, "Get the number of detected objects in this frame")
         .def("get_detection", &rs2::object_detection_frame::get_detection, "index"_a, "Get a specific detection by index");

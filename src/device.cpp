@@ -11,7 +11,7 @@
 #include "context.h"  // rs2_device_info
 #include "core/sensor-interface.h"
 #include "sensor.h"  // sensor_base::is_opened
-#include "inference-sensor.h"
+#include "perception-sensor.h"
 #include "core/supported-embedded-filters-interface.h"
 #include "librealsense-exception.h"
 
@@ -131,16 +131,16 @@ sensor_interface& device::get_sensor(size_t subdevice)
     }
 }
 
-bool device::is_inference_active() const
+bool device::is_perception_active() const
 {
     for( size_t i = 0; i < _sensors.size(); ++i )
     {
         auto & s = *_sensors[i];
-        if( ! Is< inference_sensor >( &s ) )
+        if( ! Is< perception_sensor >( &s ) )
             continue;
         if( s.is_streaming() )
             return true;
-        // An inference sensor that is opened but not yet streaming is already "active" for our purposes
+        // A perception sensor that is opened but not yet streaming is already "active" for our purposes
         auto sb = dynamic_cast< const sensor_base * >( &s );  // is_opened() is not on sensor_interface
         if( sb && sb->is_opened() )
             return true;
@@ -148,7 +148,7 @@ bool device::is_inference_active() const
     return false;
 }
 
-bool device::is_inference_blocking_filter_enabled() const
+bool device::is_perception_blocking_filter_enabled() const
 {
     for( size_t i = 0; i < _sensors.size(); ++i )
     {
@@ -168,16 +168,16 @@ bool device::is_inference_blocking_filter_enabled() const
     return false;
 }
 
-void device::throw_if_inference_active() const
+void device::throw_if_perception_active() const
 {
-    if( is_inference_active() )
-        throw wrong_api_call_sequence_exception( "Cannot enable the embedded filter while inference stream is active" );
+    if( is_perception_active() )
+        throw wrong_api_call_sequence_exception( "Cannot enable the embedded filter while perception stream is active" );
 }
 
-void device::throw_if_inference_blocking_filter_enabled() const
+void device::throw_if_perception_blocking_filter_enabled() const
 {
-    if( is_inference_blocking_filter_enabled() )
-        throw wrong_api_call_sequence_exception( "Cannot start inference stream while embedded decimation or temporal filter is enabled; "
+    if( is_perception_blocking_filter_enabled() )
+        throw wrong_api_call_sequence_exception( "Cannot start perception stream while embedded decimation or temporal filter is enabled; "
             "they cannot run at the same time. Disable the embedded filter first." );
 }
 
@@ -253,16 +253,14 @@ std::vector< rs2_format > device::map_supported_color_formats( rs2_format source
     // Mapping from source color format to all of the compatible target color formats.
 
     std::vector<rs2_format> target_formats = { RS2_FORMAT_RGB8, RS2_FORMAT_RGBA8, RS2_FORMAT_BGR8, RS2_FORMAT_BGRA8 };
+
     switch (source_format)
     {
     case RS2_FORMAT_M420:
-        target_formats.push_back(RS2_FORMAT_M420);
-        break;
     case RS2_FORMAT_NV12:
-        target_formats.push_back(RS2_FORMAT_NV12);
+        should_map_source_format = true;
         break;
     case RS2_FORMAT_YUYV:
-        break;
     case RS2_FORMAT_UYVY:
         break;
     default:

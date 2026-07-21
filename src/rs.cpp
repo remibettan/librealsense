@@ -61,14 +61,14 @@
 #include "fw-update/fw-update-device-interface.h"
 #include "core/frame-callback.h"
 #include "color-sensor.h"
-#include "inference-sensor.h"
+#include "perception-sensor.h"
 #include "safety-sensor.h"
 #include "depth-mapping-sensor.h"
 #include "composite-frame.h"
 #include "points.h"
 #include "labeled-points.h"
 #include "object-detection-frame.h"
-#include "inference-frame.h"
+#include "perception-frame.h"
 #include "eth-config-device.h"
 #include "embedded-filter-interface.h"
 
@@ -1966,8 +1966,7 @@ int rs2_is_sensor_extendable_to(const rs2_sensor* sensor, rs2_extension extensio
     case RS2_EXTENSION_DEBUG_STREAM_SENSOR     : return VALIDATE_INTERFACE_NO_THROW(sensor->sensor, librealsense::debug_stream_sensor )   != nullptr;
     case RS2_EXTENSION_SAFETY_SENSOR           : return VALIDATE_INTERFACE_NO_THROW(sensor->sensor, librealsense::safety_sensor)          != nullptr;
     case RS2_EXTENSION_DEPTH_MAPPING_SENSOR    : return VALIDATE_INTERFACE_NO_THROW(sensor->sensor, librealsense::depth_mapping_sensor)   != nullptr;
-    case RS2_EXTENSION_INFERENCE_SENSOR        : return VALIDATE_INTERFACE_NO_THROW(sensor->sensor, librealsense::inference_sensor)        != nullptr;
-    case RS2_EXTENSION_OBJECT_DETECTION_SENSOR : return VALIDATE_INTERFACE_NO_THROW(sensor->sensor, librealsense::object_detection_sensor) != nullptr;
+    case RS2_EXTENSION_PERCEPTION_SENSOR       : return VALIDATE_INTERFACE_NO_THROW(sensor->sensor, librealsense::perception_sensor)       != nullptr;
 
     default:
         return false;
@@ -1994,8 +1993,7 @@ int rs2_is_device_extendable_to(const rs2_device* dev, rs2_extension extension, 
         case RS2_EXTENSION_SAFETY_SENSOR         : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::safety_sensor)                 != nullptr;
         case RS2_EXTENSION_ADVANCED_MODE         : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::ds_advanced_mode_interface)    != nullptr;
         case RS2_EXTENSION_DEPTH_MAPPING_SENSOR  : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::depth_mapping_sensor)          != nullptr;
-        case RS2_EXTENSION_INFERENCE_SENSOR      : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::inference_sensor)              != nullptr;
-        case RS2_EXTENSION_OBJECT_DETECTION_SENSOR: return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::object_detection_sensor)      != nullptr;
+        case RS2_EXTENSION_PERCEPTION_SENSOR     : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::perception_sensor)             != nullptr;
         case RS2_EXTENSION_RECORD                : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::record_device)                 != nullptr;
         case RS2_EXTENSION_PLAYBACK              : return VALIDATE_INTERFACE_NO_THROW(dev->device, librealsense::playback_device)               != nullptr;
         case RS2_EXTENSION_TM2                   : return false;
@@ -2030,7 +2028,7 @@ int rs2_is_frame_extendable_to(const rs2_frame* f, rs2_extension extension_type,
     case RS2_EXTENSION_MOTION_FRAME             : return VALIDATE_INTERFACE_NO_THROW((frame_interface*)f, librealsense::motion_frame)    != nullptr;
     case RS2_EXTENSION_POSE_FRAME               : return VALIDATE_INTERFACE_NO_THROW((frame_interface*)f, librealsense::pose_frame)      != nullptr;
     case RS2_EXTENSION_LABELED_POINTS         : return VALIDATE_INTERFACE_NO_THROW((frame_interface*)f, librealsense::labeled_points) != nullptr;
-    case RS2_EXTENSION_INFERENCE_FRAME        : return VALIDATE_INTERFACE_NO_THROW((frame_interface*)f, librealsense::inference_frame) != nullptr;
+    case RS2_EXTENSION_PERCEPTION_FRAME       : return VALIDATE_INTERFACE_NO_THROW((frame_interface*)f, librealsense::perception_frame) != nullptr;
     case RS2_EXTENSION_OBJECT_DETECTION_FRAME : return VALIDATE_INTERFACE_NO_THROW((frame_interface*)f, librealsense::object_detection_frame) != nullptr;
 
     default:
@@ -2088,7 +2086,7 @@ int rs2_stream_profile_is(const rs2_stream_profile* profile, rs2_extension exten
     case RS2_EXTENSION_VIDEO_PROFILE      : return VALIDATE_INTERFACE_NO_THROW(profile->profile, librealsense::video_stream_profile_interface)     != nullptr;
     case RS2_EXTENSION_MOTION_PROFILE     : return VALIDATE_INTERFACE_NO_THROW(profile->profile, librealsense::motion_stream_profile_interface)    != nullptr;
     case RS2_EXTENSION_POSE_PROFILE       : return VALIDATE_INTERFACE_NO_THROW(profile->profile, librealsense::pose_stream_profile_interface)      != nullptr;
-    case RS2_EXTENSION_INFERENCE_PROFILE  : return VALIDATE_INTERFACE_NO_THROW(profile->profile, librealsense::inference_stream_profile_interface) != nullptr;
+    case RS2_EXTENSION_PERCEPTION_PROFILE : return VALIDATE_INTERFACE_NO_THROW(profile->profile, librealsense::perception_stream_profile_interface) != nullptr;
     default:
         return false;
     }
@@ -3341,21 +3339,21 @@ rs2_stream_profile* rs2_software_sensor_add_pose_stream_ex(rs2_sensor* sensor, r
 }
 HANDLE_EXCEPTIONS_AND_RETURN(0, sensor, pose_stream.type, pose_stream.index, pose_stream.fmt, pose_stream.uid, is_default)
 
-rs2_stream_profile* rs2_software_sensor_add_inference_stream(rs2_sensor* sensor, rs2_inference_stream inference_stream, rs2_error** error) BEGIN_API_CALL
+rs2_stream_profile* rs2_software_sensor_add_perception_stream(rs2_sensor* sensor, rs2_perception_stream perception_stream, rs2_error** error) BEGIN_API_CALL
 {
     VALIDATE_NOT_NULL(sensor);
     auto bs = VALIDATE_INTERFACE(sensor->sensor, librealsense::software_sensor);
-    return bs->add_inference_stream(inference_stream)->get_c_wrapper();
+    return bs->add_perception_stream(perception_stream)->get_c_wrapper();
 }
-HANDLE_EXCEPTIONS_AND_RETURN(0, sensor, inference_stream.type, inference_stream.index, inference_stream.uid)
+HANDLE_EXCEPTIONS_AND_RETURN(0, sensor, perception_stream.type, perception_stream.index, perception_stream.uid)
 
-rs2_stream_profile* rs2_software_sensor_add_inference_stream_ex(rs2_sensor* sensor, rs2_inference_stream inference_stream, int is_default, rs2_error** error) BEGIN_API_CALL
+rs2_stream_profile* rs2_software_sensor_add_perception_stream_ex(rs2_sensor* sensor, rs2_perception_stream perception_stream, int is_default, rs2_error** error) BEGIN_API_CALL
 {
     VALIDATE_NOT_NULL(sensor);
     auto bs = VALIDATE_INTERFACE(sensor->sensor, librealsense::software_sensor);
-    return bs->add_inference_stream(inference_stream, is_default != 0)->get_c_wrapper();
+    return bs->add_perception_stream(perception_stream, is_default != 0)->get_c_wrapper();
 }
-HANDLE_EXCEPTIONS_AND_RETURN(0, sensor, inference_stream.type, inference_stream.index, inference_stream.uid, is_default)
+HANDLE_EXCEPTIONS_AND_RETURN(0, sensor, perception_stream.type, perception_stream.index, perception_stream.uid, is_default)
 
 void rs2_software_sensor_add_read_only_option(rs2_sensor* sensor, rs2_option option, float val, rs2_error** error) BEGIN_API_CALL
 {
