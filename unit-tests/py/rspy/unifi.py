@@ -164,7 +164,7 @@ class UniFiSwitch(device_hub.device_hub):
             up = link.split('/')[-1].upper() == 'U'
             m = re.match(r'(\d+)([FH])', rate)
             if m is None:
-                log.d(f"UniFi port {port}: unrecognised rate field {rate!r}, skipping")
+                log.w(f"UniFi port {port}: unrecognised rate field {rate!r}, skipping")
                 continue
             speed = int(m.group(1))
             duplex = {'F': 'full', 'H': 'half'}.get(m.group(2), '')
@@ -180,7 +180,7 @@ class UniFiSwitch(device_hub.device_hub):
         try:
             info = self._get_port_link_info()
         except Exception as e:
-            log.d(f"could not read UniFi port link speeds: {e}")
+            log.w(f"could not read UniFi port link speeds: {e}")
             return
         for port, i in sorted(info.items()):
             if not i['up']:
