@@ -116,7 +116,7 @@ class UniFiSwitch(device_hub.device_hub):
 
         self.mac_port_dict = None
 
-        self.log_port_link_speeds()
+        self._log_port_link_speeds()
 
     def _init_mac_port_dict(self):
         """
@@ -163,12 +163,15 @@ class UniFiSwitch(device_hub.device_hub):
             rate = parts[2]  # e.g. "1000F", "100F", "0H"
             up = link.split('/')[-1].upper() == 'U'
             m = re.match(r'(\d+)([FH])', rate)
-            speed = int(m.group(1)) if m else 0
-            duplex = {'F': 'full', 'H': 'half'}.get(m.group(2), '') if m else ''
+            if m is None:
+                log.d(f"UniFi port {port}: unrecognised rate field {rate!r}, skipping")
+                continue
+            speed = int(m.group(1))
+            duplex = {'F': 'full', 'H': 'half'}.get(m.group(2), '')
             info[port] = {'up': up, 'speed_mbps': speed, 'duplex': duplex}
         return info
 
-    def log_port_link_speeds(self):
+    def _log_port_link_speeds(self):
         """
         Log the negotiated link speed of every linked port, and warn on any port
         that came up below 1 Gbps (a common symptom of a bad cable, crimp, or port
