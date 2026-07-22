@@ -239,31 +239,11 @@ def pytest_configure(config):
         config.option.count = repeat_val
         config.option.repeat_scope = 'module'
 
-    # --retries N is handled natively by the pytest-retry plugin: failed tests rerun
-    # up to N times, and the plugin tears down + re-creates module/class-scoped
-    # fixtures between attempts (pytest-retry's "preliminary teardown trick" -
-    # see pytest_retry.retry_plugin in the version pinned by requirements.txt).
-    # This gives us free device recycling and precondition re-apply.
-    #
-    # By default pytest-retry's `should_handle_retry` skips setup/teardown phase
-    # failures.  We relax that to also retry setup-phase failures (call.when ==
-    # "setup"), since those are the common case for transient hub/USB glitches
-    # at fixture time — the retry loop already does the right thing (tears down
-    # then re-runs setup + call), it just refuses to enter for setup failures.
-    # Teardown still excluded — re-running teardown after a teardown failure
-    # is brittle and matches pytest-retry's upstream stance.
-    # Regression for Jenkins win #113344 (fixture-time ERRORs must trigger retry).
-    # Version pinned by requirements.txt so upstream renames give a deterministic
-    # ImportError rather than silent behaviour drift.
-    try:
-        from pytest_retry import retry_plugin
-        def _retry_setup_too(call):
-            if call.excinfo is None or call.excinfo.typename == "Skipped":
-                return False
-            return call.when in ("setup", "call")
-        retry_plugin.should_handle_retry = _retry_setup_too
-    except ImportError:
-        pass
+    # Retries are handled by pytest-rerunfailures (--reruns N). It reruns the FULL protocol via
+    # _pytest.runner.runtestprotocol, so pytest_runtest_makereport fires on every attempt and
+    # setup-phase failures retry natively (regression Jenkins win #113344) — no plugin patching.
+    # Module-scoped fixtures survive reruns, so the device power-cycle between attempts is done
+    # by our pytest_runtest_logreport hook below (see "device recycle between rerun attempts").
 
     # We override pytest-repeat's `__pytest_repeat_step_number` to module scope so
     # module-scoped fixtures (e.g. module_device_setup) can depend on it and re-instantiate
@@ -425,22 +405,15 @@ def _test_log_banner(request):
     ensure_newline()
 
 
-# Stash a retry-setup-phase failure so pytest_runtest_call can surface the real error
-# instead of the masking KeyError (see pytest_runtest_call for the full story).
-_retry_setup_exc_key = pytest.StashKey()
-
-
-@pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_setup(item):
-    """Record whether the setup phase failed, so pytest_runtest_call can recover the real
-    error if pytest-retry then runs the call phase on a failed retry-setup."""
-    outcome = yield
-    item.stash[_retry_setup_exc_key] = outcome.excinfo[1] if outcome.excinfo else None
-
-
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """Log test duration and any failures/errors."""
+    """Log test duration and any failures/errors. Also capture the item's live request for the
+    rerun-recycle hook below: item._request is invalidated (set to False) at Function.teardown,
+    and pytest_runtest_logreport(outcome="rerun") fires after teardown — too late to grab it."""
+    req = getattr(item, "_request", None)
+    if req:
+        _rerun_recycle_ctx[item.nodeid] = (item, req)
+
     outcome = yield
     report = outcome.get_result()
 
@@ -448,8 +421,8 @@ def pytest_runtest_makereport(item, call):
         ensure_newline()
         reason = report.longrepr[-1]
         log.info(reason)
-    # Call-phase failures are logged from pytest_runtest_call so they also appear on
-    # pytest-retry attempts (which bypass this hook); here we cover setup/teardown.
+    # Call-phase failures are logged from pytest_runtest_call (one place for every attempt);
+    # here we cover setup/teardown.
     if report.failed and call.excinfo and call.when != "call":
         ensure_newline()
         log.error(f"{call.when} {report.outcome}: {call.excinfo.typename}: {call.excinfo.value}")
@@ -458,10 +431,54 @@ def pytest_runtest_makereport(item, call):
         log.debug(f"Test execution took {report.duration:.3f}s")
 
 
+# ============================================================================
+# Device recycle between rerun attempts
+# ============================================================================
+# pytest-rerunfailures reruns the full protocol but leaves successful module-scoped fixtures
+# cached — the rerun would reuse the same (possibly wedged) device without a power cycle. A
+# failed test often leaves the camera in a state only a power cycle can recover, so between
+# attempts we tear down every local (non-session) fixture of the item and let the rerun's
+# setup re-create them, matching pytest-retry's old "preliminary teardown" semantics.
+#
+# Seam: pytest_runtest_logreport with report.outcome == "rerun" — pytest-rerunfailures logs
+# exactly one such report per failed attempt, after that attempt's teardown and before the
+# rerun starts.
+#
+# Mechanism: FixtureDef.finish() on each local fixture in the item's closure. pytest registers
+# every fixture's finish as a finalizer on its dependencies, so finishing module_device_setup
+# cascades through its dependents (test_device, test_context, test_device_wrapped, ...): their
+# finalizers run (port disable happens in module_device_setup's own teardown) and their cached
+# results clear. finish() is idempotent, so the blanket sweep is safe. The rerun's setup then
+# re-executes the chain — port enable, bring-up settle, fresh rs.context, fresh device handle,
+# module preconditions re-applied. Port off at teardown + on at setup is exactly
+# module_device_setup's designed power cycle. module_log is finished too and reopens in append
+# mode, so all attempts still land in one per-test log file.
+
+_rerun_recycle_ctx = {}  # nodeid -> (item, live request) captured in pytest_runtest_makereport
+
+
+def pytest_runtest_logreport(report):
+    if report.outcome != "rerun":
+        return
+    item, req = _rerun_recycle_ctx.get(report.nodeid, (None, None))
+    if item is None:
+        return
+    name2defs = getattr(getattr(item, "_fixtureinfo", None), "name2fixturedefs", {})
+    for name, defs in name2defs.items():
+        fixturedef = defs[-1]
+        if getattr(fixturedef, "scope", "function") in ("session", "package"):
+            continue
+        try:
+            fixturedef.finish(req)
+        except Exception as e:
+            log.warning(f"recycle of fixture '{name}' between rerun attempts failed: {e!r}")
+
+
 def _reset_pytest_timeout_for_retry(item):
-    """Re-arm pytest-timeout so each pytest-retry attempt gets a fresh --timeout budget
-    (the outer protocol yield otherwise makes retries share the first attempt's budget).
-    Also fires on first call: setup no longer counts against the call budget."""
+    """Re-arm pytest-timeout so each rerun attempt gets a fresh --timeout budget: pytest-timeout
+    arms ONE timer around the whole runtest protocol, and pytest-rerunfailures runs all attempts
+    inside that single protocol call, so without this reset attempts share the first attempt's
+    budget. Also fires on first call: setup no longer counts against the call budget."""
     try:
         from pytest_timeout import _get_item_settings
     except (ImportError, AttributeError):
@@ -476,44 +493,21 @@ def _reset_pytest_timeout_for_retry(item):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
-    """Reset pytest-timeout between retry attempts + surface pytest-check
+    """Reset pytest-timeout between rerun attempts + surface pytest-check
     soft-check failures in the call phase.
 
-    pytest-check defers its failures to pytest_runtest_makereport. But pytest-retry
-    reruns a test by invoking pytest_runtest_call directly and building the report
-    with TestReport.from_item_and_call, which never fires makereport. So on a retry
-    attempt the soft-check failures are invisible to the retry decision (the test
-    looks passed) and instead surface later against the teardown phase, which
-    pytest-retry refuses to retry. Net effect: a retried test is reported "passed"
-    yet still fails the run with a teardown error.
-
-    Flushing the failures here, in the call phase, makes them visible to pytest-retry
-    on every attempt (a genuinely flaky soft-check test passes on retry; a persistent
-    one stays failed) and keeps them off the teardown report. Scoped to fire only for
-    the buggy case; every other path is left to pytest-check unchanged.
-
-    Also unmasks a pytest-retry bug: pytest-retry reruns a test by calling pytest_runtest_setup
-    then pytest_runtest_call unconditionally (retry_plugin ~L237-238), ignoring whether the
-    retry-setup failed. When it did, funcargs lack the fixture and pytest_pyfunc_call raises
-    `KeyError: '<fixture>'`, hiding the real setup error and confusing the retry decision.
-    We swap that KeyError back for the recorded setup exception so the failure is
-    diagnosable and pytest-retry sees the true (retryable) error.
+    Raising the soft-check failures here (instead of leaving them to pytest-check's
+    makereport handling) attributes them to the call phase, where they are visible to
+    the rerun decision and logged per attempt into the per-test .log file. A genuinely
+    flaky soft-check test passes on rerun; a persistent one stays a plain call-phase
+    FAILURE. Every other path is left to pytest-check unchanged.
     """
     _reset_pytest_timeout_for_retry(item)
 
     outcome = yield
 
-    # Match only the fixture-missing KeyError pytest injects, not a test-body KeyError.
-    setup_exc = item.stash.get(_retry_setup_exc_key, None)
-    if (setup_exc is not None and outcome.excinfo is not None
-            and outcome.excinfo[0] is KeyError
-            and str(outcome.excinfo[1]).strip("'\"") in item.fixturenames):
-        outcome.force_exception(setup_exc)
-        item.stash[_retry_setup_exc_key] = None  # consumed
-        return
-
-    # Log every call-phase failure here so pytest-retry attempts (which bypass
-    # pytest_runtest_makereport) are also captured in the per-test .log file.
+    # Log every call-phase failure here — one place that fires on every rerun attempt —
+    # so each attempt's failure is captured in the per-test .log file.
     if outcome.excinfo is not None and not issubclass(outcome.excinfo[0], pytest.skip.Exception):
         ensure_newline()
         log.error(f"call failed: {outcome.excinfo[0].__name__}: {outcome.excinfo[1]}")
