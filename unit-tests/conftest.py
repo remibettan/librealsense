@@ -464,14 +464,21 @@ def pytest_runtest_logreport(report):
     if item is None:
         return
     name2defs = getattr(getattr(item, "_fixtureinfo", None), "name2fixturedefs", {})
-    for name, defs in name2defs.items():
-        fixturedef = defs[-1]
-        if getattr(fixturedef, "scope", "function") in ("session", "package"):
-            continue
-        try:
-            fixturedef.finish(req)
-        except Exception as e:
-            log.warning(f"recycle of fixture '{name}' between rerun attempts failed: {e!r}")
+    # This hook fires between protocol phases, where pytest's output capture is suspended —
+    # raw stdout prints from the teardown (e.g. rspy's "-D- Disabling ports...") would leak
+    # into the CI console mid-progress-line. Swallow stdout for the duration; the python
+    # logging bridge still records every line in the per-test .log file. stderr is left
+    # alone so real errors stay visible.
+    import contextlib, io
+    with contextlib.redirect_stdout(io.StringIO()):
+        for name, defs in name2defs.items():
+            fixturedef = defs[-1]
+            if getattr(fixturedef, "scope", "function") in ("session", "package"):
+                continue
+            try:
+                fixturedef.finish(req)
+            except Exception as e:
+                log.warning(f"recycle of fixture '{name}' between rerun attempts failed: {e!r}")
 
 
 def _reset_pytest_timeout_for_retry(item):
