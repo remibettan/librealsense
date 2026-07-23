@@ -8,11 +8,32 @@
 #include <src/librealsense-exception.h>
 
 #include <sstream>
+#include <set>
 
 namespace librealsense
 {
     namespace platform
     {
+        const uint16_t D457_PID      = 0xABCD;
+        const uint16_t D430_GMSL_PID = 0xABCE;
+        const uint16_t D415_GMSL_PID = 0xABCF;
+        const uint16_t D401_GMSL_PID = 0xABCC;
+
+        const uint16_t D585_GMSL_PID = 0xBAAA;
+
+        static const std::set< uint16_t > mipi_devices_pid = {
+            D457_PID,
+            D430_GMSL_PID,
+            D415_GMSL_PID,
+            D401_GMSL_PID,
+            D585_GMSL_PID
+        };
+
+        bool is_mipi_pid( uint16_t pid )
+        {
+            return mipi_devices_pid.count( pid ) > 0;
+        }
+
         void camera_identifier_v4l_mipi::resolve( const std::string & dev_name )
         {
             // GVD product ID
@@ -26,6 +47,8 @@ namespace librealsense
             uint16_t device_pid = 0;
 
             std::vector< uint8_t > gvd = v4l_mipi_logic::get_gvd( dev_name );
+            if( gvd.size() < 18 )  // need bytes up to the embedded VID at 16-17
+                throw linux_backend_exception( "GVD response too short to identify device" );
 
             // d500 MIPI (e.g. D585 GMSL) uses a different GVD layout than d400 GMSL:
             // byte 8 holds the CRC32, and the RealSense VID/PID are embedded at bytes 16-19.

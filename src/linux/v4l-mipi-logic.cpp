@@ -10,6 +10,8 @@
 #include <regex>
 #include <thread>
 #include <chrono>
+#include <memory>
+#include <functional>
 
 namespace librealsense
 {
@@ -27,8 +29,10 @@ namespace librealsense
 
             std::vector< uint8_t > get_gvd( const std::string & dev_name )
             {
-                int fd = open( dev_name.c_str(), O_RDWR );
-                if( fd < 0 )
+                // RAII to close the fd on every exit path
+                std::unique_ptr< int, std::function< void( int * ) > > fd( new int( open( dev_name.c_str(), O_RDWR ) ),
+                                                                           []( int * d ) { if( d && *d >= 0 ) ::close( *d ); delete d; } );
+                if( *fd < 0 )
                     throw linux_backend_exception( "Mipi device GVD could not be read" );
 
                 std::vector< uint8_t > gvd( GVD_BUFFER_SIZE, 0 );
@@ -48,7 +52,7 @@ namespace librealsense
                 bool opcode_ok = false;
                 while( ! opcode_ok && retries-- )
                 {
-                    if( xioctl( fd, VIDIOC_G_EXT_CTRLS, &ext ) == 0 )
+                    if( xioctl( *fd, VIDIOC_G_EXT_CTRLS, &ext ) == 0 )
                     {
                         auto opcode = gvd[0];
                         if( opcode != GVD_VALID_OPCODE )
@@ -56,10 +60,9 @@ namespace librealsense
                         else
                             opcode_ok = true;
                     }
-                    std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+                    if( ! opcode_ok && retries )  // wait before the next attempt, but not after the last
+                        std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
                 }
-
-                ::close( fd );
 
                 if( ! opcode_ok )
                     throw linux_backend_exception( "Failed to pull a valid GVD from " + dev_name );

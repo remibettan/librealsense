@@ -853,8 +853,8 @@ namespace librealsense
                 if (dfu_ver.find("recovery") == std::string::npos)
                     continue;
                 mipi_device_info info{};
-                info.pid = 0xbbcd;
-                info.vid = 0x8086;
+                info.pid = 0xbbcd; // D400 MIPI recovery device ID
+                info.vid = 0x8086; // D400 Intel VID
                 info.id = *it;
                 info.device_path = mipi_dfu_path;
                 info.unique_id = *it;
@@ -2919,7 +2919,7 @@ namespace librealsense
 
         std::shared_ptr<uvc_device> v4l_backend::create_uvc_device(uvc_device_info info) const
         {
-            bool mipi_device = (mipi_devices_pid.count(info.pid) > 0);
+            bool mipi_device = is_mipi_pid(info.pid);
 
             auto v4l_uvc_dev =        mipi_device ?         std::make_shared<v4l_mipi_device>(info) :
                               ((!info.has_metadata_node) ?  std::make_shared<v4l_uvc_device>(info) :

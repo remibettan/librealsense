@@ -7,26 +7,13 @@
 
 #include <cstdint>
 #include <string>
-#include <set>
 
 namespace librealsense
 {
     namespace platform
     {
-        const uint16_t D457_PID      = 0xABCD;
-        const uint16_t D430_GMSL_PID = 0xABCE;
-        const uint16_t D415_GMSL_PID = 0xABCF;
-        const uint16_t D401_GMSL_PID = 0xABCC;
-
-        const uint16_t D585_GMSL_PID = 0xBAAA;
-
-        static const std::set< std::uint16_t > mipi_devices_pid = {
-            D457_PID,
-            D430_GMSL_PID,
-            D415_GMSL_PID,
-            D401_GMSL_PID,
-            D585_GMSL_PID
-        };
+        // True if pid is a known RealSense MIPI/GMSL product id.
+        bool is_mipi_pid( uint16_t pid );
 
         // Holds the USB-style VID/PID for a V4L2 device.
         class camera_identifier_v4l : public camera_identifier
