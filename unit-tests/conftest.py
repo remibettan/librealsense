@@ -444,23 +444,31 @@ def pytest_runtest_makereport(item, call):
 # exactly one such report per failed attempt, after that attempt's teardown and before the
 # rerun starts.
 #
-# Mechanism: FixtureDef.finish() on each local fixture in the item's closure. pytest registers
-# every fixture's finish as a finalizer on its dependencies, so finishing module_device_setup
-# cascades through its dependents (test_device, test_context, test_device_wrapped, ...): their
-# finalizers run (port disable happens in module_device_setup's own teardown) and their cached
-# results clear. finish() is idempotent, so the blanket sweep is safe. The rerun's setup then
-# re-executes the chain — port enable, bring-up settle, fresh rs.context, fresh device handle,
-# module preconditions re-applied. Port off at teardown + on at setup is exactly
-# module_device_setup's designed power cycle. module_log is finished too and reopens in append
-# mode, so all attempts still land in one per-test log file.
+# Mechanism: FixtureDef.finish() on each local fixture in the item's closure. Finishing a
+# fixture runs the finalizers registered on it, and pytest registers a dependent's teardown as a
+# finalizer on the fixture it depends on — so finishing module_device_setup already cascades to
+# its dependents (test_device, test_context, test_device_wrapped, ...) in the correct order
+# (dependent first), with the port disable happening in module_device_setup's own teardown. The
+# blanket sweep over the closure also covers fixtures outside that chain; finish() is idempotent,
+# so a fixture already torn down by the cascade is a no-op and iteration order does not matter.
+# The rerun's setup then re-executes the chain — port enable, bring-up settle, fresh rs.context,
+# fresh device handle, module preconditions re-applied. Port off at teardown + on at setup is
+# exactly module_device_setup's designed power cycle. module_log is finished too and reopens in
+# append mode, so all attempts still land in one per-test log file.
 
 _rerun_recycle_ctx = {}  # nodeid -> (item, live request) captured in pytest_runtest_makereport
 
 
 def pytest_runtest_logreport(report):
+    # Two jobs on this hook: recycle the device between rerun attempts, and keep
+    # _rerun_recycle_ctx bounded. The ctx entry is dropped on the rerun that consumes it
+    # (makereport re-stores it for the next attempt) and on the final teardown of any test that
+    # did not rerun — so at most the in-flight items are retained, never the whole session.
     if report.outcome != "rerun":
+        if report.when == "teardown":
+            _rerun_recycle_ctx.pop(report.nodeid, None)
         return
-    item, req = _rerun_recycle_ctx.get(report.nodeid, (None, None))
+    item, req = _rerun_recycle_ctx.pop(report.nodeid, (None, None))
     if item is None:
         return
     name2defs = getattr(getattr(item, "_fixtureinfo", None), "name2fixturedefs", {})
