@@ -14,7 +14,9 @@
 #include <src/core/time-service.h>
 #include <src/core/frame-continuation.h>
 #include <atomic>
+#include <chrono>
 #include <cstdlib>
+#include <thread>
 
 #ifdef RS2_USE_CUDA_ZEROCOPY
 #include <rsutils/accelerators/gpu.h>
@@ -142,6 +144,8 @@ void uvc_sensor::open( const stream_profiles & requests )
 
     verify_supported_requests( requests );
 
+    _zc_inflight.clear();  // drained/read in close(); repopulated per stream below
+
     for( auto && req_profile : requests )
     {
         auto && req_profile_base = std::dynamic_pointer_cast< stream_profile_base >( req_profile );
@@ -153,6 +157,7 @@ void uvc_sensor::open( const stream_profiles & requests )
             // backend buffers currently pinned by in-flight zero-copy frames. shared_ptr so
             // it outlives the lambda if a frame is released later, on another thread.
             auto zc_inflight = std::make_shared< std::atomic< int > >( 0 );
+            _zc_inflight.push_back( zc_inflight );  // close() drains this before buffers are freed
             _device->probe_and_commit(
                 req_profile_base->get_backend_profile(),
                 [this, req_profile_base, req_profile, last_frame_number, last_timestamp, zc_inflight](
@@ -411,6 +416,28 @@ void uvc_sensor::close()
         throw wrong_api_call_sequence_exception( "close() failed. UVC device is streaming!" );
     else if( ! _is_opened )
         throw wrong_api_call_sequence_exception( "close() failed. UVC device was not opened!" );
+
+    // Zero-copy frames alias the backend V4L2 buffers via a deferred continuation, and those
+    // buffers are unmapped in _device->close() below. Wait (bounded) for any in-flight zero-copy
+    // frames to be released first, so we never free a buffer a frame still points at. No-op when
+    // none are in flight (the common case and every non-zero-copy build).
+    if( ! _zc_inflight.empty() )
+    {
+        auto inflight_total = [this]()
+        {
+            int s = 0;
+            for( auto & c : _zc_inflight )
+                s += c->load( std::memory_order_relaxed );
+            return s;
+        };
+        auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds( 1 );
+        while( inflight_total() > 0 && std::chrono::steady_clock::now() < deadline )
+            std::this_thread::sleep_for( std::chrono::milliseconds( 5 ) );
+        if( int remaining = inflight_total() )
+            LOG_WARNING( "close(): " << remaining
+                         << " zero-copy frame(s) still held; release frames before close()" );
+        _zc_inflight.clear();
+    }
 
     for( auto && profile : _internal_config )
     {

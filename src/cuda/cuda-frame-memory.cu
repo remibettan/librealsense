@@ -17,7 +17,7 @@
 
 namespace librealsense {
 
-#if defined( RS2_USE_CUDA ) && defined( RS2_USE_CUDA_ZEROCOPY )
+#ifdef RS2_USE_CUDA_ZEROCOPY
 // Trailing slack added to every zero-copy frame buffer. Vectorized CPU consumers (notably
 // pointcloud_neon::get_texture_map_neon) process in fixed-width blocks and over-read/write
 // a partial tail past the logical end. malloc'd buffers had incidental slack that absorbed
@@ -28,7 +28,7 @@ static constexpr std::size_t RS_ZC_TAIL_PAD = 256;
 
 bool rs_frame_zc_enabled()
 {
-#if defined( RS2_USE_CUDA ) && defined( RS2_USE_CUDA_ZEROCOPY )
+#ifdef RS2_USE_CUDA_ZEROCOPY
     // Decide once: zero-copy only pays off on an integrated GPU (shared DRAM). On a
     // discrete GPU, mapped host memory is read per-element over PCIe and would be a
     // large regression, so we fall back to plain malloc + the existing copy path.
@@ -44,7 +44,7 @@ void * rs_frame_zc_alloc( std::size_t bytes )
     if( bytes == 0 )
         return nullptr;
 
-#if defined( RS2_USE_CUDA ) && defined( RS2_USE_CUDA_ZEROCOPY )
+#ifdef RS2_USE_CUDA_ZEROCOPY
     if( rs_frame_zc_enabled() )
     {
         void * p = nullptr;
@@ -70,7 +70,7 @@ void rs_frame_zc_free( void * p )
     if( ! p )
         return;
 
-#if defined( RS2_USE_CUDA ) && defined( RS2_USE_CUDA_ZEROCOPY )
+#ifdef RS2_USE_CUDA_ZEROCOPY
     if( rs_frame_zc_enabled() )
     {
         // rs_frame_zc_alloc() normally returns cudaHostAlloc memory, but it falls back to
@@ -91,7 +91,7 @@ void rs_frame_zc_free( void * p )
 
 void * rs_frame_zc_device_ptr( const void * host_ptr )
 {
-#if defined( RS2_USE_CUDA ) && defined( RS2_USE_CUDA_ZEROCOPY )
+#ifdef RS2_USE_CUDA_ZEROCOPY
     if( host_ptr && rs_frame_zc_enabled() )
     {
         // Works for managed (pool frames) AND host-registered mapped (V4L2 buffers):
@@ -126,7 +126,7 @@ void * rs_frame_zc_device_ptr( const void * host_ptr )
 
 bool rs_v4l2_zc_register( void * ptr, std::size_t len )
 {
-#if defined( RS2_USE_CUDA ) && defined( RS2_USE_CUDA_ZEROCOPY )
+#ifdef RS2_USE_CUDA_ZEROCOPY
     if( ptr && len && rs_frame_zc_enabled() )
     {
         // Mapped flag so the buffer is reachable from the GPU via cudaHostGetDevicePointer.
@@ -142,7 +142,7 @@ bool rs_v4l2_zc_register( void * ptr, std::size_t len )
 
 void rs_v4l2_zc_unregister( void * ptr )
 {
-#if defined( RS2_USE_CUDA ) && defined( RS2_USE_CUDA_ZEROCOPY )
+#ifdef RS2_USE_CUDA_ZEROCOPY
     if( ptr && rs_frame_zc_enabled() )
     {
         cudaHostUnregister( ptr );
