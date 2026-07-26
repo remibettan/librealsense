@@ -56,7 +56,7 @@ namespace librealsense
                     {
                         auto opcode = gvd[0];
                         if( opcode != GVD_VALID_OPCODE )
-                            LOG_WARNING( "Wrong opcode when pulling GVD: gvd[0] returned as: " << opcode );
+                            LOG_WARNING( "Wrong opcode when pulling GVD: gvd[0] returned as: " << static_cast< int >( opcode ) );
                         else
                             opcode_ok = true;
                     }

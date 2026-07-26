@@ -19,7 +19,7 @@ namespace librealsense
         const uint16_t D415_GMSL_PID = 0xABCF;
         const uint16_t D401_GMSL_PID = 0xABCC;
 
-        const uint16_t D585_GMSL_PID = 0xBAAA;
+        const uint16_t D585_GMSL_PID = 0xBAAA;  // TODO - replace with the real D585 GMSL PID
 
         static const std::set< uint16_t > mipi_devices_pid = {
             D457_PID,
