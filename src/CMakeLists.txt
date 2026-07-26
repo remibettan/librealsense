@@ -113,6 +113,7 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/backend.h"
         "${CMAKE_CURRENT_LIST_DIR}/backend-device.h"
         "${CMAKE_CURRENT_LIST_DIR}/platform/backend-device-group.h"
+        "${CMAKE_CURRENT_LIST_DIR}/platform/camera-identifier.h"
         "${CMAKE_CURRENT_LIST_DIR}/platform/platform-device-info.h"
         "${CMAKE_CURRENT_LIST_DIR}/platform/device-watcher.h"
         "${CMAKE_CURRENT_LIST_DIR}/platform/frame-object.h"

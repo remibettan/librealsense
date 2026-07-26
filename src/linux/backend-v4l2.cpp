@@ -2,6 +2,8 @@
 // Copyright(c) 2015-2024 RealSense, Inc. All Rights Reserved.
 
 #include "backend-v4l2.h"
+#include "v4l-mipi-logic.h"
+#include "v4l-usb-logic.h"
 #include <src/platform/command-transfer.h>
 #include <src/platform/hid-data.h>
 #include <src/core/time-service.h>
@@ -62,7 +64,6 @@
 
 #pragma GCC diagnostic ignored "-Woverflow"
 
-const size_t MAX_DEV_PARENT_DIR = 10;
 const double DEFAULT_KPI_FRAME_DROPS_PERCENTAGE = 0.05;
 
 //D457 Dev. TODO -shall be refactored into the kernel headers.
@@ -310,13 +311,36 @@ namespace librealsense
             return true;
         }
 
-        static int xioctl(int fh, unsigned long request, void *arg)
+        int xioctl(int fh, unsigned long request, void *arg)
         {
-            int r=0;
+            int r = 0;
             do {
                 r = ioctl(fh, request, arg);
             } while (r < 0 && errno == EINTR);
             return r;
+        }
+
+        // Retrieve device video capabilities to discriminate video capturing and metadata nodes
+        v4l2_capability v4l_uvc_device::get_dev_capabilities(const std::string dev_name)
+        {
+            // RAII to handle exceptions
+            std::unique_ptr<int, std::function<void(int*)> > fd(
+                        new int (open(dev_name.c_str(), O_RDWR | O_NONBLOCK, 0)),
+                        [](int* d){ if (d && (*d)) {::close(*d); } delete d; });
+
+            if(*fd < 0)
+                throw linux_backend_exception(rsutils::string::from() << __FUNCTION__ << ": Cannot open '" << dev_name);
+
+            v4l2_capability cap = {};
+            if(xioctl(*fd, VIDIOC_QUERYCAP, &cap) < 0)
+            {
+                if(errno == EINVAL)
+                    throw linux_backend_exception(rsutils::string::from() << __FUNCTION__ << " " << dev_name << " is no V4L2 device");
+                else
+                    throw linux_backend_exception(rsutils::string::from() <<__FUNCTION__ << " xioctl(VIDIOC_QUERYCAP) failed");
+            }
+
+            return cap;
         }
 
         buffer::buffer(int fd, v4l2_buf_type type, bool use_memory_map, uint32_t index)
@@ -526,58 +550,6 @@ namespace librealsense
         bool  buffers_mgr::md_node_present() const
         {
             return (buffers[e_metadata_buf]._file_desc > 0);
-        }
-
-        // retrieve the USB specification attributed to a specific USB device.
-        // This functionality is required to find the USB connection type for UVC device
-        // Note that the input parameter is passed by value
-        static usb_spec get_usb_connection_type(std::string path)
-        {
-            usb_spec res{usb_undefined};
-
-            char usb_actual_path[PATH_MAX] = {0};
-            if (realpath(path.c_str(), usb_actual_path) != nullptr)
-            {
-                path = std::string(usb_actual_path);
-                std::string camera_usb_version;
-                if(!(std::ifstream(path + "/version") >> camera_usb_version))
-                    throw linux_backend_exception("Failed to read usb version specification");
-
-                // go through the usb_name_to_spec map to find a usb type where the first element is contained in 'camera_usb_version'
-                // (contained and not strictly equal because of differences like "3.2" vs "3.20")
-                for(const auto usb_type : usb_name_to_spec ) {
-                    std::string usb_name = usb_type.first;
-                    if (std::string::npos != camera_usb_version.find(usb_name))
-                    {
-                         res = usb_type.second;
-                         return res;
-                    }
-                }
-            }
-            return res;
-        }
-
-        // Retrieve device video capabilities to discriminate video capturing and metadata nodes
-        static v4l2_capability get_dev_capabilities(const std::string dev_name)
-        {
-            // RAII to handle exceptions
-            std::unique_ptr<int, std::function<void(int*)> > fd(
-                        new int (open(dev_name.c_str(), O_RDWR | O_NONBLOCK, 0)),
-                        [](int* d){ if (d && (*d)) {::close(*d); } delete d; });
-
-            if(*fd < 0)
-                throw linux_backend_exception(rsutils::string::from() << __FUNCTION__ << ": Cannot open '" << dev_name);
-
-            v4l2_capability cap = {};
-            if(xioctl(*fd, VIDIOC_QUERYCAP, &cap) < 0)
-            {
-                if(errno == EINVAL)
-                    throw linux_backend_exception(rsutils::string::from() << __FUNCTION__ << " " << dev_name << " is no V4L2 device");
-                else
-                    throw linux_backend_exception(rsutils::string::from() <<__FUNCTION__ << " xioctl(VIDIOC_QUERYCAP) failed");
-            }
-
-            return cap;
         }
 
         void stream_ctl_on(int fd, v4l2_buf_type type=V4L2_BUF_TYPE_VIDEO_CAPTURE)
@@ -856,391 +828,6 @@ namespace librealsense
             return dfu_paths;
         }
 
-        bool v4l_uvc_device::is_usb_path_valid(const std::string& usb_video_path, const std::string& dev_name,
-                                               std::string& busnum, std::string& devnum, std::string& devpath)
-        {
-            struct stat st = {};
-            if(stat(dev_name.c_str(), &st) < 0)
-            {
-                throw linux_backend_exception(rsutils::string::from() << "Cannot identify '" << dev_name);
-            }
-            if(!S_ISCHR(st.st_mode))
-                throw linux_backend_exception(dev_name + " is no device");
-
-            // Search directory and up to three parent directories to find busnum/devnum
-            auto valid_path = false;
-            std::ostringstream ss;
-            ss << "/sys/dev/char/" << major(st.st_rdev) << ":" << minor(st.st_rdev) << "/device/";
-
-            auto char_dev_path = ss.str();
-
-            for(auto i=0U; i < MAX_DEV_PARENT_DIR; ++i)
-            {
-                if(std::ifstream(char_dev_path + "busnum") >> busnum)
-                {
-                    if(std::ifstream(char_dev_path + "devnum") >> devnum)
-                    {
-                        if(std::ifstream(char_dev_path + "devpath") >> devpath)
-                        {
-                            valid_path = true;
-                            break;
-                        }
-                    }
-                }
-                char_dev_path += "../";
-            }
-            return valid_path;
-        }
-
-        uvc_device_info v4l_uvc_device::get_info_from_usb_device_path(const std::string& video_path, const std::string& dev_name, const std::string& name,
-                                                                      const std::vector<std::pair <std::string, std::string>>& sys_to_dev_video_paths)
-        {
-            std::string busnum, devnum, devpath;
-
-            if (!is_usb_path_valid(video_path, dev_name, busnum, devnum, devpath))
-            {
-#ifndef RS2_USE_CUDA
-                if (rsutils::rs2_is_cuda_available())
-                {
-                    /* On the Jetson TX, the camera module is CSI & I2C and does not report as this code expects
-                    Patch suggested by JetsonHacks: https://github.com/jetsonhacks/buildLibrealsense2TX */
-                    LOG_INFO("Failed to read busnum/devnum. Device Path: " << ("/sys/class/video4linux/" + name));
-                }
-#endif
-               throw linux_backend_exception("Failed to read busnum/devnum of usb device");
-            }
-
-            LOG_INFO("Enumerating UVC " << name << " v4l_path=" << video_path << " dev_name=" << dev_name);
-            uint16_t vid{}, pid{}, mi{};
-            usb_spec usb_specification(usb_undefined);
-
-            std::string modalias;
-            if(!(std::ifstream("/sys/class/video4linux/" + name + "/device/modalias") >> modalias))
-                throw linux_backend_exception("Failed to read modalias");
-            if(modalias.size() < 14 || modalias.substr(0,5) != "usb:v" || modalias[9] != 'p')
-                throw linux_backend_exception("Not a usb format modalias");
-            if(!(std::istringstream(modalias.substr(5,4)) >> std::hex >> vid))
-                throw linux_backend_exception("Failed to read vendor ID");
-            if(!(std::istringstream(modalias.substr(10,4)) >> std::hex >> pid))
-                throw linux_backend_exception("Failed to read product ID");
-            if(!(std::ifstream("/sys/class/video4linux/" + name + "/device/bInterfaceNumber") >> std::hex >> mi))
-                throw linux_backend_exception("Failed to read interface number");
-
-            // Find the USB specification (USB2/3) type from the underlying device
-            // Use device mapping obtained in previous step to traverse node tree
-            // and extract the required descriptors
-            // Traverse from
-            // /sys/devices/pci0000:00/0000:00:xx.0/ABC/M-N/3-6:1.0/video4linux/video0
-            // to
-            // /sys/devices/pci0000:00/0000:00:xx.0/ABC/M-N/version
-            usb_specification = get_usb_connection_type(video_path + "/../../../");
-
-            uvc_device_info info{};
-            info.pid = pid;
-            info.vid = vid;
-            info.mi = mi;
-            info.id = dev_name;
-            info.device_path = video_path;
-            info.unique_id = busnum + "-" + devpath + "-" + devnum;
-            info.conn_spec = usb_specification;
-            info.uvc_capabilities = get_dev_capabilities(dev_name).device_caps;
-
-            return info;
-        }
-
-        bool v4l_uvc_device::is_format_supported_on_node(const std::string& dev_name, std::string v4l_4cc_fmt)
-        {
-            int fd = open(dev_name.c_str(), O_RDWR);
-            if (fd < 0)
-                throw linux_backend_exception("Mipi device format could not be grabbed");
-
-            struct v4l2_fmtdesc fmtdesc;
-            memset(&fmtdesc,0,sizeof(fmtdesc));
-            fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
-            uint32_t format;
-            memcpy(&format, v4l_4cc_fmt.c_str(), sizeof(format));
-
-            while (ioctl(fd,VIDIOC_ENUM_FMT,&fmtdesc) == 0)
-            {
-                if (fmtdesc.pixelformat == format)
-                {
-                    ::close(fd);
-                    return true;
-                }
-
-                fmtdesc.index++;
-            }
-
-            ::close(fd);
-
-            return false;
-        }
-
-        bool v4l_uvc_device::is_device_depth_node(const std::string& dev_name)
-        {
-            bool is_depth = false;
-
-            // first search video node links, for example, video-rs-depth-0
-            std::smatch match;
-            static std::regex video_dev_rs("video-rs-");
-            static std::regex video_dev_depth("video-rs-depth-\\d+$");
-            if(std::regex_search(dev_name, match, video_dev_rs))
-            {
-                if (std::regex_search(dev_name, match, video_dev_depth))
-                    is_depth = true;
-                else
-                    is_depth = false;
-            }
-            // then search video nodes to find the depth node
-            else if (is_format_supported_on_node(dev_name, "Z16 "))
-                is_depth = true;
-            else
-                is_depth = false;
-
-            return is_depth;
-        }
-
-        uint16_t v4l_uvc_device::get_mipi_device_pid(const std::string& dev_name)
-        {
-            // GVD product ID
-            const uint8_t GVD_PID_OFFSET    = 4;
-
-            const uint8_t GVD_PID_D457      = 0x12;
-            const uint8_t GVD_PID_D401_GMSL = 0x13;
-            const uint8_t GVD_PID_D430_GMSL = 0x0F;
-            const uint8_t GVD_PID_D415_GMSL = 0x06;
-
-            // device PID
-            uint16_t device_pid = 0;
-
-            int fd = open(dev_name.c_str(), O_RDWR);
-            if (fd < 0)
-                throw linux_backend_exception("Mipi device PID could not be found");
-
-            uint8_t gvd[276];
-            struct v4l2_ext_control ctrl;
-
-            memset(gvd,0,276);
-
-            ctrl.id = RS_CAMERA_CID_GVD;
-            ctrl.size = sizeof(gvd);
-            ctrl.p_u8 = gvd;
-
-            struct v4l2_ext_controls ext;
-
-            ext.ctrl_class = V4L2_CTRL_CLASS_CAMERA;
-            ext.controls = &ctrl;
-            ext.count = 1;
-
-            int retries = 5;
-            bool opcode_ok = false;
-            while (!opcode_ok && retries--)
-            {
-                if (xioctl(fd, VIDIOC_G_EXT_CTRLS, &ext) == 0)
-                {
-                    auto opcode = gvd[0];
-                    if (opcode != 0x10)
-                    {
-                        LOG_WARNING("Wrong opcode when pulling GVD: gvd[0] returned as: " << opcode);
-                        continue;
-                    }
-                    else {
-                        opcode_ok = true;
-                    }
-
-                    // d500 MIPI (e.g. D585 GMSL) uses a different GVD layout than d400 GMSL:
-                    // byte 8 holds the CRC32, and the RealSense VID/PID are embedded at bytes 16-19.
-                    // TODO - temp WA for D585 GMSL, until the GVD layout is fixed to match the D400 GMSL layout
-                    uint16_t embedded_vid = gvd[16] | ( gvd[17] << 8 );
-                    if( embedded_vid == 0x38e5 ) // RealSense VID identifies the d500 GMSL family
-                    {
-                        device_pid = D585_GMSL_PID;
-                        continue;
-                    }
-
-                    uint8_t product_pid = gvd[4 + GVD_PID_OFFSET];
-
-                    switch(product_pid)
-                    {
-                        case(GVD_PID_D457):
-                            device_pid = D457_PID;
-                            break;
-
-                        case(GVD_PID_D430_GMSL):
-                            device_pid = D430_GMSL_PID;
-                            break;
-
-                        case(GVD_PID_D415_GMSL):
-                            device_pid = D415_GMSL_PID;
-                            break;
-
-                        case(GVD_PID_D401_GMSL):
-                            device_pid = D401_GMSL_PID;
-                            break;
-
-                        default:
-                            LOG_WARNING("Unidentified MIPI device product id: 0x" << std::hex << (int) product_pid << "remaining retries = " << retries);
-                            device_pid = 0x0000;
-                            break;
-                    }
-                }
-                std::this_thread::sleep_for( std::chrono::milliseconds(100));
-            }
-
-            ::close(fd);
-
-            return device_pid;
-        }
-
-        void v4l_uvc_device::get_mipi_device_info(const std::string& dev_name,
-                                                  std::string& bus_info, std::string& card)
-        {
-            struct v4l2_capability vcap;
-            int fd = open(dev_name.c_str(), O_RDWR);
-            if (fd < 0)
-                throw linux_backend_exception("Mipi device capability could not be grabbed");
-            int err = ioctl(fd, VIDIOC_QUERYCAP, &vcap);
-            if (err)
-            {
-                struct media_device_info mdi;
-
-                err = ioctl(fd, MEDIA_IOC_DEVICE_INFO, &mdi);
-                if (!err)
-                {
-                    if (mdi.bus_info[0])
-                        bus_info = mdi.bus_info;
-                    else
-                        bus_info = std::string("platform:") + mdi.driver;
-
-                    if (mdi.model[0])
-                        card = mdi.model;
-                    else
-                        card = mdi.driver;
-                 }
-            }
-            else
-            {
-                bus_info = reinterpret_cast<const char *>(vcap.bus_info);
-                card = reinterpret_cast<const char *>(vcap.card);
-            }
-
-            ::close(fd);
-        }
-
-        // PID of the current MIPI camera: derived from its depth node and inherited by the
-        // camera color/IR/IMU nodes. Reset per-camera in get_mipi_rs_enum_nodes so a camera
-        // without a readable depth node cannot inherit a previous camera PID.
-        static uint16_t s_mipi_camera_pid = 0;
-
-        uvc_device_info v4l_uvc_device::get_info_from_mipi_device_path(const std::string& video_path, const std::string& name)
-        {
-            uint16_t vid{}, pid{}, mi{};
-            usb_spec usb_specification(usb_undefined);
-            std::string bus_info, card;
-
-            auto dev_name = "/dev/" + name;
-
-            get_mipi_device_info(dev_name, bus_info, card);
-
-            vid = 0x8086;
-
-            // find device PID from depth video node (see s_mipi_camera_pid)
-            try
-            {
-                if (is_device_depth_node(dev_name))
-                {
-                    s_mipi_camera_pid = get_mipi_device_pid(dev_name);
-                }
-            }
-            catch(const std::exception & e)
-            {
-                LOG_WARNING("MIPI device product id detection issue, device will be skipped: " << e.what());
-                s_mipi_camera_pid = 0;
-            }
-
-            pid = s_mipi_camera_pid;
-            if (pid == D585_GMSL_PID)
-                vid = 0x38e5; // D585 GMSL uses RealSense VID
-            
-
-//          std::cout << "video_path:" << video_path << ", name:" << dev_name << ", pid=" << std::hex << (int) pid << std::endl;
-
-            static std::regex video_dev_index("\\d+$");
-            std::smatch match;
-            uint8_t ind{};
-            if (std::regex_search(name, match, video_dev_index))
-            {
-                ind = static_cast<uint8_t>(std::stoi(match[0]));
-            }
-            else
-            {
-                LOG_WARNING("Unresolved Video4Linux device pattern: " << name << ", device is skipped");
-                throw linux_backend_exception("Unresolved Video4Linux device, device is skipped");
-            }
-
-            //  D457 exposes (assuming first_video_index = 0):
-            // - video0 for Depth and video1 for Depth's md.
-            // - video2 for RGB and video3 for RGB's md.
-            // - video4 for IR and video5 for IR's md.
-            // - video6 for IMU (accel or gyro TBD)
-            // next several lines permit to use D457 even if a usb device has already "taken" the video0,1,2 (for example)
-            // further development is needed to permit use of several mipi devices
-            static int  first_video_index = ind;
-
-            // Use camera_video_nodes as number of /dev/video[%d] for each camera sensor subset
-            const int camera_video_nodes = 7;
-            int cam_id = ind / camera_video_nodes;
-            ind = (ind - first_video_index) % camera_video_nodes; // offset from first mipi video node and assume 6 nodes per mipi camera
-            if (ind == 0 || ind == 2 || ind == 4)
-                mi = 0; // video node indicator
-            else if (ind == 1 || ind == 3 || ind == 5)
-                mi = 3; // metadata node indicator
-            else if (ind == 6)
-                mi = 4; // IMU node indicator
-            else
-            {
-                LOG_WARNING("Unresolved Video4Linux device mi, device is skipped");
-                throw linux_backend_exception("Unresolved Video4Linux device, device is skipped");
-            }
-
-            uvc_device_info info{};
-            info.pid = pid;
-            info.vid = vid;
-            info.mi = mi;
-            info.id = dev_name;
-            info.device_path = video_path;
-            // unique id for MIPI: This will assign sensor set for each camera.
-            // it cannot be generated as in usb, because the params busnum, devpath and devnum
-            // are not available via mipi
-            // assign unique id for mipi by appending camera id to bus_info (bus_info is same for each mipi port)
-            // Note - jetson can use only bus_info, as card is different for each sensor and metadata node.
-            info.unique_id = bus_info + "-" + std::to_string(cam_id); // use bus_info as per camera unique id for mipi
-            // Get DFU node for MIPI camera
-            std::vector<std::string> dfu_device_paths = get_mipi_dfu_paths();
-
-            for (const auto& dfu_device_path: dfu_device_paths) {
-                auto mipi_dfu_chardev = "/dev/" + dfu_device_path;
-                int vfd = open(mipi_dfu_chardev.c_str(), O_RDONLY | O_NONBLOCK);
-                if (vfd >= 0) {
-                    // Use legacy DFU device node used in firmware_update_manager
-                    info.dfu_device_path = mipi_dfu_chardev;
-                    ::close(vfd); // file exists, close file and continue to assign it
-                    break;
-                }
-            }
-            info.conn_spec = usb_specification;
-            info.uvc_capabilities = get_dev_capabilities(dev_name).device_caps;
-
-            return info;
-        }
-
-        bool v4l_uvc_device::is_usb_device_path(const std::string& video_path)
-        {
-            static const std::regex uvc_pattern("(\\/usb\\d+\\/)\\w+"); // Locate UVC device path pattern ../usbX/...
-            return std::regex_search(video_path, uvc_pattern);
-        }
-
         void v4l_mipi_device::foreach_mipi_device(
                 std::function<void(const mipi_device_info&,
                                    const std::string&)> action)
@@ -1266,8 +853,8 @@ namespace librealsense
                 if (dfu_ver.find("recovery") == std::string::npos)
                     continue;
                 mipi_device_info info{};
-                info.pid = 0xbbcd;
-                info.vid = 0x8086;
+                info.pid = 0xbbcd; // D400 MIPI recovery device ID
+                info.vid = 0x8086; // D400 Intel VID
                 info.id = *it;
                 info.device_path = mipi_dfu_path;
                 info.unique_id = *it;
@@ -1291,81 +878,6 @@ namespace librealsense
             {
                 LOG_ERROR("Registration of MIPI recovery device failed: " << e.what());
             }
-        }
-
-        std::vector<node_info> v4l_uvc_device::get_mipi_rs_enum_nodes()
-        {
-            std::vector<node_info> mipi_rs_enum_nodes;
-
-            /* Enumerate mipi nodes by links with usage of rs-enum script */
-            std::vector<std::string> video_sensors = {"depth", "color", "ir", "imu"};
-            const int MAX_V4L2_DEVICES = 8; // assume maximum 8 mipi devices
-
-            for ( int i = 0; i < MAX_V4L2_DEVICES; i++ ) {
-                s_mipi_camera_pid = 0; // reset per camera; depth node sets it, siblings inherit
-                for (const auto &vs: video_sensors) {
-                    int vfd = -1;
-                    std::string device_path = "video-rs-" + vs + "-" + std::to_string(i);
-                    std::string device_md_path = "video-rs-" + vs + "-md-" + std::to_string(i);
-                    std::string video_path = "/dev/" + device_path;
-                    std::string video_md_path = "/dev/" + device_md_path;
-                    std::string dfu_device_path = "/dev/d4xx-dfu-" + std::to_string(i);
-                    uvc_device_info info{};
-
-                    // Get Video node
-                    // Check if file on video_path is exists
-                    vfd = open(video_path.c_str(), O_RDONLY | O_NONBLOCK);
-
-                    if (vfd < 0) // file does not exists, continue to the next one
-                        continue;
-                    else
-                        ::close(vfd); // file exists, close file and continue to assign it
-                    try
-                    {
-                        info = get_info_from_mipi_device_path(video_path, device_path);
-                    }
-                    catch(const std::exception & e)
-                    {
-                        LOG_WARNING("MIPI video device issue: " << e.what());
-                        continue;
-                    }
-
-                    // Get DFU node for MIPI camera
-                    vfd = open(dfu_device_path.c_str(), O_RDONLY | O_NONBLOCK);
-
-                    if (vfd >= 0) {
-                        ::close(vfd); // file exists, close file and continue to assign it
-                        info.dfu_device_path = dfu_device_path;
-                    }
-
-                    info.mi = vs.compare("imu") ? 0 : 4;
-                    info.unique_id += "-" + std::to_string(i);
-                    info.uvc_capabilities &= ~(V4L2_CAP_META_CAPTURE); // clean caps
-                    mipi_rs_enum_nodes.emplace_back(info, video_path);
-                    // Get metadata node
-                    // Check if file on video_md_path is exists
-                    vfd = open(video_md_path.c_str(), O_RDONLY | O_NONBLOCK);
-
-                    if (vfd < 0) // file does not exists, continue to the next one
-                        continue;
-                    else
-                        ::close(vfd); // file exists, close file and continue to assign it
-
-                    try
-                    {
-                        info = get_info_from_mipi_device_path(video_md_path, device_md_path);
-                    }
-                    catch(const std::exception & e)
-                    {
-                        LOG_WARNING("MIPI video metadata device issue: " << e.what());
-                        continue;
-                    }
-                    info.mi = 3;
-                    info.unique_id += "-" + std::to_string(i);
-                    mipi_rs_enum_nodes.emplace_back(info, video_md_path);
-                }
-            }
-            return mipi_rs_enum_nodes;
         }
 
         std::vector<node_info> v4l_uvc_device::match_video_with_metadata_nodes(const std::vector<node_info>& uvc_nodes)
@@ -1416,24 +928,199 @@ namespace librealsense
             return uvc_devices;
         }
 
-        bool v4l_uvc_device::get_info_from_v4l_video_path(const std::string& v4l_video_path, const std::string& dev_name, uvc_device_info& info, bool is_mipi_rs_enum_nodes_empty,
-                                                      const std::vector<std::pair <std::string, std::string>>& v4l_to_dev_video_paths)
+        uvc_device_info v4l_uvc_device::get_info_from_usb_device_path( const std::string & video_path,
+                                                                       const std::string & dev_name,
+                                                                       const std::string & name )
+        {
+            std::string busnum, devnum, devpath;
+
+            if (!v4l_usb_logic::is_usb_path_valid(video_path, dev_name, busnum, devnum, devpath))
+            {
+#ifndef RS2_USE_CUDA
+                if (rsutils::rs2_is_cuda_available())
+                {
+                    /* On the Jetson TX, the camera module is CSI & I2C and does not report as this code expects
+                    Patch suggested by JetsonHacks: https://github.com/jetsonhacks/buildLibrealsense2TX */
+                    LOG_INFO("Failed to read busnum/devnum. Device Path: " << ("/sys/class/video4linux/" + name));
+                }
+#endif
+               throw linux_backend_exception("Failed to read busnum/devnum of usb device");
+            }
+
+            LOG_INFO("Enumerating UVC " << name << " v4l_path=" << video_path << " dev_name=" << dev_name);
+
+            camera_identifier_v4l_usb usb_id;
+            usb_id.resolve(name);
+
+            uvc_device_info info{};
+            info.pid = usb_id.get_pid();
+            info.vid = usb_id.get_vid();
+            info.mi = v4l_usb_logic::read_interface_number(name);
+            info.id = dev_name;
+            info.device_path = video_path;
+            info.unique_id = busnum + "-" + devpath + "-" + devnum;
+            // Find the USB specification (USB2/3) type from the underlying device, traversing from
+            // /sys/devices/.../M-N/3-6:1.0/video4linux/video0 up to /sys/devices/.../M-N/version
+            info.conn_spec = v4l_usb_logic::get_usb_connection_type(video_path + "/../../../");
+            info.uvc_capabilities = get_dev_capabilities(dev_name).device_caps;
+
+            return info;
+        }
+
+        uvc_device_info v4l_uvc_device::get_info_from_mipi_device_path(const std::string& video_path, const std::string& name,
+                                                                       camera_identifier_v4l_mipi& mipi_id)
+        {
+            auto dev_name = "/dev/" + name;
+
+            std::string bus_info, card;
+            v4l_mipi_logic::get_device_info(dev_name, bus_info, card);
+
+            // Resolve PID/VID from the depth node; sibling color/IR/IMU nodes inherit it via mipi_id
+            try
+            {
+                if (v4l_mipi_logic::is_device_depth_node(dev_name))
+                    mipi_id.resolve(dev_name);
+            }
+            catch(const std::exception & e)
+            {
+                LOG_WARNING("MIPI device product id detection issue, device will be skipped: " << e.what());
+                mipi_id.reset();
+            }
+
+            uint16_t mi{};
+            int cam_id{};
+            v4l_mipi_logic::derive_mi_and_cam_id(v4l_mipi_logic::parse_video_index(name), mi, cam_id);
+
+            uvc_device_info info{};
+            info.pid = mipi_id.get_pid();
+            info.vid = mipi_id.get_vid();
+            info.mi = mi;
+            info.id = dev_name;
+            info.device_path = video_path;
+            // unique id for MIPI: This will assign sensor set for each camera. It cannot be generated as in usb,
+            // because the params busnum, devpath and devnum are not available via mipi.
+            // Assign unique id for mipi by appending camera id to bus_info (bus_info is same for each mipi port)
+            // Note - jetson can use only bus_info, as card is different for each sensor and metadata node.
+            info.unique_id = bus_info + "-" + std::to_string(cam_id);
+
+            // Get DFU node for MIPI camera
+            for (const auto& dfu_device_path : get_mipi_dfu_paths())
+            {
+                auto mipi_dfu_chardev = "/dev/" + dfu_device_path;
+                int vfd = open(mipi_dfu_chardev.c_str(), O_RDONLY | O_NONBLOCK);
+                if (vfd >= 0)
+                {
+                    // Use legacy DFU device node used in firmware_update_manager
+                    info.dfu_device_path = mipi_dfu_chardev;
+                    ::close(vfd); // file exists, close file and continue to assign it
+                    break;
+                }
+            }
+            info.conn_spec = usb_undefined;
+            info.uvc_capabilities = get_dev_capabilities(dev_name).device_caps;
+
+            return info;
+        }
+
+        std::vector<node_info> v4l_uvc_device::get_mipi_rs_enum_nodes()
+        {
+            std::vector<node_info> mipi_rs_enum_nodes;
+
+            // Enumerate mipi nodes by links with usage of rs-enum script
+            std::vector<std::string> video_sensors = {"depth", "color", "ir", "imu"};
+            const int MAX_V4L2_DEVICES = 8; // assume maximum 8 mipi devices
+
+            // Carries a camera's PID/VID from its depth node to its sibling nodes
+            camera_identifier_v4l_mipi mipi_id;
+            for (int i = 0; i < MAX_V4L2_DEVICES; i++)
+            {
+                mipi_id.reset(); // reset per camera; depth node sets it, siblings inherit
+                for (const auto& vs : video_sensors)
+                {
+                    int vfd = -1;
+                    std::string device_path = v4l_mipi_logic::rs_enum_video_node_name(vs, i, false);
+                    std::string device_md_path = v4l_mipi_logic::rs_enum_video_node_name(vs, i, true);
+                    std::string video_path = "/dev/" + device_path;
+                    std::string video_md_path = "/dev/" + device_md_path;
+                    std::string dfu_device_path = v4l_mipi_logic::rs_enum_dfu_node_path(i);
+                    uvc_device_info info{};
+
+                    // Get Video node
+                    // Check if file on video_path is exists
+                    vfd = open(video_path.c_str(), O_RDONLY | O_NONBLOCK);
+
+                    if (vfd < 0) // file does not exists, continue to the next one
+                        continue;
+                    else
+                        ::close(vfd); // file exists, close file and continue to assign it
+                    try
+                    {
+                        info = get_info_from_mipi_device_path(video_path, device_path, mipi_id);
+                    }
+                    catch(const std::exception & e)
+                    {
+                        LOG_WARNING("MIPI video device issue: " << e.what());
+                        continue;
+                    }
+
+                    // Get DFU node for MIPI camera
+                    vfd = open(dfu_device_path.c_str(), O_RDONLY | O_NONBLOCK);
+
+                    if (vfd >= 0)
+                    {
+                        ::close(vfd); // file exists, close file and continue to assign it
+                        info.dfu_device_path = dfu_device_path;
+                    }
+
+                    info.mi = vs.compare("imu") ? 0 : 4;
+                    info.unique_id += "-" + std::to_string(i);
+                    info.uvc_capabilities &= ~(V4L2_CAP_META_CAPTURE); // clean caps
+                    mipi_rs_enum_nodes.emplace_back(info, video_path);
+
+                    // Get metadata node
+                    // Check if file on video_md_path is exists
+                    vfd = open(video_md_path.c_str(), O_RDONLY | O_NONBLOCK);
+
+                    if (vfd < 0) // file does not exists, continue to the next one
+                        continue;
+                    else
+                        ::close(vfd); // file exists, close file and continue to assign it
+
+                    try
+                    {
+                        info = get_info_from_mipi_device_path(video_md_path, device_md_path, mipi_id);
+                    }
+                    catch(const std::exception & e)
+                    {
+                        LOG_WARNING("MIPI video metadata device issue: " << e.what());
+                        continue;
+                    }
+                    info.mi = 3;
+                    info.unique_id += "-" + std::to_string(i);
+                    mipi_rs_enum_nodes.emplace_back(info, video_md_path);
+                }
+            }
+            return mipi_rs_enum_nodes;
+        }
+
+        bool v4l_uvc_device::get_info_from_v4l_video_path( const std::string & v4l_video_path, const std::string & dev_name,
+                                                           uvc_device_info & info, bool is_mipi_rs_enum_nodes_empty, camera_identifier_v4l_mipi& mipi_id)
         {
             bool res = false;
 
             // following line grabs video0 from "/sys/devices/.../video0" paths
             auto name = v4l_video_path.substr(v4l_video_path.find_last_of('/') + 1);
 
-            if (is_usb_device_path(v4l_video_path))
+            if (v4l_usb_logic::is_usb_device_path(v4l_video_path))
             {
-                info = get_info_from_usb_device_path(v4l_video_path, dev_name, name, v4l_to_dev_video_paths);
+                info = get_info_from_usb_device_path(v4l_video_path, dev_name, name);
                 res = true;
             }
             else if(is_mipi_rs_enum_nodes_empty) //video4linux devices that are not USB devices and not previously enumerated by rs links
             {
                 // filter out all possible codecs, work only with compatible driver
                 static const std::regex rs_mipi_compatible(".vi:|ipu6");
-                info = get_info_from_mipi_device_path(v4l_video_path, name);
+                info = get_info_from_mipi_device_path(v4l_video_path, name, mipi_id);
                 if (regex_search(info.unique_id, rs_mipi_compatible)) {
                     res = true;
                 }
@@ -1446,16 +1133,13 @@ namespace librealsense
         }
 
         std::vector<node_info> v4l_uvc_device::collect_uvc_nodes(const std::vector<path_and_identifier>& v4l_videos,
-                                                                 const std::vector<node_info>& mipi_rs_enum_nodes,
                                                                  const std::vector<std::pair <std::string, std::string>>& v4l_to_dev_video_paths)
         {
-            std::vector<node_info> uvc_nodes;
-            // Append mipi nodes to uvc nodes list
-            if(mipi_rs_enum_nodes.size())
-            {
-                uvc_nodes.insert(uvc_nodes.end(), mipi_rs_enum_nodes.begin(), mipi_rs_enum_nodes.end());
-            }
+            std::vector<node_info> uvc_nodes = get_mipi_rs_enum_nodes();
+            bool is_mipi_rs_enum_nodes_empty = uvc_nodes.empty();
 
+            // Carries a fallback MIPI camera's PID/VID from its depth node to its sibling nodes across the loop
+            camera_identifier_v4l_mipi mipi_id;
             for(auto&& v4l_video : v4l_videos)
             {
                 try
@@ -1464,10 +1148,10 @@ namespace librealsense
                     if (!get_devname_from_v4l_video_path(v4l_video.path, dev_name, v4l_to_dev_video_paths))
                     {
                         continue;
-
                     }
+
                     uvc_device_info info;
-                    if (get_info_from_v4l_video_path(v4l_video.path, dev_name, info, mipi_rs_enum_nodes.empty(), v4l_to_dev_video_paths))
+                    if (get_info_from_v4l_video_path(v4l_video.path, dev_name, info, is_mipi_rs_enum_nodes_empty, mipi_id))
                     {
                         uvc_nodes.emplace_back(info, dev_name);
                     }
@@ -1477,12 +1161,11 @@ namespace librealsense
                     LOG_INFO("Not a USB video device: " << e.what());
                 }
             }
+
             return uvc_nodes;
         }
 
-        void v4l_uvc_device::foreach_uvc_device(
-                std::function<void(const uvc_device_info&,
-                                   const std::string&)> action)
+        void v4l_uvc_device::foreach_uvc_device( std::function<void(const uvc_device_info&, const std::string&)> action )
         {
             // building vector of /sys/class/video4linux/.../videoX files with path, major, minor
             std::vector<path_and_identifier> v4l_videos = collect_v4l_video_path_and_identifier();
@@ -1491,10 +1174,8 @@ namespace librealsense
             // generate map of "/sys/class/video4linux/.../videoX" to "/dev/videoY"
             auto v4l_to_dev_video_paths = generate_v4l_to_dev_video_paths(v4l_videos, dev_videos);
 
-            std::vector<node_info> mipi_rs_enum_nodes = get_mipi_rs_enum_nodes();
-
             // Collect UVC nodes info to bundle metadata and video
-            std::vector<node_info> uvc_nodes = collect_uvc_nodes(v4l_videos, mipi_rs_enum_nodes, v4l_to_dev_video_paths);
+            std::vector<node_info> uvc_nodes = collect_uvc_nodes(v4l_videos, v4l_to_dev_video_paths);
 
             // Matching video and metadata nodes
             std::vector<node_info> uvc_devices = match_video_with_metadata_nodes(uvc_nodes);
@@ -3239,7 +2920,7 @@ namespace librealsense
 
         std::shared_ptr<uvc_device> v4l_backend::create_uvc_device(uvc_device_info info) const
         {
-            bool mipi_device = (mipi_devices_pid.count(info.pid) > 0);
+            bool mipi_device = is_mipi_pid(info.pid);
 
             auto v4l_uvc_dev =        mipi_device ?         std::make_shared<v4l_mipi_device>(info) :
                               ((!info.has_metadata_node) ?  std::make_shared<v4l_uvc_device>(info) :

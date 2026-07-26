@@ -362,7 +362,7 @@ namespace librealsense
 
         if (depth_devs_info.empty() || depth_devices.empty())
         {
-            throw backend_exception("cannot access depth sensor", RS2_EXCEPTION_TYPE_BACKEND);
+            throw backend_exception("cannot access depth sensor");
         }
 
         std::unique_ptr< frame_timestamp_reader > timestamp_reader_backup( new ds_timestamp_reader() );
@@ -463,11 +463,7 @@ namespace librealsense
 
         d500_auto_calibrated::set_depth_sensor( &depth_sensor );
 
-        using namespace platform;
-
-        std::string pid_hex_str, usb_type_str;
         d500_gvd_parsed_fields gvd_parsed_fields;
-        bool usb_modality = true;
         group_multiple_fw_calls(depth_sensor, [&]() {
             
             // D500 device can get enumerated before the whole HW in the camera is ready.
@@ -488,19 +484,9 @@ namespace librealsense
 
             _fw_version = rsutils::version(gvd_parsed_fields.fw_version);
 
-            auto _usb_mode = usb3_type;
-            usb_type_str = usb_spec_names.at(_usb_mode);
-            _usb_mode = raw_depth_sensor->get_usb_specification();
-            if (usb_spec_names.count(_usb_mode) && (usb_undefined != _usb_mode))
-                usb_type_str = usb_spec_names.at(_usb_mode);
-            else  // Backend fails to provide USB descriptor  - occurs with RS3 build. Requires further work
-                usb_modality = false;
-
             set_imu_type( gvd_buff, &gvd_parsed_fields );
 
             _is_symmetrization_enabled = check_symmetrization_enabled();
-
-            pid_hex_str = rsutils::string::from() << std::uppercase << rsutils::string::hexdump( _pid );
 
             _is_locked = _ds_device_common->is_locked( gvd_buff.data(), d500_gvd_offsets::is_camera_locked_offset );
 
@@ -698,7 +684,8 @@ namespace librealsense
         register_info(RS2_CAMERA_INFO_FIRMWARE_VERSION, gvd_parsed_fields.fw_version);        
         register_info(RS2_CAMERA_INFO_PHYSICAL_PORT, group.uvc_devices.front().device_path);
         register_info(RS2_CAMERA_INFO_DEBUG_OP_CODE, std::to_string(static_cast<int>(fw_cmd::GET_FW_LOGS)));
-        register_info(RS2_CAMERA_INFO_PRODUCT_ID, pid_hex_str);
+        std::string pid_hex_str = rsutils::string::from() << std::uppercase << rsutils::string::hexdump( _pid );
+        register_info( RS2_CAMERA_INFO_PRODUCT_ID, pid_hex_str );
         register_info(RS2_CAMERA_INFO_PRODUCT_LINE, "D500");
         register_info(RS2_CAMERA_INFO_CAMERA_LOCKED, _is_locked ? "YES" : "NO");
 
@@ -706,12 +693,8 @@ namespace librealsense
         {
             register_info(RS2_CAMERA_INFO_SMCU_FW_VERSION, gvd_parsed_fields.safety_sw_suite_version);
         }
+        register_connection_info( raw_depth_sensor->get_usb_specification() );
 
-        if (usb_modality)
-        {
-            register_info(RS2_CAMERA_INFO_CONNECTION_TYPE, "USB");
-            register_info(RS2_CAMERA_INFO_USB_TYPE_DESCRIPTOR, usb_type_str);
-        }
         register_info( RS2_CAMERA_INFO_IMU_TYPE, gvd_parsed_fields.imu_type );
 
         register_features();
@@ -722,6 +705,42 @@ namespace librealsense
             _coefficients_table_raw.reset();
             _new_calib_table_raw.reset();
         } );
+    }
+
+    void d500_device::register_connection_info( platform::usb_spec usb_spec )
+    {
+        using namespace platform;
+
+        if( usb_spec_names.count( usb_spec ) && ( usb_undefined != usb_spec ) )
+        {
+            std::string usb_spec_str = usb_spec_names.at( usb_spec );
+            register_info( RS2_CAMERA_INFO_CONNECTION_TYPE, "USB" );
+            register_info( RS2_CAMERA_INFO_USB_TYPE_DESCRIPTOR, usb_spec_str );
+        }
+        else // Backend fails to provide USB descriptor
+        {
+            if( _is_mipi_device )
+            {
+                register_info( RS2_CAMERA_INFO_CONNECTION_TYPE, "GMSL" );
+                rsutils::version mipi_driver_version = platform::get_jetson_driver_version();
+                if( mipi_driver_version.is_valid() )
+                {
+                    register_info( RS2_CAMERA_INFO_MIPI_DRIVER_VERSION, mipi_driver_version.to_string() );
+
+                    // Log driver version only once across all devices
+                    static bool logged = false;
+                    if( ! logged )
+                    {
+                        LOG_INFO( "MIPI driver version detected: " << mipi_driver_version.to_string() );
+                        logged = true;
+                    }
+                }
+            }
+            else
+            {
+                throw backend_exception( "Unsupported connection type" );
+            }
+        }
     }
 
     void d500_device::register_features()
