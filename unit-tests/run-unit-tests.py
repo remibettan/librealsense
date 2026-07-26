@@ -179,13 +179,13 @@ for opt, arg in opts:
         skip_regex = arg
     elif opt == '--custom-fw-d400':
         custom_fw_path = arg  # Store the custom firmware path
-        log.i(f"custom D400 firmware path was provided ${custom_fw_path}")
+        log.i(f"custom D400 firmware path was provided {custom_fw_path}")
     elif opt == '--custom-fw-d555':
         custom_fw_d555_path = arg  # Store the custom D555 firmware path
-        log.i(f"custom D555 firmware path was provided ${custom_fw_d555_path}")
+        log.i(f"custom D555 firmware path was provided {custom_fw_d555_path}")
     elif opt == '--custom-fw-d585':
         custom_fw_d585_path = arg  # Store the custom D585 (non-safety) firmware path; never applied to D585S
-        log.i(f"custom D585 firmware path was provided ${custom_fw_d585_path}")
+        log.i(f"custom D585 firmware path was provided {custom_fw_d585_path}")
 
 if not test_dirs:
     test_dirs = [current_dir]
