@@ -321,7 +321,8 @@ if args.serial:
     cmd += ['-s', args.serial]
 # Add '-u' only if the path doesn't include 'signed'
 if ('signed' not in custom_fw_path.lower()
-        and "d555" not in product_name.lower()): # currently -u is not supported for D555
+        and "d555" not in product_name.lower()  # currently -u is not supported for D555
+        and "d585" not in product_name.lower()): # nor for D585/D585S
     cmd.insert(1, '-u')
 
 # for DDS devices we need to close device and context to detect it back after FW update
