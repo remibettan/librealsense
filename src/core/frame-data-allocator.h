@@ -34,6 +34,11 @@ struct cuda_zc_allocator
 
     T * allocate( std::size_t n )
     {
+        // The C++ allocator contract allows allocate(0); STL containers may call it during
+        // empty-vector operations, so return nullptr instead of throwing (rs_frame_zc_alloc(0)
+        // returns nullptr, and deallocate(nullptr) is a no-op).
+        if( n == 0 )
+            return nullptr;
         if( void * p = rs_frame_zc_alloc( n * sizeof( T ) ) )
             return static_cast< T * >( p );
         throw std::bad_alloc();

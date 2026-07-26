@@ -262,15 +262,27 @@ void uvc_sensor::open( const stream_profiles & requests )
                             // Point the frame at the backend buffer and defer its release
                             // (continuation -> VIDIOC_QBUF) until the frame is destroyed. The
                             // inflight counter is decremented in the same deferred release.
-                            zc_inflight->fetch_add( 1, std::memory_order_relaxed );
+                            // Attach first and only count the buffer once the continuation is
+                            // installed: constructing/attaching it can throw (std::function copy),
+                            // and incrementing first would leak the in-flight slot on throw. On
+                            // failure zc_attached stays false, so the copy path below returns the
+                            // backend buffer via the trailing continuation() (no double release).
                             auto inflight = zc_inflight;
-                            fh.frame->attach_continuation( frame_continuation(
-                                [continuation, inflight]() {
-                                    continuation();
-                                    inflight->fetch_sub( 1, std::memory_order_relaxed );
-                                },
-                                f.pixels ) );
-                            zc_attached = true;
+                            try
+                            {
+                                fh.frame->attach_continuation( frame_continuation(
+                                    [continuation, inflight]() {
+                                        continuation();
+                                        inflight->fetch_sub( 1, std::memory_order_relaxed );
+                                    },
+                                    f.pixels ) );
+                                zc_inflight->fetch_add( 1, std::memory_order_relaxed );
+                                zc_attached = true;
+                            }
+                            catch( ... )
+                            {
+                                zc_attached = false;
+                            }
                         }
                         // method should be limited to use of MIPI - not for USB
                         // the aim is to grab the data from a bigger buffer, which is aligned to 64 bytes,
