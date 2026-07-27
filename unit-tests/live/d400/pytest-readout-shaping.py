@@ -39,3 +39,15 @@ def test_readout_shaping_set_get(test_device_wrapped):
         assert apply(0) == 0       # return to 0
     finally:
         pipe.stop()
+
+
+def test_readout_shaping_rejects_out_of_range(test_device_wrapped):
+    # Values above the 0-100 range are rejected (no streaming needed).
+    dev, _ = test_device_wrapped
+    depth_sensor = dev.first_depth_sensor()
+    if not depth_sensor.supports(rs.option.readout_shaping):
+        pytest.skip("readout shaping not exposed on this device")
+
+    for bad in (101, 200, 255):
+        with pytest.raises(Exception):
+            depth_sensor.set_option(rs.option.readout_shaping, bad)
