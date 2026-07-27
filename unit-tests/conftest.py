@@ -201,8 +201,7 @@ def pytest_addoption(parser):
         help="Pre-parsed flags (no need for --rs-help): "
              "--debug (enable -D- debug logs), "
              "-r/--regex <pattern> (filter tests by name, maps to -k), "
-             "--tag <name> (run only tests with marker, maps to -m), "
-             "--retries N (retry failed tests N times)."
+             "--tag <name> (run only tests with marker, maps to -m)."
     )
     group.addoption(
         "--test-dir",
@@ -239,11 +238,9 @@ def pytest_configure(config):
         config.option.count = repeat_val
         config.option.repeat_scope = 'module'
 
-    # Retries are handled by pytest-rerunfailures (--reruns N). It reruns the FULL protocol via
-    # _pytest.runner.runtestprotocol, so pytest_runtest_makereport fires on every attempt and
-    # setup-phase failures retry natively (regression Jenkins win #113344) — no plugin patching.
-    # Module-scoped fixtures survive reruns, so the device power-cycle between attempts is done
-    # by our pytest_runtest_logreport hook below (see "device recycle between rerun attempts").
+    # Retries: pytest-rerunfailures (--reruns N). It reruns the full protocol, so setup-phase
+    # failures retry natively; device power-cycle between attempts is done by the
+    # pytest_runtest_logreport hook below.
 
     # We override pytest-repeat's `__pytest_repeat_step_number` to module scope so
     # module-scoped fixtures (e.g. module_device_setup) can depend on it and re-instantiate
@@ -407,9 +404,8 @@ def _test_log_banner(request):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """Log test duration and any failures/errors. Also capture the item's live request for the
-    rerun-recycle hook below: item._request is invalidated (set to False) at Function.teardown,
-    and pytest_runtest_logreport(outcome="rerun") fires after teardown — too late to grab it."""
+    """Log test duration and any failures/errors, and stash the item's live request for the
+    rerun-recycle hook (item._request is cleared at teardown, before that hook fires)."""
     req = getattr(item, "_request", None)
     if req:
         _rerun_recycle_ctx[item.nodeid] = (item, req)
@@ -434,36 +430,19 @@ def pytest_runtest_makereport(item, call):
 # ============================================================================
 # Device recycle between rerun attempts
 # ============================================================================
-# pytest-rerunfailures reruns the full protocol but leaves successful module-scoped fixtures
-# cached — the rerun would reuse the same (possibly wedged) device without a power cycle. A
-# failed test often leaves the camera in a state only a power cycle can recover, so between
-# attempts we tear down every local (non-session) fixture of the item and let the rerun's
-# setup re-create them, matching pytest-retry's old "preliminary teardown" semantics.
-#
-# Seam: pytest_runtest_logreport with report.outcome == "rerun" — pytest-rerunfailures logs
-# exactly one such report per failed attempt, after that attempt's teardown and before the
-# rerun starts.
-#
-# Mechanism: FixtureDef.finish() on each local fixture in the item's closure. Finishing a
-# fixture runs the finalizers registered on it, and pytest registers a dependent's teardown as a
-# finalizer on the fixture it depends on — so finishing module_device_setup already cascades to
-# its dependents (test_device, test_context, test_device_wrapped, ...) in the correct order
-# (dependent first), with the port disable happening in module_device_setup's own teardown. The
-# blanket sweep over the closure also covers fixtures outside that chain; finish() is idempotent,
-# so a fixture already torn down by the cascade is a no-op and iteration order does not matter.
-# The rerun's setup then re-executes the chain — port enable, bring-up settle, fresh rs.context,
-# fresh device handle, module preconditions re-applied. Port off at teardown + on at setup is
-# exactly module_device_setup's designed power cycle. module_log is finished too and reopens in
-# append mode, so all attempts still land in one per-test log file.
+# pytest-rerunfailures keeps successful module-scoped fixtures cached across a rerun, so the
+# rerun would reuse the same (possibly wedged) device with no power cycle. On the "rerun" report
+# (logged once per failed attempt, before the next attempt) we finish every local fixture of the
+# item; finishing module_device_setup cascades to its dependents and its teardown powers the port
+# off, and the rerun's setup powers it back on — the power cycle. finish() is idempotent so the
+# blanket sweep is order-independent. See test_e2e_cli_options / test_e2e_rerun_console_leak.
 
 _rerun_recycle_ctx = {}  # nodeid -> (item, live request) captured in pytest_runtest_makereport
 
 
 def pytest_runtest_logreport(report):
-    # Two jobs on this hook: recycle the device between rerun attempts, and keep
-    # _rerun_recycle_ctx bounded. The ctx entry is dropped on the rerun that consumes it
-    # (makereport re-stores it for the next attempt) and on the final teardown of any test that
-    # did not rerun — so at most the in-flight items are retained, never the whole session.
+    # Recycle on rerun, and keep _rerun_recycle_ctx bounded: drop the entry on the rerun that
+    # consumes it (makereport re-stores it for the next attempt) and on any test's final teardown.
     if report.outcome != "rerun":
         if report.when == "teardown":
             _rerun_recycle_ctx.pop(report.nodeid, None)
@@ -472,11 +451,8 @@ def pytest_runtest_logreport(report):
     if item is None:
         return
     name2defs = getattr(getattr(item, "_fixtureinfo", None), "name2fixturedefs", {})
-    # This hook fires between protocol phases, where pytest's output capture is suspended —
-    # raw stdout prints from the teardown (e.g. rspy's "-D- Disabling ports...") would leak
-    # into the CI console mid-progress-line. Swallow stdout for the duration; the python
-    # logging bridge still records every line in the per-test .log file. stderr is left
-    # alone so real errors stay visible.
+    # This hook runs between phases, where pytest capture is off — swallow stdout so rspy's raw
+    # "-D-" teardown prints don't leak into the console (the logging bridge still logs them).
     import contextlib, io
     with contextlib.redirect_stdout(io.StringIO()):
         for name, defs in name2defs.items():

@@ -12,7 +12,7 @@ pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_each("D500*"),
     pytest.mark.context("nightly"),
-    pytest.mark.flaky(retries=2),  # See FW stability issue RSDSO-18908
+    pytest.mark.flaky(reruns=2),  # See FW stability issue RSDSO-18908
 ]
 
 

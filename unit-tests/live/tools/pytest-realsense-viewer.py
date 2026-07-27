@@ -21,7 +21,7 @@ pytestmark = [
     pytest.mark.context("gui"),
     # Opt out of --retries: the outer pytest-timeout clock is not reset between
     # attempts, so a retry runs on the leftover budget and gets killed mid-viewer.
-    pytest.mark.flaky(retries=0),
+    pytest.mark.flaky(reruns=0),
 ]
 
 
