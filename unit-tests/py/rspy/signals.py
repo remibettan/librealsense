@@ -44,18 +44,19 @@ while True:
 '''
 
 
-def start_abort_watchdog(grace=None):
+def start_abort_watchdog():
     """
-    Start the GIL-independent abort watchdog (POSIX only; no-op on Windows or if
-    already running). See _WATCHDOG_CODE above for why it must be a separate process.
+    Start the GIL-independent abort watchdog (POSIX only; no-op on Windows or if one is
+    still running). See _WATCHDOG_CODE above for why it must be a separate process.
     """
     global _watchdog
-    if os.name != 'posix' or _watchdog is not None:
+    if os.name != 'posix' or (_watchdog is not None and _watchdog.poll() is None):
         return
-    if grace is None:
-        grace = WATCHDOG_GRACE_S
     try:
-        proc = subprocess.Popen([sys.executable, '-c', _WATCHDOG_CODE, str(os.getpid()), str(grace)],
+        if _watchdog is not None:  # the previous one died: release its pipe before replacing it
+            _watchdog.stdin.close()
+            _watchdog = None
+        proc = subprocess.Popen([sys.executable, '-c', _WATCHDOG_CODE, str(os.getpid()), str(WATCHDOG_GRACE_S)],
                                 stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL)
