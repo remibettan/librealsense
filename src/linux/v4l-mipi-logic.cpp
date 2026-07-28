@@ -24,7 +24,6 @@ namespace librealsense
             static constexpr uint32_t RS_CAMERA_CID_BASE = ( V4L2_CTRL_CLASS_CAMERA | RS_STREAM_CONFIG_0 );
             static constexpr uint32_t RS_CAMERA_CID_GVD = ( RS_CAMERA_CID_BASE + 8 );
 
-            static constexpr size_t GVD_BUFFER_SIZE = 276;
             static constexpr uint8_t GVD_VALID_OPCODE = 0x10;
 
             std::vector< uint8_t > get_gvd( const std::string & dev_name )
@@ -35,7 +34,13 @@ namespace librealsense
                 if( *fd < 0 )
                     throw linux_backend_exception( "Mipi device GVD could not be read" );
 
-                std::vector< uint8_t > gvd( GVD_BUFFER_SIZE, 0 );
+                // GVD payload has different size depending on product line. Query the control's size so the full struct is read.
+                struct v4l2_query_ext_ctrl qctrl = {};
+                qctrl.id = RS_CAMERA_CID_GVD;
+                if( xioctl( *fd, VIDIOC_QUERY_EXT_CTRL, &qctrl ) != 0 || qctrl.elems == 0 )
+                    throw linux_backend_exception( "Mipi device GVD size could not be queried" );
+
+                std::vector< uint8_t > gvd( qctrl.elems * qctrl.elem_size, 0 );
                 struct v4l2_ext_control ctrl;
 
                 ctrl.id = RS_CAMERA_CID_GVD;
