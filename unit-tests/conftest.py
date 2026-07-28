@@ -201,8 +201,8 @@ def pytest_addoption(parser):
         help="Pre-parsed flags (no need for --rs-help): "
              "--debug (enable -D- debug logs), "
              "-r/--regex <pattern> (filter tests by name, maps to -k), "
-             "--tag <name> (run only tests with marker, maps to -m). "
-             "Retries: --reruns N (native pytest-rerunfailures flag)."
+             "--tag <name> (run only tests with marker, maps to -m), "
+             "--reruns N (pytest-rerunfailures retries a failed test N times)."
     )
     group.addoption(
         "--test-dir",
