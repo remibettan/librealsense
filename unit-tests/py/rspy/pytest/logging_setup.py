@@ -85,7 +85,12 @@ def install_rs_log_bridge(rs):
 
     rs_log.setLevel(logging.DEBUG)
     _rs_log_callback = _callback
-    rs.log_to_callback(rs.log_severity.debug, _callback)
+    try:
+        # Async: the emitting LibRS thread never takes the GIL, so a LOG under an internal
+        # mutex cannot deadlock against the main thread; messages arrive as plain str
+        rs.log_to_callback(rs.log_severity.debug, _callback, asynchronous=True)
+    except TypeError:  # older pyrealsense2 build without the flag
+        rs.log_to_callback(rs.log_severity.debug, _callback)
 
 
 def bridge_rspy_log():

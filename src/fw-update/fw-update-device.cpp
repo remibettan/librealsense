@@ -44,10 +44,9 @@ namespace librealsense
         auto res = messenger->control_transfer(0xa1 /*DFU_GETSTATUS_PACKET*/, RS2_DFU_GET_STATE, 0, 0, &state, 1, transferred, DEFAULT_TIMEOUT);
         if (res == librealsense::platform::RS2_USB_STATUS_ACCESS)
             throw backend_exception("Permission Denied!\n"
-                "This is often an indication of outdated or missing udev-rules.\n"
-                "If using Debian package, run sudo apt-get install librealsense2-dkms\n"
-                "If building from source, run ./scripts/setup_udev_rules.sh",
-                RS2_EXCEPTION_TYPE_BACKEND);
+                                    "This is often an indication of outdated or missing udev-rules.\n"
+                                    "If using Debian package, run sudo apt-get install librealsense2-dkms\n"
+                                    "If building from source, run ./scripts/setup_udev_rules.sh");
         return res == platform::RS2_USB_STATUS_SUCCESS ? (rs2_dfu_state)state : RS2_DFU_STATE_DFU_ERROR;
     }
 

@@ -31,18 +31,46 @@ namespace librealsense
         const uint16_t D585F_PID              = 0x0C06; // 3C with IR only L/R cover
         const uint16_t D585_2C_PROTO_PID      = 0x0C07;
         const uint16_t D585_3C_PROTO_PID      = 0x0C08;
-        
-        // DS500 depth XU identifiers
-        // Note: selector values differ from the D400-family depth_xu selectors in ds-private.h.
-        const uint8_t DS5_ALIGN_DEPTH              = 0x10;  // Enable depth-to-RGB alignment for OD distance; must be sent before depth streaming starts
-        const uint8_t DS5_HKR_PVT_TEMPERATURE      = 0x15;
-        const uint8_t DS5_HKR_PROJECTOR_TEMPERATURE = 0x16;
-        const uint8_t DS5_HKR_OHM_TEMPERATURE      = 0x17;
+        const uint16_t D585_GMSL_PID          = 0xBAAA; // D585 GMSL (MIPI)
+   
+        enum d500_xu_id : uint8_t // Note: some values may differ from the D400-family depth_xu selectors in ds-private.h.
+        {
+            DETECTION_DISTANCE    = 0x01,  // Enable FW depth-derived distance for detections
+            ALIGN_DEPTH           = 0x10,  // Enable depth-to-RGB alignment for OD distance; must be sent before depth streaming starts
+            PVT_TEMPERATURE       = 0x15,
+            PROJECTOR_TEMPERATURE = 0x16,
+            OHM_TEMPERATURE       = 0x17
+        };
+
+        // Same GUID as safety_xu. FW publishes as either safety or inference, not both.
+        const platform::extension_unit inference_xu = { 0, 0x10, 2,
+        { 0xf6c3c3d1, 0x5cde, 0x4477, { 0xad, 0xf0, 0x41, 0x33, 0xf5, 0x8d, 0xa6, 0xf4 } } };
+
 
         // d500 Devices supported by the current version
         static const std::set<std::uint16_t> rs500_sku_pid = {
             D555_PID,
             D585_LEGACY_PID,
+            D585S_PID,
+            D535_2C_PID,
+            D535_3C_PID,
+            D535F_PID,
+            D585_2C_PID,
+            D585_3C_PID,
+            D585F_PID,
+            D585_2C_PROTO_PID,
+            D585_3C_PROTO_PID,
+            D585_GMSL_PID
+        };
+
+        // d500 MIPI (GMSL) devices - color and IMU are exposed as separate V4L2 nodes rather than
+        // the USB layout (color on a dedicated mi=3 node, IMU over HID).
+        static const std::set<std::uint16_t> d500_mipi_device_pid = {
+            D585_GMSL_PID
+        };
+
+        // d500 PIDs that expose the projector temperature via HKR selector 0x16
+        static const std::set<std::uint16_t> d500_projector_temperature_pids = {
             D585S_PID,
             D535_2C_PID,
             D535_3C_PID,
@@ -69,7 +97,8 @@ namespace librealsense
             { D585_3C_PID,            "RealSense D585" },
             { D585F_PID,              "RealSense D585F" },
             { D585_2C_PROTO_PID,      "RealSense D585 Proto Dual RGB" },
-            { D585_3C_PROTO_PID,      "RealSense D585 Prototype" }
+            { D585_3C_PROTO_PID,      "RealSense D585 Prototype" },
+            { D585_GMSL_PID,          "RealSense D585 GMSL" }
         };
 
         //TODO
