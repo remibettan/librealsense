@@ -4,6 +4,7 @@ Copyright(c) 2017 RealSense, Inc. All Rights Reserved. */
 #include "pyrealsense2.h"
 #include <librealsense2/rs.hpp>
 
+#include <cstdint>
 #include <rsutils/string/from.h>
 #include <src/image.cpp>  // bad idea? for get_image_bpp
 
@@ -162,6 +163,16 @@ void init_frame(py::module &m) {
         .def(BIND_DOWNCAST(frame, pose_frame))
         .def(BIND_DOWNCAST(frame, perception_frame))
         .def(BIND_DOWNCAST(frame, object_detection_frame))
+        .def(BIND_DOWNCAST(frame, gpu_frame))
+        .def("get_gpu_data_or_upload", [](const rs2::frame& self) -> py::object {
+            bool copied = false;
+            const void* p = self.get_gpu_data_or_upload(&copied);
+            if (!p) return py::none();
+            return py::make_tuple(py::int_(reinterpret_cast<std::uintptr_t>(p)), copied);
+        }, "Always returns a usable CUDA device pointer on a CUDA build as a (address:int, copied:bool) "
+           "tuple: zero-copy when available (copied=False), otherwise the SDK uploads to a cached device "
+           "buffer (copied=True). Returns None on non-CUDA builds. Consume the address via "
+           "CuPy/PyCUDA/Numba/TensorRT; keep the frame alive until the GPU work completes.")
         // No apply_filter?
         .def( "__repr__", []( const rs2::frame &self )
         {
@@ -339,6 +350,17 @@ void init_frame(py::module &m) {
     object_detection_frame.def(py::init<rs2::frame>())
         .def("get_detection_count", &rs2::object_detection_frame::get_detection_count, "Get the number of detected objects in this frame")
         .def("get_detection", &rs2::object_detection_frame::get_detection, "index"_a, "Get a specific detection by index");
+
+    py::class_<rs2::gpu_frame, rs2::frame> gpu_frame(m, "gpu_frame", "Extends the frame class for a GPU-resident (zero-copy) frame on "
+        "integrated-GPU CUDA builds. Reach it with frame.as(gpu_frame); the cast is null unless the frame is GPU-resident.");
+    gpu_frame.def(py::init<rs2::frame>())
+        .def("get_gpu_data", [](const rs2::gpu_frame& self) -> py::object {
+            const void* p = self.get_gpu_data();
+            if (!p) return py::none();
+            return py::int_(reinterpret_cast<std::uintptr_t>(p));
+        }, "Retrieve the CUDA device pointer aliasing the frame data for zero-copy GPU consumption "
+           "(CuPy/PyCUDA/Numba/TensorRT). Returns the device address as an int, or None if unavailable. "
+           "Keep the frame alive until the GPU work completes.");
 
     // TODO: Deprecate composite_frame, replace with frameset
     py::class_<rs2::frameset, rs2::frame> frameset(m, "composite_frame", "Extends the frame class with additional frameset related attributes and functions");
