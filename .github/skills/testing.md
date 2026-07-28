@@ -80,7 +80,7 @@ So when using `-r`, omit the `test-` filename prefix and join subdirectories wit
 Use `--skip-regex` to exclude tests whose names match:
 
 ```bash
-python3 run-unit-tests.py -s --skip-regex "test-fw-update"
+python3 run-unit-tests.py -s --skip-regex "test-hdr"
 ```
 
 ### By Tag
@@ -196,17 +196,17 @@ python3 run-unit-tests.py --test-dir /path/to/custom/tests
 
 ## Custom Firmware for Testing
 
-The SDK no longer ships a bundled firmware blob, so `test-fw-update` **requires** a custom firmware path for the device under test. Without one it logs a warning and skips. Download a signed `.bin` from <https://dev.realsenseai.com/docs/firmware-updates>, then:
+The SDK no longer ships a bundled firmware blob, so `pytest-fw-update` **requires** a custom firmware path for the device under test. Without one it skips. Download a signed `.bin` from <https://dev.realsenseai.com/docs/firmware-updates>, then:
 
 ```bash
-python3 run-unit-tests.py --custom-fw-d400 /path/to/firmware.bin
-python3 run-unit-tests.py --custom-fw-d555 /path/to/firmware.bin
-python3 run-unit-tests.py --custom-fw-d585 /path/to/firmware.bin
+python3 -m pytest pytest-fw-update.py --custom-fw-d400 /path/to/firmware.bin
+python3 -m pytest pytest-fw-update.py --custom-fw-d555 /path/to/firmware.bin
+python3 -m pytest pytest-fw-update.py --custom-fw-d585 /path/to/firmware.bin
 ```
 
 `--custom-fw-d585` is only ever flashed onto a device whose name contains "D585" but not "D585S"
 (e.g. "D585 Prototype") -- the safety SKU D585S is never updated with it, even though the
-`#test:device each(D585)` directive dispatches the test for both (D585S just logs a skip).
+`device_each("D585")` marker dispatches the test for both (D585S just skips).
 
 ## Troubleshooting
 

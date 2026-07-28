@@ -154,6 +154,37 @@ class TestPrioritySorting:
         assert names[0] == "test_below"
         assert names.index("test_no_prio") < names.index("test_above")
 
+    def test_priority_orders_modules(self):
+        """A module holding a high-priority test must run before alphabetically-earlier
+        modules (e.g. pytest-fw-update priority 1 runs before everything else)."""
+        items = [
+            make_mock_item("test_default", module_name="mod_aaa"),
+            make_mock_item("test_urgent", module_name="mod_zzz_fw_update",
+                           markers=[pytest.mark.priority(1)]),
+            make_mock_item("test_late", module_name="mod_bbb",
+                           markers=[pytest.mark.priority(900)]),
+        ]
+        filter_and_sort_items(make_mock_config(), items)
+
+        names = [i.name for i in items]
+        assert names == ["test_urgent", "test_default", "test_late"]
+
+    def test_module_priority_keeps_module_grouping(self):
+        """A single high-priority test pulls its whole module forward, but items never
+        interleave across modules — grouping by module is preserved."""
+        items = [
+            make_mock_item("test_a1", module_name="mod_aaa"),
+            make_mock_item("test_z1", module_name="mod_zzz"),
+            make_mock_item("test_z2_first", module_name="mod_zzz",
+                           markers=[pytest.mark.priority(1)]),
+            make_mock_item("test_a2", module_name="mod_aaa"),
+        ]
+        filter_and_sort_items(make_mock_config(), items)
+
+        names = [i.name for i in items]
+        # mod_zzz (min priority 1) runs first as a contiguous block, priority order inside
+        assert names == ["test_z2_first", "test_z1", "test_a1", "test_a2"]
+
 
 class TestDeviceGrouping:
     """Tests should be grouped by (module, device_serial) so hub recycling is minimized."""
