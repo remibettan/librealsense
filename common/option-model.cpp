@@ -200,17 +200,23 @@ void option_model::update_all_fields( std::string & error_message, notifications
 {
     try
     {
+        // Defensive: a blank/torn option_model (null endpoint, e.g. a default-inserted map slot)
+        // would null-deref below. Skip the refresh rather than crash.
+        auto ep = endpoint;
+        if( ! ep )
+            return;
+
         // After slider was dragged value updated using set_option, don't update value again here
         if( last_slider_hold_stopwatch.get_elapsed_ms() < 500 )
             return;
 
-        value = endpoint->get_option_value( opt );
+        value = ep->get_option_value( opt );
         _has_user_request->store( false );
         supported = value->is_valid;
         if( supported )
         {
-            range = endpoint->get_option_range( opt );
-            read_only = endpoint->is_option_read_only( opt );
+            range = ep->get_option_range( opt );
+            read_only = ep->is_option_read_only( opt );
         }
     }
     catch( const error & e )
@@ -695,6 +701,11 @@ bool option_model::draw_option(bool update_read_only_options,
     bool is_streaming,
     std::string& error_message, notifications_model& model)
 {
+    // Defensive: a blank/torn option_model (null endpoint, e.g. a default-inserted map slot) would
+    // null-deref every member access below. Skip it rather than crash.
+    if( ! endpoint )
+        return false;
+
     // Drain the async worker's cross-thread state on the UI thread:
     //  - last_error: any FW write failure — surface as an error_message that
     //    eventually drives viewer_model::popup_if_error (matching the pre-PR

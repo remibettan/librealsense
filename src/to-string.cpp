@@ -421,6 +421,7 @@ const char * get_string( rs2_extension value )
     CASE( OBJECT_DETECTION_FRAME )
     CASE( PERCEPTION_SENSOR )
     CASE( PERCEPTION_PROFILE )
+    CASE( GPU_FRAME )
     default:
         assert( ! is_valid( value ) );
         return UNKNOWN_VALUE;
