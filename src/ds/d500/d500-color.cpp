@@ -197,15 +197,6 @@ namespace librealsense
 
         _ds_color_common->register_color_options();
 
-        // The D585 GMSL MIPI V4L2 backend has no working control for these color PUs
-        // (querying them fails), so drop them from the shared set rather than expose dead controls.
-        if( _is_mipi_device )
-        {
-            color_ep.unregister_option( RS2_OPTION_BRIGHTNESS );
-            color_ep.unregister_option( RS2_OPTION_CONTRAST );
-            color_ep.unregister_option( RS2_OPTION_GAMMA );
-        }
-
         std::map< float, std::string > description_per_value = std::map<float, std::string>{
             { 0.f, "Disabled"},
             { 1.f, "50Hz" },

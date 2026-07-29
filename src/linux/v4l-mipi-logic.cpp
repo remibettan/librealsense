@@ -51,9 +51,14 @@ namespace librealsense
             static constexpr uint32_t RS_CAMERA_CID_READOUT_SHAPING         = ( RS_CAMERA_CID_BASE + 34 );
             static constexpr uint32_t RS_CAMERA_CID_AE_MODE                 = ( RS_CAMERA_CID_BASE + 35 );
 
+            static constexpr uint32_t RS_CAMERA_CID_SOC_PVT_TEMPERATURE     = ( RS_CAMERA_CID_BASE + 0x18 );
+            static constexpr uint32_t RS_CAMERA_CID_PROJECTOR_TEMPERATURE   = ( RS_CAMERA_CID_BASE + 0x19 );
+            static constexpr uint32_t RS_CAMERA_CID_OHM_TEMPERATURE         = ( RS_CAMERA_CID_BASE + 0x1A );
+            static constexpr uint32_t RS_CAMERA_CID_ERROR_CODE              = ( RS_CAMERA_CID_BASE + 0x1B );
+
             static constexpr uint8_t GVD_VALID_OPCODE = 0x10;
 
-            // D5xx / D457 MIPI depth-XU selector identifiers (subdevice 0).
+            // MIPI depth-XU selector identifiers (subdevice 0).
             static constexpr uint8_t RS_HWMONITOR                       = 1;
             static constexpr uint8_t RS_DEPTH_EMITTER_ENABLED           = 2;
             static constexpr uint8_t RS_EXPOSURE                        = 3;
@@ -69,6 +74,9 @@ namespace librealsense
             static constexpr uint8_t RS_DEPTH_AUTO_EXPOSURE_MODE        = 0x11;
             static constexpr uint8_t RS_EXTERNAL_SYNC                   = 0x12;
             static constexpr uint8_t RS_READOUT_SHAPING                 = 0x13;
+            static constexpr uint8_t RS_PVT_TEMPERATURE                 = 0x15;
+            static constexpr uint8_t RS_PROJECTOR_TEMPERATURE           = 0x16;
+            static constexpr uint8_t RS_OHM_TEMPERATURE                 = 0x17;
 
             bool is_auto_exposure_control( uint8_t control )
             {
@@ -304,8 +312,11 @@ namespace librealsense
                     case RS_DEPTH_AUTO_EXPOSURE_MODE : return RS_CAMERA_CID_AE_MODE;
                     case RS_EXTERNAL_SYNC : return RS_CAMERA_CID_SYNC_MODE;
                     case RS_READOUT_SHAPING : return RS_CAMERA_CID_READOUT_SHAPING;
+                    case RS_PVT_TEMPERATURE : return RS_CAMERA_CID_SOC_PVT_TEMPERATURE;
+                    case RS_OHM_TEMPERATURE : return RS_CAMERA_CID_OHM_TEMPERATURE;
+                    case RS_PROJECTOR_TEMPERATURE : return RS_CAMERA_CID_PROJECTOR_TEMPERATURE;
+                    case RS_ERROR_REPORTING : return RS_CAMERA_CID_ERROR_CODE;
                     // D457 Missing functionality
-                    //case RS_ERROR_REPORTING: TBD;
                     //case RS_EXT_TRIGGER: TBD;
                     //case RS_ASIC_AND_PROJECTOR_TEMPERATURES: TBD;
                     //case RS_LED_PWR: TBD;
