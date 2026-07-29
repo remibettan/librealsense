@@ -28,14 +28,19 @@ namespace rs2
         try
         {
             int uid = 0;
+            bool found_z16 = false;
             for (const auto& format : _sub->formats)
             {
                 if (format.second[0] == "Z16")
                 {
                     uid = format.first;
+                    found_z16 = true;
                     break;
                 }
             }
+            if (!found_z16)
+                return false;  // depth subdevice with no Z16 profile — abort rather than enable the wrong stream
+
             _sub->select_resolution(w, h, RS2_STREAM_DEPTH);
 
             _sub->stream_enabled.clear();
@@ -43,10 +48,10 @@ namespace rs2
             _sub->ui.selected_format_id.clear();
             _sub->ui.selected_format_id[uid] = 0;
 
-            for (int i = 0; i < _sub->shared_fps_values.size(); i++)
+            for (size_t i = 0; i < _sub->shared_fps_values.size(); i++)
             {
                 if (_sub->shared_fps_values[i] == fps)
-                    _sub->ui.selected_shared_fps_id = i;
+                    _sub->ui.selected_shared_fps_id = static_cast<int>(i);
             }
 
             if (!_sub->is_selected_combination_supported())
