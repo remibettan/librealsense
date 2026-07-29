@@ -12,13 +12,138 @@ namespace rs2
         : process_manager("D500 On-Chip Calibration"),
         _model(model),
         _dev(dev),
-        _sub(sub)
+        _sub(sub),
+        _viewer(viewer)
     {
         if (dev.supports(RS2_CAMERA_INFO_PRODUCT_LINE) &&
             std::string(dev.get_info(RS2_CAMERA_INFO_PRODUCT_LINE)) != "D500")
         {
             throw std::runtime_error("This Calibration Process cannot be processed with this device");
         }
+    }
+
+    bool d500_on_chip_calib_manager::start_viewer(int w, int h, int fps, invoker invoke)
+    {
+        bool frame_arrived = false;
+        try
+        {
+            int uid = 0;
+            for (const auto& format : _sub->formats)
+            {
+                if (format.second[0] == "Z16")
+                {
+                    uid = format.first;
+                    break;
+                }
+            }
+            _sub->select_resolution(w, h, RS2_STREAM_DEPTH);
+
+            _sub->stream_enabled.clear();
+            _sub->stream_enabled[uid] = true;
+            _sub->ui.selected_format_id.clear();
+            _sub->ui.selected_format_id[uid] = 0;
+
+            for (int i = 0; i < _sub->shared_fps_values.size(); i++)
+            {
+                if (_sub->shared_fps_values[i] == fps)
+                    _sub->ui.selected_shared_fps_id = i;
+            }
+
+            if (!_sub->is_selected_combination_supported())
+                return false;
+
+            auto profiles = _sub->get_selected_profiles();
+
+            invoke([&]()
+            {
+                if (!_model.dev_syncer)
+                    _model.dev_syncer = _viewer.syncer->create_syncer();
+
+                _sub->play(profiles, _viewer, _model.dev_syncer);
+                for (auto&& profile : profiles)
+                    _viewer.begin_stream(_sub, profile);
+            });
+
+            int count = 0;
+            while (!frame_arrived && count++ < 200)
+            {
+                for (auto&& stream : _viewer.streams)
+                {
+                    if (std::find(profiles.begin(), profiles.end(),
+                        stream.second.original_profile) != profiles.end())
+                    {
+                        auto now = std::chrono::high_resolution_clock::now();
+                        if (now - stream.second.last_frame < std::chrono::milliseconds(100))
+                            frame_arrived = true;
+                    }
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        }
+        catch (...) {}
+        return frame_arrived;
+    }
+
+    void d500_on_chip_calib_manager::try_start_viewer(int w, int h, int fps, invoker invoke)
+    {
+        bool started = start_viewer(w, h, fps, invoke);
+        if (!started)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(600));
+            started = start_viewer(w, h, fps, invoke);
+        }
+        if (!started)
+        {
+            stop_viewer(invoke);
+            throw std::runtime_error(rsutils::string::from()
+                << "Failed to start streaming (" << w << ", " << h << ", " << fps << ")!");
+        }
+    }
+
+    void d500_on_chip_calib_manager::stop_viewer(invoker invoke)
+    {
+        try
+        {
+            invoke([&]()
+            {
+                if (_sub->streaming)
+                    _sub->stop(_viewer.not_model);
+            });
+        }
+        catch (...) {}
+    }
+
+    void d500_on_chip_calib_manager::restore_workspace(invoker invoke)
+    {
+        if (!_saved_ui)
+            return;  // no auto-start happened on this manager
+
+        stop_viewer(invoke);
+
+        _sub->ui = *_saved_ui;
+        _sub->stream_enabled = _saved_stream_enabled;
+        _saved_ui.reset();
+
+        if (_was_streaming)
+        {
+            try
+            {
+                auto profiles = _sub->get_selected_profiles();
+                if (!profiles.empty())
+                {
+                    invoke([&]()
+                    {
+                        if (!_model.dev_syncer)
+                            _model.dev_syncer = _viewer.syncer->create_syncer();
+                        _sub->play(profiles, _viewer, _model.dev_syncer);
+                        for (auto&& profile : profiles)
+                            _viewer.begin_stream(_sub, profile);
+                    });
+                }
+            }
+            catch (...) {}
+        }
+        _was_streaming = false;
     }
 
     std::string d500_on_chip_calib_manager::convert_action_to_json_string()
@@ -38,46 +163,82 @@ namespace rs2
         return ss.str();
     }
 
-    bool d500_on_chip_calib_manager::uses_hkr_new_tc() const
+    bool d500_on_chip_calib_manager::uses_interactive_triggered_calibration() const
     {
-        // Mirrors ds::d5x5_hkr_new_tc_pids in src/ds/d500/d500-private.h — the viewer cannot include SDK-internal headers.
-        // Keep the two lists in sync when adding new PIDs.
-        static const std::set< std::string > hkr_new_tc_pids = {
+        // Mirrors ds::d5x5_interactive_triggered_calibration_pids in src/ds/d500/d500-private.h —
+        // the viewer cannot include SDK-internal headers. Keep the two lists in sync when adding new PIDs.
+        static const std::set< std::string > interactive_triggered_calibration_pids = {
             "0C01", "0C02", "0C03", "0C04", "0C05", "0C06", "0C07", "0C08"
         };
-        return hkr_new_tc_pids.count(get_device_pid()) > 0;
+        return interactive_triggered_calibration_pids.count(get_device_pid()) > 0;
     }
 
     void d500_on_chip_calib_manager::process_flow(std::function<void()> cleanup, invoker invoke)
     {
-        std::string json = convert_action_to_json_string();
+        const bool interactive = uses_interactive_triggered_calibration();
+        const bool interactive_run = interactive && action == RS2_CALIB_ACTION_ON_CHIP_CALIB;
+        const bool interactive_terminal = interactive
+            && (action == RS2_CALIB_ACTION_ON_CHIP_CALIB_COMMIT
+                || action == RS2_CALIB_ACTION_ON_CHIP_CALIB_ABORT);
+        const bool interactive_try = interactive
+            && (action == RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW
+                || action == RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_OLD);
 
-        auto calib_dev = _dev.as<auto_calibrated_device>();
-        float health = 0.f;
-        int timeout_ms = 240000; // increased to 4 minutes for additional algo processing
-        auto ans = calib_dev.run_on_chip_calibration(json, &health,
-            [&](const float progress) {_progress = progress; }, timeout_ms);
+        // Auto-start disabled until the FW supports streaming during triggered calibration.
+        // if (interactive_run)
+        // {
+        //     _saved_ui = std::make_shared<subdevice_ui_selection>(_sub->ui);
+        //     _saved_stream_enabled = _sub->stream_enabled;
+        //     _was_streaming = _sub->streaming;
+        //     try_start_viewer(1280, 720, 30, invoke);
+        // }
+        (void)interactive_run;
 
-        // For D5x5 HKR-new TC, the initial RUN call returns at HEALTH_CHECK — populate scalar health
-        // so the UI can render pass/fail; the flow is not "done" until a subsequent COMMIT reaches COMPLETE.
-        if (uses_hkr_new_tc() && action == RS2_CALIB_ACTION_ON_CHIP_CALIB)
+        try
         {
-            _scalar_health = health;
-            _done = true;   // "done" here means "phase complete"; the notification UI transitions to HEALTH_CHECK
-            return;
-        }
+            std::string json = convert_action_to_json_string();
+            auto calib_dev = _dev.as<auto_calibrated_device>();
+            float health = 0.f;
+            int timeout_ms = 240000; // increased to 4 minutes for additional algo processing
+            auto ans = calib_dev.run_on_chip_calibration(json, &health,
+                [&](const float progress) {_progress = progress; }, timeout_ms);
 
-        if (_progress == 100.0)
+            // For D5x5 interactive triggered calibration, the initial RUN call returns at HEALTH_CHECK — populate scalar health
+            // so the UI can render pass/fail; the flow is not "done" until a subsequent COMMIT reaches COMPLETE.
+            if (interactive_run)
+            {
+                _scalar_health = health;
+                _done = true;   // "done" here means "phase complete"; the notification UI transitions to HEALTH_CHECK
+                return;         // leave streaming on — TRY/COMMIT/ABORT need it live
+            }
+
+            // Interactive TRY_NEW/TRY_OLD are one-shot live-preview toggles — mark done, keep stream live.
+            if (interactive_try)
+            {
+                _done = true;
+                return;
+            }
+
+            // Interactive terminal (COMMIT / ABORT) — mark done and restore the user's pre-calibration workspace.
+            if (interactive_terminal)
+            {
+                _done = true;
+                restore_workspace(invoke);
+                return;
+            }
+
+            // Legacy D500 path (D585S / D585_LEGACY).
+            if (_progress == 100.0)
+                _done = true;
+            else
+                _failed = true;  // exception must have been thrown from run_on_chip_calibration call
+        }
+        catch (...)
         {
-            _done = true;
+            // Any failure of a phase where we own the stream → restore before propagating so the user isn't left mid-flight.
+            restore_workspace(invoke);
+            throw;
         }
-        else
-        {
-            // exception must have been thrown from run_on_chip_calibration call
-            _failed = true;
-        }
-
-
     }
 
     bool d500_on_chip_calib_manager::abort()
@@ -243,10 +404,10 @@ namespace rs2
             {
                 if (update_manager->done())
                 {
-                    // D5x5 HKR-new: the first RUN phase completes at HEALTH_CHECK, not COMPLETE — the user has yet to
+                    // D5x5 interactive: the first RUN phase completes at HEALTH_CHECK, not COMPLETE — the user has yet to
                     // approve. The COMMIT phase, in contrast, ends at COMPLETE.
-                    const bool hkr_first_phase = get_manager().uses_hkr_new_tc() && ! commit_phase;
-                    if (hkr_first_phase && update_state == RS2_CALIB_STATE_CALIB_IN_PROCESS)
+                    const bool interactive_first_phase = get_manager().uses_interactive_triggered_calibration() && ! commit_phase;
+                    if (interactive_first_phase && update_state == RS2_CALIB_STATE_CALIB_IN_PROCESS)
                     {
                         update_state = RS2_CALIB_STATE_HEALTH_CHECK;
                     }
@@ -282,6 +443,9 @@ namespace rs2
 
     int d500_autocalib_notification_model::calc_height()
     {
+        // Restore default width for every non-health state; the health check row needs extra room for four buttons.
+        width = (update_state == RS2_CALIB_STATE_HEALTH_CHECK) ? 460 : 320;
+
         // adjusting the height of the notification window
         if (update_state == RS2_CALIB_STATE_CALIB_IN_PROCESS ||
             update_state == RS2_CALIB_STATE_COMPLETE ||
@@ -346,10 +510,6 @@ namespace rs2
         {
             update_state = RS2_CALIB_STATE_ABORT;
         }
-        if (ImGui::IsItemHovered())
-        {
-            RsImGui::CustomTooltip("Abort Calibration Process");
-        }
     }
 
     void d500_autocalib_notification_model::update_ui_after_abort_called(ux_window& win, int x, int y)
@@ -404,6 +564,11 @@ namespace rs2
 
     void d500_autocalib_notification_model::draw_health_check(ux_window& win, int x, int y, int bar_width)
     {
+        using namespace std::chrono;
+
+        // The base Dismiss button is not needed on this screen — the four action buttons (Commit/Discard/Try…) are terminal.
+        enable_dismiss = false;
+
         const float h = get_manager().get_scalar_health();
         const bool passes = get_manager().health_passes();
 
@@ -414,8 +579,13 @@ namespace rs2
         if (h < 0.f) ImGui::Text("Rect health: n/a");
         else         ImGui::Text("Rect health: %.3f px  (threshold 0.400)", h);
 
-        // Button row: Try New | Try Old | Commit | Discard
-        const float btn_w = float(bar_width) / 4.f - 4.f;
+        // Button row: Try New | Try Old | Commit | Discard. Ignore the caller's bar_width — it reserves a 115px
+        // right gutter for the base Dismiss button, which we've hidden above; use the full popup width instead.
+        // Reserve 3 × ImGui default ItemSpacing.x (~8px each) between the four buttons so Discard doesn't clip the right edge.
+        (void)bar_width;
+        const float row_width = float(width - 10);
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float btn_w = (row_width - 3.f * spacing) / 4.f;
         const float btn_y = float(y + height - 28);
 
         std::string try_new_id  = rsutils::string::from() << "Try New##"  << index;
@@ -423,22 +593,44 @@ namespace rs2
         std::string commit_id   = rsutils::string::from() << "Commit##"   << index;
         std::string discard_id  = rsutils::string::from() << "Discard##"  << index;
 
+        // The notification base pushes a near-transparent ImGuiCol_Button (see notification_model::set_color_scheme),
+        // so buttons on this row need their own scheme to read as clickable — matches calibration_button() and the
+        // rest of on-chip-calib.
+        const auto sat = 1.f + sin(duration_cast<milliseconds>(system_clock::now() - created_time).count() / 700.f) * 0.1f;
+
         ImGui::SetCursorScreenPos({ float(x + 5), btn_y });
+        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, sat));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, 1.5f));
         if (ImGui::Button(try_new_id.c_str(), { btn_w, 20.f }))
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW);
+        ImGui::PopStyleColor(2);
 
         ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, sat));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, 1.5f));
         if (ImGui::Button(try_old_id.c_str(), { btn_w, 20.f }))
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_OLD);
+        ImGui::PopStyleColor(2);
 
         ImGui::SameLine();
-        // ImGui::Button has no direct disabled flag; when health check fails the button is drawn but the action is guarded.
+        // Commit is health-gated: on FAIL, dim the button and swallow the click so it visibly reads as disabled.
+        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, passes ? sat : 0.4f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, passes ? 1.5f : 0.4f));
         if (ImGui::Button(commit_id.c_str(), { btn_w, 20.f }) && passes)
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_COMMIT);
+        ImGui::PopStyleColor(2);
 
         ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, sat));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, 1.5f));
         if (ImGui::Button(discard_id.c_str(), { btn_w, 20.f }))
+        {
+            // Fire the ABORT command in the background (manager restores the workspace on completion) and
+            // dismiss the popup immediately — the user has already made their decision, no further UI is needed.
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_ABORT);
+            dismissed = true;
+        }
+        ImGui::PopStyleColor(2);
     }
 
     void d500_autocalib_notification_model::update_ui_on_calibration_complete(ux_window& win, int x, int y)

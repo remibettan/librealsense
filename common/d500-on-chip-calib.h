@@ -6,6 +6,7 @@
 #include "notifications.h"
 #include <rsutils/concurrency/concurrency.h>
 #include "../src/algo.h"
+#include <map>
 #include <set>
 
 #include <random>
@@ -32,9 +33,9 @@ namespace rs2
             RS2_CALIB_ACTION_ON_CHIP_CALIB,         // On-Chip calibration
             RS2_CALIB_ACTION_ON_CHIP_CALIB_DRY_RUN, // Dry Run
             RS2_CALIB_ACTION_ON_CHIP_CALIB_ABORT,   // Abort
-            RS2_CALIB_ACTION_ON_CHIP_CALIB_COMMIT,  // D5x5 HKR-new only — approve HEALTH_CHECK candidate
-            RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW, // D5x5 HKR-new only — preview new candidate live
-            RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_OLD  // D5x5 HKR-new only — restore currently-committed table live
+            RS2_CALIB_ACTION_ON_CHIP_CALIB_COMMIT,  // D5x5 interactive only — approve HEALTH_CHECK candidate
+            RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW, // D5x5 interactive only — preview new candidate live
+            RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_OLD  // D5x5 interactive only — restore currently-committed table live
         };
 
         calib_action action = RS2_CALIB_ACTION_ON_CHIP_CALIB;
@@ -46,10 +47,10 @@ namespace rs2
         void prepare_for_calibration();
         std::string get_device_pid() const;
 
-        // D5x5 HKR-new TC only. The viewer sees only the scalar `rect_health` populated in the `float* health`
+        // D5x5 interactive triggered calibration only. The viewer sees only the scalar `rect_health` populated in the `float* health`
         // out-param of run_on_chip_calibration — the full CalibrationHealthMetrics struct requires an SDK-internal
         // include, deliberately not surfaced through common/ to avoid a public API addition.
-        bool uses_hkr_new_tc() const;
+        bool uses_interactive_triggered_calibration() const;
         float get_scalar_health() const { return _scalar_health; }
         bool health_passes() const { return _scalar_health >= 0.f && _scalar_health < 0.4f; }  // provisional per spec §5.5
 
@@ -58,10 +59,23 @@ namespace rs2
         std::string convert_action_to_json_string();
         float _scalar_health = -1.f;
 
+        // D5x5 interactive triggered calibration only — mirrors on_chip_calib_manager::start_viewer for the depth-only case.
+        // Selects Z16 @ w×h @ fps on the depth subdevice, kicks off streaming, waits for the first frame.
+        bool start_viewer(int w, int h, int fps, invoker invoke);
+        void try_start_viewer(int w, int h, int fps, invoker invoke);
+        void stop_viewer(invoker invoke);
+        // Undo the RUN-phase auto-start: stop the calibration stream, restore _sub->ui/stream_enabled, replay
+        // the user's prior stream if they were streaming before. No-op if we never auto-started.
+        void restore_workspace(invoker invoke);
+
         template<class T>
         void set_option_if_needed(T& sensor, rs2_option opt, float required_value);
         device _dev;
         device_model& _model;
+        viewer_model& _viewer;
+        bool _was_streaming = false;
+        std::shared_ptr<subdevice_ui_selection> _saved_ui;
+        std::map<int, bool> _saved_stream_enabled;
     };
 
     template<class T>
@@ -96,8 +110,8 @@ namespace rs2
             RS2_CALIB_STATE_INIT_DRY_RUN,
             RS2_CALIB_STATE_ABORT,
             RS2_CALIB_STATE_ABORT_CALLED,
-            RS2_CALIB_STATE_HEALTH_CHECK,    // D5x5 HKR-new only — candidate ready, awaiting user Commit/Discard/Try
-            RS2_CALIB_STATE_COMMIT_IN_PROGRESS  // D5x5 HKR-new only — flash write in progress
+            RS2_CALIB_STATE_HEALTH_CHECK,    // D5x5 interactive only — candidate ready, awaiting user Commit/Discard/Try
+            RS2_CALIB_STATE_COMMIT_IN_PROGRESS  // D5x5 interactive only — flash write in progress
         };
 
         d500_autocalib_notification_model(std::string name, std::shared_ptr<process_manager> manager, bool expaned);
@@ -110,7 +124,7 @@ namespace rs2
         void update_ui_after_abort_called(ux_window& win, int x, int y);
         void update_ui_on_calibration_complete(ux_window& win, int x, int y);
         void update_ui_on_failure(ux_window& win, int x, int y);
-        void draw_health_check(ux_window& win, int x, int y, int bar_width);   // D5x5 HKR-new only
+        void draw_health_check(ux_window& win, int x, int y, int bar_width);   // D5x5 interactive only
         void start_action_phase(d500_on_chip_calib_manager::calib_action a);   // helper for Commit / Try / Discard buttons
         std::string _error_message = "";
         bool reset_called = false;

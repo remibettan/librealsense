@@ -19,8 +19,8 @@ struct d500_calibration_answer
     ds::d500_coefficients_table depth_calibration;
 };
 
-// D5x5 HKR-new reply layout — 3-byte header + 20-byte health block + 512-byte table (total 535 from HEALTH_CHECK).
-struct hkr_calibration_answer
+// D5x5 interactive triggered calibration reply layout — 3-byte header + 20-byte health block + 512-byte table (total 535 from HEALTH_CHECK).
+struct interactive_calibration_answer
 {
     calibration_state state;            // wire byte 2 means HEALTH_CHECK on this path
     int8_t progress;
@@ -30,11 +30,17 @@ struct hkr_calibration_answer
 };
 #pragma pack(pop)
 
+// check_buffer_size_interactive derives the IDLE/PROCESS header size from these three sizeofs.
+// If padding ever leaks in (e.g. the pack pragma is dropped), that check silently rejects the FW's 3-byte reply.
+static_assert(sizeof(interactive_calibration_answer)
+                  == 3 + sizeof(calibration_health_metrics) + sizeof(ds::d500_coefficients_table),
+              "interactive_calibration_answer must be tightly packed: state+progress+result form a 3-byte header");
+
 class debug_interface;
 class d500_debug_protocol_calibration_engine : public calibration_engine_interface
 {
 public:
-    d500_debug_protocol_calibration_engine(debug_interface* dev) : _dev(dev), _hkr_new_tc(false), _calib_ans{}, _hkr_ans{} {}
+    d500_debug_protocol_calibration_engine(debug_interface* dev) : _dev(dev), _interactive_triggered_calibration(false), _calib_ans{}, _interactive_ans{} {}
     void update_triggered_calibration_status() override;
     std::vector<uint8_t> run_triggered_calibration(calibration_mode _mode) override;
     virtual calibration_state get_triggered_calibration_state() const override;
@@ -46,20 +52,20 @@ public:
     virtual void set_calibration_config(const std::string& calibration_config_json_str) const override;
     ds::d500_coefficients_table get_depth_calibration() const;
 
-    // D5x5 HKR-new TC path.
-    void set_hkr_new_tc_enabled( bool enabled ) override { _hkr_new_tc = enabled; }
-    bool is_hkr_new_tc_enabled() const override { return _hkr_new_tc; }
+    // D5x5 interactive triggered calibration path.
+    void set_interactive_triggered_calibration_enabled( bool enabled ) override { _interactive_triggered_calibration = enabled; }
+    bool is_interactive_triggered_calibration_enabled() const override { return _interactive_triggered_calibration; }
     calibration_health_metrics get_triggered_calibration_health() const override;
     std::vector<uint8_t> run_triggered_calibration_try( try_calibration_selection selection ) override;
 
 
 private:
     bool check_buffer_size_from_get_calib_status(std::vector<uint8_t> res) const;
-    bool check_buffer_size_hkr(std::vector<uint8_t> res) const;
+    bool check_buffer_size_interactive(std::vector<uint8_t> res) const;
     debug_interface* _dev;
-    bool _hkr_new_tc;
+    bool _interactive_triggered_calibration;
     d500_calibration_answer _calib_ans;
-    hkr_calibration_answer _hkr_ans;
+    interactive_calibration_answer _interactive_ans;
 };
 
 } // namespace librealsense

@@ -32,9 +32,9 @@ bool d500_debug_protocol_calibration_engine::check_buffer_size_from_get_calib_st
     return is_size_ok;
 }
 
-bool d500_debug_protocol_calibration_engine::check_buffer_size_hkr(std::vector<uint8_t> res) const
+bool d500_debug_protocol_calibration_engine::check_buffer_size_interactive(std::vector<uint8_t> res) const
 {
-    // D5x5 HKR-new TC: 3-byte header for IDLE/PROCESS, 535 bytes from HEALTH_CHECK onward
+    // D5x5 interactive triggered calibration: 3-byte header for IDLE/PROCESS, 535 bytes from HEALTH_CHECK onward
     // (3 header + 20 health + 512 candidate/committed table).
     if (res.size() < 2)
         return false;
@@ -42,8 +42,8 @@ bool d500_debug_protocol_calibration_engine::check_buffer_size_hkr(std::vector<u
     // Wire state byte 2 on this path means HEALTH_CHECK, not SUCCESS. Anything at or beyond that carries the full payload.
     const bool has_payload = res[0] >= 2;
     if (!has_payload)
-        return res.size() == (sizeof(hkr_calibration_answer) - sizeof(calibration_health_metrics) - sizeof(ds::d500_coefficients_table));
-    return res.size() == sizeof(hkr_calibration_answer);
+        return res.size() == (sizeof(interactive_calibration_answer) - sizeof(calibration_health_metrics) - sizeof(ds::d500_coefficients_table));
+    return res.size() == sizeof(interactive_calibration_answer);
 }
 
 void d500_debug_protocol_calibration_engine::update_triggered_calibration_status()
@@ -60,34 +60,34 @@ void d500_debug_protocol_calibration_engine::update_triggered_calibration_status
     // slicing 4 first bytes - opcode
     res.erase(res.begin(), res.begin() + 4);
 
-    if (_hkr_new_tc)
+    if (_interactive_triggered_calibration)
     {
-        if (!check_buffer_size_hkr(res))
-            throw std::runtime_error("GET_CALIB_STATUS (HKR) returned struct with wrong size");
+        if (!check_buffer_size_interactive(res))
+            throw std::runtime_error("GET_CALIB_STATUS (interactive) returned struct with wrong size");
 
         // Header (3 bytes) is always present; health + candidate table (532 more) only from HEALTH_CHECK onward.
-        _hkr_ans = {};
-        _hkr_ans.state    = static_cast<calibration_state >(res[0]);
-        _hkr_ans.progress = static_cast<int8_t             >(res[1]);
-        _hkr_ans.result   = static_cast<calibration_result >(res[2]);
-        if (res.size() == sizeof(hkr_calibration_answer))
+        _interactive_ans = {};
+        _interactive_ans.state    = static_cast<calibration_state >(res[0]);
+        _interactive_ans.progress = static_cast<int8_t             >(res[1]);
+        _interactive_ans.result   = static_cast<calibration_result >(res[2]);
+        if (res.size() == sizeof(interactive_calibration_answer))
         {
             constexpr size_t health_off = 3;
             constexpr size_t table_off  = 3 + sizeof(calibration_health_metrics);
-            std::memcpy(&_hkr_ans.health, res.data() + health_off, sizeof(_hkr_ans.health));
-            std::memcpy(&_hkr_ans.depth_calibration, res.data() + table_off, sizeof(_hkr_ans.depth_calibration));
+            std::memcpy(&_interactive_ans.health, res.data() + health_off, sizeof(_interactive_ans.health));
+            std::memcpy(&_interactive_ans.depth_calibration, res.data() + table_off, sizeof(_interactive_ans.depth_calibration));
         }
 
-        // Re-map wire state byte to enum: on the HKR path, byte 2 means HEALTH_CHECK, byte 3 FLASH_UPDATE, byte 4 COMPLETE.
-        switch (static_cast<uint8_t>(_hkr_ans.state))
+        // Re-map wire state byte to enum: on the interactive path, byte 2 means HEALTH_CHECK, byte 3 FLASH_UPDATE, byte 4 COMPLETE.
+        switch (static_cast<uint8_t>(_interactive_ans.state))
         {
-            case 0: _hkr_ans.state = calibration_state::IDLE;         break;
-            case 1: _hkr_ans.state = calibration_state::PROCESS;      break;
-            case 2: _hkr_ans.state = calibration_state::HEALTH_CHECK; break;
-            case 3: _hkr_ans.state = calibration_state::FLASH_UPDATE; break;
-            case 4: _hkr_ans.state = calibration_state::COMPLETE;     break;
+            case 0: _interactive_ans.state = calibration_state::IDLE;         break;
+            case 1: _interactive_ans.state = calibration_state::PROCESS;      break;
+            case 2: _interactive_ans.state = calibration_state::HEALTH_CHECK; break;
+            case 3: _interactive_ans.state = calibration_state::FLASH_UPDATE; break;
+            case 4: _interactive_ans.state = calibration_state::COMPLETE;     break;
             default:
-                throw std::runtime_error("GET_CALIB_STATUS (HKR) returned unknown state byte");
+                throw std::runtime_error("GET_CALIB_STATUS (interactive) returned unknown state byte");
         }
         return;
     }
@@ -123,20 +123,20 @@ std::vector<uint8_t> d500_debug_protocol_calibration_engine::run_triggered_calib
 
 calibration_state d500_debug_protocol_calibration_engine::get_triggered_calibration_state() const
 {
-    return _hkr_new_tc ? _hkr_ans.state : _calib_ans.state;
+    return _interactive_triggered_calibration ? _interactive_ans.state : _calib_ans.state;
 }
 calibration_result d500_debug_protocol_calibration_engine::get_triggered_calibration_result() const
 {
-    return _hkr_new_tc ? _hkr_ans.result : _calib_ans.result;
+    return _interactive_triggered_calibration ? _interactive_ans.result : _calib_ans.result;
 }
 int8_t d500_debug_protocol_calibration_engine::get_triggered_calibration_progress() const
 {
-    return _hkr_new_tc ? _hkr_ans.progress : _calib_ans.progress;
+    return _interactive_triggered_calibration ? _interactive_ans.progress : _calib_ans.progress;
 }
 
 calibration_health_metrics d500_debug_protocol_calibration_engine::get_triggered_calibration_health() const
 {
-    return _hkr_new_tc ? _hkr_ans.health : calibration_health_metrics{};
+    return _interactive_triggered_calibration ? _interactive_ans.health : calibration_health_metrics{};
 }
 
 std::vector<uint8_t> d500_debug_protocol_calibration_engine::get_calibration_table(std::vector<uint8_t>& current_calibration) const
@@ -250,7 +250,7 @@ void d500_debug_protocol_calibration_engine::set_calibration_config(const std::s
 
 ds::d500_coefficients_table d500_debug_protocol_calibration_engine::get_depth_calibration() const
 {
-    return _hkr_new_tc ? _hkr_ans.depth_calibration : _calib_ans.depth_calibration;
+    return _interactive_triggered_calibration ? _interactive_ans.depth_calibration : _calib_ans.depth_calibration;
 }
 
 }// namespace librealsense

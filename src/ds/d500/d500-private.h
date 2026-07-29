@@ -67,9 +67,9 @@ namespace librealsense
             D585_3C_PROTO_PID
         };
 
-        // D5x5 (non-safety, non-legacy) HKR-new Triggered Calibration flow.
-        // D555 stays on the D400 OCC path; D585S and D585_LEGACY_PID stay on the current D500 TC flow.
-        static const std::set<std::uint16_t> d5x5_hkr_new_tc_pids = {
+        // D5x5 (non-safety, non-legacy) interactive Triggered Calibration flow.
+        // D555 stays on the D400 OCC path; D585S and D585_LEGACY_PID stay on the current D500 triggered-calibration flow.
+        static const std::set<std::uint16_t> d5x5_interactive_triggered_calibration_pids = {
             D535_2C_PID,
             D535_3C_PID,
             D535F_PID,
@@ -80,9 +80,9 @@ namespace librealsense
             D585_3C_PROTO_PID
         };
 
-        inline bool uses_hkr_new_tc( uint16_t pid )
+        inline bool uses_interactive_triggered_calibration( uint16_t pid )
         {
-            return d5x5_hkr_new_tc_pids.find( pid ) != d5x5_hkr_new_tc_pids.end();
+            return d5x5_interactive_triggered_calibration_pids.find( pid ) != d5x5_interactive_triggered_calibration_pids.end();
         }
 
         static const std::map< std::uint16_t, std::string > rs500_sku_names = {

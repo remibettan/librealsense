@@ -22,7 +22,8 @@ namespace librealsense
         "Done Success",
         "Done Failure",
         "Flash Update",
-        "Complete"
+        "Complete",
+        "Health Check"   // interactive triggered calibration — enum value 6
     };
 
     static const std::string calibration_result_strings[] = {
@@ -48,7 +49,7 @@ namespace librealsense
             throw not_implemented_exception( " debug_interface must be supplied to d500_auto_calibrated" );
     }
 
-    bool d500_auto_calibrated::device_uses_hkr_new_tc() const
+    bool d500_auto_calibrated::device_uses_interactive_triggered_calibration() const
     {
         auto dev = As< device >( _debug_dev );
         if( ! dev || ! dev->supports_info( RS2_CAMERA_INFO_PRODUCT_ID ) )
@@ -56,7 +57,7 @@ namespace librealsense
         try
         {
             auto pid = static_cast< uint16_t >( std::stoi( dev->get_info( RS2_CAMERA_INFO_PRODUCT_ID ), nullptr, 16 ) );
-            return ds::uses_hkr_new_tc( pid );
+            return ds::uses_interactive_triggered_calibration( pid );
         }
         catch( ... )
         {
@@ -141,18 +142,18 @@ namespace librealsense
         if( is_d555 )
             return run_occ( timeout_ms, json, health, progress_callback );
 
-        if( device_uses_hkr_new_tc() )
-            return run_hkr_triggered_calibration( timeout_ms, json, health, progress_callback );
+        if( device_uses_interactive_triggered_calibration() )
+            return run_interactive_triggered_calibration( timeout_ms, json, health, progress_callback );
 
         return run_triggered_calibration( timeout_ms, json, progress_callback );
     }
 
-    std::vector< uint8_t > d500_auto_calibrated::run_hkr_triggered_calibration( int timeout_ms,
-                                                                                std::string json,
-                                                                                float * const health,
-                                                                                rs2_update_progress_callback_sptr progress_callback )
+    std::vector< uint8_t > d500_auto_calibrated::run_interactive_triggered_calibration( int timeout_ms,
+                                                                                        std::string json,
+                                                                                        float * const health,
+                                                                                        rs2_update_progress_callback_sptr progress_callback )
     {
-        _calib_engine->set_hkr_new_tc_enabled( true );
+        _calib_engine->set_interactive_triggered_calibration_enabled( true );
 
         try
         {
@@ -173,12 +174,12 @@ namespace librealsense
 
             // RUN / DRY_RUN / COMMIT — poll until we hit a terminal state for this mode.
             const bool unattended = ( _commit_trigger == commit_trigger::UNATTENDED ) || ( _mode == calibration_mode::COMMIT );
-            auto res = update_hkr_calibration_status( timeout_ms, unattended, progress_callback );
+            auto res = update_interactive_calibration_status( timeout_ms, unattended, progress_callback );
 
             if( health )
             {
                 // Only trust the health payload once the FW has actually populated it (from HEALTH_CHECK onward).
-                // If FAILED_TO_CONVERGE / FAILED_TO_RUN broke the loop before that, _hkr_ans.health is still zero-initialized
+                // If FAILED_TO_CONVERGE / FAILED_TO_RUN broke the loop before that, _interactive_ans.health is still zero-initialized
                 // and 0.0 would spuriously read as "PASS" (< 0.40 threshold) in the viewer — return the -1 sentinel instead.
                 if( _state == calibration_state::HEALTH_CHECK || _state == calibration_state::COMPLETE )
                 {
@@ -198,13 +199,13 @@ namespace librealsense
         }
         catch( ... )
         {
-            throw std::runtime_error( rsutils::string::from() << "HKR triggered calibration could not be triggered" );
+            throw std::runtime_error( rsutils::string::from() << "Interactive triggered calibration could not be triggered" );
         }
     }
 
-    std::vector< uint8_t > d500_auto_calibrated::update_hkr_calibration_status( int timeout_ms,
-                                                                                bool unattended,
-                                                                                rs2_update_progress_callback_sptr progress_callback )
+    std::vector< uint8_t > d500_auto_calibrated::update_interactive_calibration_status( int timeout_ms,
+                                                                                        bool unattended,
+                                                                                        rs2_update_progress_callback_sptr progress_callback )
     {
         auto start_time = std::chrono::high_resolution_clock::now();
         std::vector< uint8_t > res;
@@ -215,6 +216,16 @@ namespace librealsense
 
             _state = _calib_engine->get_triggered_calibration_state();
             _result = _calib_engine->get_triggered_calibration_result();
+            {
+                std::stringstream ss;
+                ss << "Calibration in progress - State = " << calibration_state_strings[static_cast<int>(_state)];
+                if( _state == calibration_state::PROCESS )
+                {
+                    ss << ", progress = " << static_cast<int>( _calib_engine->get_triggered_calibration_progress() );
+                    ss << ", result = " << calibration_result_strings[static_cast<int>(_result)];
+                }
+                LOG_INFO( ss.str().c_str() );
+            }
             if( progress_callback )
                 progress_callback->on_update_progress( _calib_engine->get_triggered_calibration_progress() );
 
@@ -236,7 +247,7 @@ namespace librealsense
                 break;
 
             if( std::chrono::high_resolution_clock::now() - start_time > std::chrono::milliseconds( timeout_ms ) )
-                throw std::runtime_error( "HKR triggered calibration timeout" );
+                throw std::runtime_error( "Interactive triggered calibration timeout" );
         }
         while( true );
 
@@ -248,7 +259,7 @@ namespace librealsense
         }
         else if( _result == calibration_result::FAILED_TO_RUN )
         {
-            throw std::runtime_error( "HKR triggered calibration failed to run" );
+            throw std::runtime_error( "Interactive triggered calibration failed to run" );
         }
 
         return res;
