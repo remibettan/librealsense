@@ -22,7 +22,8 @@ namespace librealsense
         "Done Success",
         "Done Failure",
         "Flash Update",
-        "Complete"
+        "Complete",
+        "Health Check"   // interactive triggered calibration — enum value 6
     };
 
     static const std::string calibration_result_strings[] = {
@@ -41,9 +42,26 @@ namespace librealsense
         , _result( calibration_result::UNKNOWN )
         , _depth_sensor( ds )
         , _debug_dev( debug_dev )
+        , _try_selection( try_calibration_selection::NEW )
     {
         if( ! _debug_dev )
             throw not_implemented_exception( " debug_interface must be supplied to d500_auto_calibrated" );
+    }
+
+    bool d500_auto_calibrated::device_uses_interactive_triggered_calibration() const
+    {
+        auto dev = As< device >( _debug_dev );
+        if( ! dev || ! dev->supports_info( RS2_CAMERA_INFO_PRODUCT_ID ) )
+            return false;
+        try
+        {
+            auto pid = static_cast< uint16_t >( std::stoi( dev->get_info( RS2_CAMERA_INFO_PRODUCT_ID ), nullptr, 16 ) );
+            return ds::uses_interactive_triggered_calibration( pid );
+        }
+        catch( ... )
+        {
+            return false;
+        }
     }
 
     void d500_auto_calibrated::check_preconditions_and_set_state()
@@ -78,11 +96,25 @@ namespace librealsense
 
     void d500_auto_calibrated::get_mode_from_json(const std::string& json)
     {
-        if (json.find("calib run") != std::string::npos)
-            _mode = calibration_mode::RUN;
-        else if (json.find("calib dry run") != std::string::npos)
+        if (json.find("calib dry run") != std::string::npos)
             _mode = calibration_mode::DRY_RUN;
-        else if (json.find("calib abort") != std::string::npos)
+        else if (json.find("calib commit") != std::string::npos)
+            _mode = calibration_mode::COMMIT;
+        else if (json.find("calib cancel") != std::string::npos)
+            _mode = calibration_mode::ABORT;
+        else if (json.find("calib try new") != std::string::npos)
+        {
+            _mode = calibration_mode::TRY;
+            _try_selection = try_calibration_selection::NEW;
+        }
+        else if (json.find("calib try old") != std::string::npos)
+        {
+            _mode = calibration_mode::TRY;
+            _try_selection = try_calibration_selection::OLD;
+        }
+        else if (json.find("calib run") != std::string::npos)
+            _mode = calibration_mode::RUN;
+        else if (json.find("calib abort") != std::string::npos)  // legacy alias, kept for D585S callers
             _mode = calibration_mode::ABORT;
         else
             throw std::runtime_error("run_on_chip_calibration called with wrong content in json file");
@@ -102,7 +134,139 @@ namespace librealsense
         if( is_d555 )
             return run_occ( timeout_ms, json, health, progress_callback );
 
+        if( device_uses_interactive_triggered_calibration() )
+            return run_interactive_triggered_calibration( timeout_ms, json, health, progress_callback );
+
         return run_triggered_calibration( timeout_ms, json, progress_callback );
+    }
+
+    std::vector< uint8_t > d500_auto_calibrated::run_interactive_triggered_calibration( int timeout_ms,
+                                                                                        std::string json,
+                                                                                        float * const health,
+                                                                                        rs2_update_progress_callback_sptr progress_callback )
+    {
+        _calib_engine->set_interactive_triggered_calibration_enabled( true );
+
+        try
+        {
+            get_mode_from_json( json );
+
+            // RUN / DRY_RUN require the device to be in a fresh state (IDLE) or coming off a prior COMPLETE.
+            // Skipping this check would let a RUN issued mid-PROCESS silently stack a second calibration.
+            if( _mode == calibration_mode::RUN || _mode == calibration_mode::DRY_RUN )
+            {
+                _calib_engine->update_triggered_calibration_status();
+                _state = _calib_engine->get_triggered_calibration_state();
+                if( _state != calibration_state::IDLE && _state != calibration_state::COMPLETE )
+                {
+                    LOG_ERROR( "Interactive TC RUN rejected: state = "
+                               << calibration_state_strings[static_cast<int>(_state)]
+                               << " (expected Idle or Complete)" );
+                    throw std::runtime_error( "Interactive TC RUN requires state to be Idle or Complete" );
+                }
+            }
+
+            // TRY is a live-preview toggle at HEALTH_CHECK; does not change state and does not poll.
+            if( _mode == calibration_mode::TRY )
+            {
+                _calib_engine->run_triggered_calibration_try( _try_selection );
+                return {};
+            }
+
+            // For COMMIT / ABORT the SET_CALIB_MODE is a one-shot; state polling picks up FLASH_UPDATE / IDLE from there.
+            _calib_engine->run_triggered_calibration( _mode );
+
+            if( _mode == calibration_mode::ABORT )
+                return update_abort_status();
+
+            // RUN / DRY_RUN / COMMIT — poll until we hit a terminal state for this mode.
+            auto res = update_interactive_calibration_status( timeout_ms, progress_callback );
+
+            if( health )
+            {
+                // Only trust the health payload once the FW has actually populated it (from HEALTH_CHECK onward).
+                // If FAILED_TO_CONVERGE / FAILED_TO_RUN broke the loop before that, _interactive_ans.health is still zero-initialized
+                // and 0.0 would spuriously read as "PASS" (< 0.40 threshold) in the viewer — return the -1 sentinel instead.
+                if( _state == calibration_state::HEALTH_CHECK || _state == calibration_state::COMPLETE )
+                {
+                    auto h = _calib_engine->get_triggered_calibration_health();
+                    *health = h.rect_health;   // primary pass/fail metric; full struct available via engine
+                }
+                else
+                {
+                    *health = -1.f;
+                }
+            }
+            return res;
+        }
+        catch( std::runtime_error & )
+        {
+            throw;
+        }
+        catch( ... )
+        {
+            throw std::runtime_error( rsutils::string::from() << "Interactive triggered calibration could not be triggered" );
+        }
+    }
+
+    std::vector< uint8_t > d500_auto_calibrated::update_interactive_calibration_status( int timeout_ms,
+                                                                                        rs2_update_progress_callback_sptr progress_callback )
+    {
+        auto start_time = std::chrono::high_resolution_clock::now();
+        std::vector< uint8_t > res;
+        do
+        {
+            std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
+            _calib_engine->update_triggered_calibration_status();
+
+            _state = _calib_engine->get_triggered_calibration_state();
+            _result = _calib_engine->get_triggered_calibration_result();
+            {
+                std::stringstream ss;
+                ss << "Calibration in progress - State = " << calibration_state_strings[static_cast<int>(_state)];
+                if( _state == calibration_state::PROCESS )
+                {
+                    ss << ", progress = " << static_cast<int>( _calib_engine->get_triggered_calibration_progress() );
+                    ss << ", result = " << calibration_result_strings[static_cast<int>(_result)];
+                }
+                LOG_INFO( ss.str().c_str() );
+            }
+            if( progress_callback )
+                progress_callback->on_update_progress( _calib_engine->get_triggered_calibration_progress() );
+
+            // Either failure result should break the loop; otherwise a stuck-in-PROCESS + failed result would spin until timeout.
+            // FAILED_TO_CONVERGE is a legitimate outcome at HEALTH_CHECK — surfaced to the caller via _result rather than throwing here.
+            if( _result == calibration_result::FAILED_TO_RUN
+                || _result == calibration_result::FAILED_TO_CONVERGE )
+                break;
+
+            // Terminal states depend on the mode:
+            // - RUN / DRY_RUN: stop at HEALTH_CHECK — host inspects health then calls again with commit/cancel.
+            // - COMMIT: stop at COMPLETE (or IDLE if there was nothing to persist).
+            if( _state == calibration_state::IDLE )
+                break;
+            if( _state == calibration_state::COMPLETE )
+                break;
+            if( _mode != calibration_mode::COMMIT && _state == calibration_state::HEALTH_CHECK )
+                break;
+
+            if( std::chrono::high_resolution_clock::now() - start_time > std::chrono::milliseconds( timeout_ms ) )
+                throw std::runtime_error( "Interactive triggered calibration timeout" );
+        }
+        while( true );
+
+        if( _state == calibration_state::HEALTH_CHECK || _state == calibration_state::COMPLETE )
+        {
+            auto depth_calib = _calib_engine->get_depth_calibration();
+            auto ptr = reinterpret_cast< uint8_t * >( &depth_calib );
+            res.insert( res.begin(), ptr, ptr + sizeof( ds::d500_coefficients_table ) );
+        }
+        else if( _result == calibration_result::FAILED_TO_RUN )
+        {
+            throw std::runtime_error( "Interactive triggered calibration failed to run" );
+        }
+
+        return res;
     }
 
     std::vector< uint8_t > d500_auto_calibrated::run_triggered_calibration( int timeout_ms,
