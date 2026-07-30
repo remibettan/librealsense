@@ -36,7 +36,7 @@ bool d500_debug_protocol_calibration_engine::check_buffer_size_interactive(std::
 {
     // D5x5 interactive triggered calibration: 3-byte header for IDLE/PROCESS, 535 bytes from HEALTH_CHECK onward
     // (3 header + 20 health + 512 candidate/committed table).
-    if (res.size() < 2)
+    if (res.size() < 3)
         return false;
 
     // Wire state byte 2 on this path means HEALTH_CHECK, not SUCCESS. Anything at or beyond that carries the full payload.
@@ -79,7 +79,10 @@ void d500_debug_protocol_calibration_engine::update_triggered_calibration_status
         }
 
         // Re-map wire state byte to enum: on the interactive path, byte 2 means HEALTH_CHECK, byte 3 FLASH_UPDATE, byte 4 COMPLETE.
-        switch (static_cast<uint8_t>(_interactive_ans.state))
+        // If FW ships with a different numbering, degrade to PROCESS + LOG_WARNING rather than aborting the entire flow —
+        // the wire contract is unverified until FW is available and a hard throw would brick every poll.
+        const uint8_t raw_state = static_cast<uint8_t>(_interactive_ans.state);
+        switch (raw_state)
         {
             case 0: _interactive_ans.state = calibration_state::IDLE;         break;
             case 1: _interactive_ans.state = calibration_state::PROCESS;      break;
@@ -87,7 +90,10 @@ void d500_debug_protocol_calibration_engine::update_triggered_calibration_status
             case 3: _interactive_ans.state = calibration_state::FLASH_UPDATE; break;
             case 4: _interactive_ans.state = calibration_state::COMPLETE;     break;
             default:
-                throw std::runtime_error("GET_CALIB_STATUS (interactive) returned unknown state byte");
+                LOG_WARNING("GET_CALIB_STATUS (interactive) unknown state byte " << static_cast<int>(raw_state)
+                            << " — treating as PROCESS");
+                _interactive_ans.state = calibration_state::PROCESS;
+                break;
         }
         return;
     }
@@ -114,9 +120,11 @@ std::vector<uint8_t> d500_debug_protocol_calibration_engine::run_triggered_calib
     if (!_dev)
         throw std::runtime_error("device has not been set");
 
-    // TRY carries the NEW/OLD selector as its sub-parameter, riding param2 (the same slot mode = 1 uses today).
+    // Preserve the legacy `param2 = 1 /*always*/` marker so FW's SET_CALIB_MODE validity check still passes;
+    // encode the NEW/OLD selector in param3 to avoid colliding with the marker (TRY_NEW = 0 would otherwise look like "not always").
     auto cmd = _dev->build_command(ds::SET_CALIB_MODE,
                                    static_cast<uint32_t>(calibration_mode::TRY),
+                                   1 /*always, matches legacy*/,
                                    static_cast<uint32_t>(selection));
     return _dev->send_receive_raw_data(cmd);
 }

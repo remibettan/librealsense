@@ -583,13 +583,22 @@ namespace rs2
 
         const float h = get_manager().get_scalar_health();
         const bool passes = get_manager().health_passes();
+        // A previous TRY / COMMIT / ABORT click may still be in flight on the manager's background thread — every
+        // button on this row spawns a new process_flow, so a second click before the first phase finishes would race
+        // on _done / _scalar_health and send two overlapping SET_CALIB_MODE commands. Dim + swallow while running.
+        const bool in_flight = update_manager
+                            && update_manager->started()
+                            && !update_manager->done()
+                            && !update_manager->failed();
+        const bool commit_enabled = passes && !in_flight;
 
         ImGui::SetCursorScreenPos({ float(x + 9), float(y + 27) });
         ImGui::Text("%s", passes ? "Health check: PASS" : "Health check: FAIL");
 
         ImGui::SetCursorScreenPos({ float(x + 9), float(y + 45) });
         if (h < 0.f) ImGui::Text("Rect health: n/a");
-        else         ImGui::Text("Rect health: %.3f px  (threshold 0.400)", h);
+        else         ImGui::Text("Rect health: %.3f px  (threshold %.3f)", h,
+                                 d500_on_chip_calib_manager::k_rect_health_pass_threshold_px);
 
         // Button row: Try New | Try Old | Commit | Discard. Ignore the caller's bar_width — it reserves a 115px
         // right gutter for the base Dismiss button, which we've hidden above; use the full popup width instead.
@@ -609,33 +618,35 @@ namespace rs2
         // so buttons on this row need their own scheme to read as clickable — matches calibration_button() and the
         // rest of on-chip-calib.
         const auto sat = 1.f + sin(duration_cast<milliseconds>(system_clock::now() - created_time).count() / 700.f) * 0.1f;
+        const float active_sat  = in_flight ? 0.4f : sat;
+        const float hover_sat   = in_flight ? 0.4f : 1.5f;
 
         ImGui::SetCursorScreenPos({ float(x + 5), btn_y });
-        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, sat));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, 1.5f));
-        if (ImGui::Button(try_new_id.c_str(), { btn_w, 20.f }))
+        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, active_sat));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, hover_sat));
+        if (ImGui::Button(try_new_id.c_str(), { btn_w, 20.f }) && !in_flight)
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW);
         ImGui::PopStyleColor(2);
 
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, sat));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, 1.5f));
-        if (ImGui::Button(try_old_id.c_str(), { btn_w, 20.f }))
+        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, active_sat));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, hover_sat));
+        if (ImGui::Button(try_old_id.c_str(), { btn_w, 20.f }) && !in_flight)
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_OLD);
         ImGui::PopStyleColor(2);
 
         ImGui::SameLine();
-        // Commit is health-gated: on FAIL, dim the button and swallow the click so it visibly reads as disabled.
-        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, passes ? sat : 0.4f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, passes ? 1.5f : 0.4f));
-        if (ImGui::Button(commit_id.c_str(), { btn_w, 20.f }) && passes)
+        // Commit is health-gated AND in-flight-gated: dim on either condition; swallow the click accordingly.
+        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, commit_enabled ? sat : 0.4f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, commit_enabled ? 1.5f : 0.4f));
+        if (ImGui::Button(commit_id.c_str(), { btn_w, 20.f }) && commit_enabled)
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_COMMIT);
         ImGui::PopStyleColor(2);
 
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, sat));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, 1.5f));
-        if (ImGui::Button(discard_id.c_str(), { btn_w, 20.f }))
+        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, active_sat));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, hover_sat));
+        if (ImGui::Button(discard_id.c_str(), { btn_w, 20.f }) && !in_flight)
         {
             // Fire the ABORT command in the background (manager restores the workspace on completion) and
             // dismiss the popup immediately — the user has already made their decision, no further UI is needed.

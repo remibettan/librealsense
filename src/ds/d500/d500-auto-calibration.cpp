@@ -43,7 +43,6 @@ namespace librealsense
         , _depth_sensor( ds )
         , _debug_dev( debug_dev )
         , _try_selection( try_calibration_selection::NEW )
-        , _commit_trigger( commit_trigger::HEALTH_GATED )
     {
         if( ! _debug_dev )
             throw not_implemented_exception( " debug_interface must be supplied to d500_auto_calibrated" );
@@ -97,7 +96,6 @@ namespace librealsense
 
     void d500_auto_calibrated::get_mode_from_json(const std::string& json)
     {
-        // Order matters: "calib dry run" must be matched before "calib run" since the former contains the latter as a substring.
         if (json.find("calib dry run") != std::string::npos)
             _mode = calibration_mode::DRY_RUN;
         else if (json.find("calib commit") != std::string::npos)
@@ -120,12 +118,6 @@ namespace librealsense
             _mode = calibration_mode::ABORT;
         else
             throw std::runtime_error("run_on_chip_calibration called with wrong content in json file");
-
-        // "unattended": true selects CommitTrigger::UNATTENDED, otherwise HEALTH_GATED (default).
-        // Match the whole key-value substring so an unrelated `true` elsewhere in the JSON does not flip the flag.
-        const bool unattended = json.find("\"unattended\": true") != std::string::npos
-                             || json.find("\"unattended\":true")  != std::string::npos;
-        _commit_trigger = unattended ? commit_trigger::UNATTENDED : commit_trigger::HEALTH_GATED;
     }
 
     std::vector<uint8_t> d500_auto_calibrated::run_on_chip_calibration( int timeout_ms,
@@ -159,6 +151,21 @@ namespace librealsense
         {
             get_mode_from_json( json );
 
+            // RUN / DRY_RUN require the device to be in a fresh state (IDLE) or coming off a prior COMPLETE.
+            // Skipping this check would let a RUN issued mid-PROCESS silently stack a second calibration.
+            if( _mode == calibration_mode::RUN || _mode == calibration_mode::DRY_RUN )
+            {
+                _calib_engine->update_triggered_calibration_status();
+                _state = _calib_engine->get_triggered_calibration_state();
+                if( _state != calibration_state::IDLE && _state != calibration_state::COMPLETE )
+                {
+                    LOG_ERROR( "Interactive TC RUN rejected: state = "
+                               << calibration_state_strings[static_cast<int>(_state)]
+                               << " (expected Idle or Complete)" );
+                    throw std::runtime_error( "Interactive TC RUN requires state to be Idle or Complete" );
+                }
+            }
+
             // TRY is a live-preview toggle at HEALTH_CHECK; does not change state and does not poll.
             if( _mode == calibration_mode::TRY )
             {
@@ -173,8 +180,7 @@ namespace librealsense
                 return update_abort_status();
 
             // RUN / DRY_RUN / COMMIT — poll until we hit a terminal state for this mode.
-            const bool unattended = ( _commit_trigger == commit_trigger::UNATTENDED ) || ( _mode == calibration_mode::COMMIT );
-            auto res = update_interactive_calibration_status( timeout_ms, unattended, progress_callback );
+            auto res = update_interactive_calibration_status( timeout_ms, progress_callback );
 
             if( health )
             {
@@ -204,7 +210,6 @@ namespace librealsense
     }
 
     std::vector< uint8_t > d500_auto_calibrated::update_interactive_calibration_status( int timeout_ms,
-                                                                                        bool unattended,
                                                                                         rs2_update_progress_callback_sptr progress_callback )
     {
         auto start_time = std::chrono::high_resolution_clock::now();
@@ -236,14 +241,13 @@ namespace librealsense
                 break;
 
             // Terminal states depend on the mode:
-            // - Gated RUN/DRY_RUN: stop at HEALTH_CHECK — host inspects health then calls again with commit/cancel.
-            // - Unattended RUN: stop at COMPLETE (device auto-commits) or IDLE (nothing to persist).
-            // - COMMIT: stop at COMPLETE.
+            // - RUN / DRY_RUN: stop at HEALTH_CHECK — host inspects health then calls again with commit/cancel.
+            // - COMMIT: stop at COMPLETE (or IDLE if there was nothing to persist).
             if( _state == calibration_state::IDLE )
                 break;
             if( _state == calibration_state::COMPLETE )
                 break;
-            if( ! unattended && _state == calibration_state::HEALTH_CHECK )
+            if( _mode != calibration_mode::COMMIT && _state == calibration_state::HEALTH_CHECK )
                 break;
 
             if( std::chrono::high_resolution_clock::now() - start_time > std::chrono::milliseconds( timeout_ms ) )
