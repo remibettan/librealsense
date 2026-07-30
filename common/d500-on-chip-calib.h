@@ -52,7 +52,9 @@ namespace rs2
         // include, deliberately not surfaced through common/ to avoid a public API addition.
         bool uses_interactive_triggered_calibration() const;
         float get_scalar_health() const { return _scalar_health; }
-        static constexpr float k_rect_health_pass_threshold_px = 0.4f;   // provisional per spec §5.5
+        // Must match librealsense::rect_health_pass_threshold_px in src/calibration-engine-interface.h.
+        // The viewer cannot include that SDK-internal header, so the value is mirrored here.
+        static constexpr float k_rect_health_pass_threshold_px = 0.4f;
         bool health_passes() const { return _scalar_health >= 0.f && _scalar_health < k_rect_health_pass_threshold_px; }
 
     private:

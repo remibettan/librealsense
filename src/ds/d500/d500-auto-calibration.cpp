@@ -48,6 +48,46 @@ namespace librealsense
             throw not_implemented_exception( " debug_interface must be supplied to d500_auto_calibrated" );
     }
 
+    void d500_auto_calibrated::cancel_and_wait_for_idle()
+    {
+        try
+        {
+            _calib_engine->run_triggered_calibration( calibration_mode::ABORT );
+            // SET_CALIB_MODE is one-shot; FW takes a moment to settle back to IDLE.
+            for( int i = 0; i < 20; ++i )
+            {
+                std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+                _calib_engine->update_triggered_calibration_status();
+                if( _calib_engine->get_triggered_calibration_state() == calibration_state::IDLE )
+                    break;
+            }
+        }
+        catch( ... )
+        {
+            // best-effort — leave FW where it is if CANCEL itself fails
+        }
+
+        // Belt-and-suspenders: on some FW builds CANCEL does not restore the flashed depth table into the RAM
+        // slot that the depth pipeline reads, so the stream can end up rendering a half-baked candidate that
+        // looks visibly worse than the pre-RUN calibration. Copy the flashed table back into RAM ourselves and
+        // fire the depth-write observers so host caches (intrinsics) re-fetch on next query.
+        try
+        {
+            std::vector< uint8_t > dummy;
+            auto flash_table = _calib_engine->get_calibration_table( dummy );
+            if( ! flash_table.empty() )
+            {
+                set_calibration_table( flash_table );
+                for( auto & cb : _depth_write_callbacks )
+                    cb();
+            }
+        }
+        catch( ... )
+        {
+            // best-effort — the depth stream may still look wrong if FW didn't revert, but nothing else we can do
+        }
+    }
+
     bool d500_auto_calibrated::device_uses_interactive_triggered_calibration() const
     {
         auto dev = As< device >( _debug_dev );
@@ -147,23 +187,60 @@ namespace librealsense
     {
         _calib_engine->set_interactive_triggered_calibration_enabled( true );
 
+        // Diagnostic: read the currently flashed depth calibration table and log its CRC32. Called before RUN and
+        // after COMMIT so users can tell whether the FW actually flashed a new table (differing CRC across the
+        // two log lines) or silently no-op'd (same CRC → intrinsics won't visibly change even after COMMIT).
+        auto log_flashed_depth_crc = [this]( const char * label )
+        {
+            try
+            {
+                std::vector< uint8_t > dummy;
+                auto raw = _calib_engine->get_calibration_table( dummy );
+                if( raw.size() >= sizeof( ds::table_header ) )
+                {
+                    auto hdr = reinterpret_cast< const ds::table_header * >( raw.data() );
+                    LOG_INFO( "Interactive TC: depth calibration CRC32 "
+                              << label << " = 0x" << std::hex << hdr->crc32 << std::dec );
+                }
+            }
+            catch( ... )
+            {
+                // best-effort diagnostic — silence
+            }
+        };
+
         try
         {
             get_mode_from_json( json );
 
-            // RUN / DRY_RUN require the device to be in a fresh state (IDLE) or coming off a prior COMPLETE.
-            // Skipping this check would let a RUN issued mid-PROCESS silently stack a second calibration.
+            // RUN / DRY_RUN require the device to be in IDLE. Some FW builds silently no-op SET_CALIB_MODE(RUN)
+            // when the state is HEALTH_CHECK (stale candidate) or COMPLETE (prior successful run), leaving the
+            // poll loop seeing the previous terminal state immediately and reporting a bogus "1-second RUN".
+            // Send a CANCEL first — spec §5.2 says CANCEL is valid from any state except FLASH_UPDATE — so the
+            // subsequent SET_CALIB_MODE(RUN) hits a clean IDLE and the algorithm actually starts.
             if( _mode == calibration_mode::RUN || _mode == calibration_mode::DRY_RUN )
             {
                 _calib_engine->update_triggered_calibration_status();
                 _state = _calib_engine->get_triggered_calibration_state();
-                if( _state != calibration_state::IDLE && _state != calibration_state::COMPLETE )
+
+                if( _state == calibration_state::HEALTH_CHECK || _state == calibration_state::COMPLETE )
+                {
+                    LOG_INFO( "Interactive TC: FW at "
+                              << calibration_state_strings[static_cast<int>(_state)]
+                              << " — sending CANCEL to return to Idle before RUN" );
+                    cancel_and_wait_for_idle();
+                    _state = _calib_engine->get_triggered_calibration_state();
+                }
+
+                if( _state != calibration_state::IDLE )
                 {
                     LOG_ERROR( "Interactive TC RUN rejected: state = "
                                << calibration_state_strings[static_cast<int>(_state)]
-                               << " (expected Idle or Complete)" );
-                    throw std::runtime_error( "Interactive TC RUN requires state to be Idle or Complete" );
+                               << " (expected Idle)" );
+                    throw std::runtime_error( "Interactive TC RUN requires state to be Idle" );
                 }
+
+                log_flashed_depth_crc( "before RUN" );
             }
 
             // TRY is a live-preview toggle at HEALTH_CHECK; does not change state and does not poll.
@@ -193,6 +270,16 @@ namespace librealsense
             {
                 for( auto & cb : _depth_write_callbacks )
                     cb();
+                log_flashed_depth_crc( "after COMMIT" );
+            }
+
+            // A RUN that ended without SUCCESS leaves FW in a non-IDLE state (typically HEALTH_CHECK with a
+            // stale candidate, or PROCESS on FAILED_TO_RUN). Send a best-effort CANCEL so FW returns to IDLE,
+            // matching the pre-run recovery above.
+            if( ( _mode == calibration_mode::RUN || _mode == calibration_mode::DRY_RUN )
+                && _result != calibration_result::SUCCESS )
+            {
+                cancel_and_wait_for_idle();
             }
 
             if( health )
@@ -244,6 +331,17 @@ namespace librealsense
                 {
                     ss << ", progress = " << static_cast<int>( _calib_engine->get_triggered_calibration_progress() );
                     ss << ", result = " << calibration_result_strings[static_cast<int>(_result)];
+                }
+                else if( _state == calibration_state::HEALTH_CHECK
+                      || _state == calibration_state::COMPLETE )
+                {
+                    ss << ", result = " << calibration_result_strings[static_cast<int>(_result)];
+                    if( _state == calibration_state::HEALTH_CHECK )
+                    {
+                        auto h = _calib_engine->get_triggered_calibration_health();
+                        ss << ", rect_health = " << h.rect_health << " px"
+                           << " (pass range = [0, " << rect_health_pass_threshold_px << ") px)";
+                    }
                 }
                 LOG_INFO( ss.str().c_str() );
             }

@@ -49,13 +49,20 @@ enum class try_calibration_selection : uint8_t
 #pragma pack(push, 1)
 struct calibration_health_metrics
 {
-    float coverage_safe_for_depth;   // [0,1]  — pass: >= Coverage_Threshold (0.50)
-    float rect_health;               // px    — pass: <  RectThreshold (0.40, provisional)
+    float coverage_safe_for_depth;   // [0,1]  — pass: >= coverage_safe_for_depth_pass_threshold
+    float rect_health;               // px    — pass: <  rect_health_pass_threshold_px
     float rect_improvement;          // px    — informational only
-    float scale_health;              // px    — pass: <  ScaleThreshold (0.50, provisional)
+    float scale_health;              // px    — pass: <  scale_health_pass_threshold_px
     float scale_improvement;         // px    — informational only
 };
 #pragma pack(pop)
+
+// Provisional pass thresholds per spec §5.5 (subject to FW-team tuning). Kept out of the packed wire struct
+// above so future adjustments don't accidentally shift its layout. The viewer mirrors these in
+// common/d500-on-chip-calib.h — keep the two in sync.
+static constexpr float rect_health_pass_threshold_px           = 0.4f;
+static constexpr float scale_health_pass_threshold_px          = 0.5f;
+static constexpr float coverage_safe_for_depth_pass_threshold  = 0.5f;
 
 class calibration_engine_interface
 {

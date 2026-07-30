@@ -234,8 +234,20 @@ namespace rs2
             if (interactive_run)
             {
                 _scalar_health = health;
-                _done = true;   // "done" here means "phase complete"; the notification UI transitions to HEALTH_CHECK
-                return;         // leave streaming on — TRY/COMMIT/ABORT need it live
+                // `health < 0.f` is the SDK's sentinel for "FW did not report SUCCESS" (see
+                // d500_auto_calibrated::run_interactive_triggered_calibration). In that case there is no meaningful
+                // candidate to Commit/Try/Discard — surface the run as failed so the notification model shows the
+                // FAILED popup (update_ui_on_failure) instead of the HEALTH_CHECK screen, matching the D585S legacy UX.
+                if (health < 0.f)
+                {
+                    restore_workspace(invoke);   // stop the auto-started depth stream, restore user's prior stream
+                    _failed = true;
+                }
+                else
+                {
+                    _done = true;   // "done" here means "phase complete"; the notification UI transitions to HEALTH_CHECK
+                }
+                return;             // on success, leave streaming on — TRY/COMMIT/ABORT need it live
             }
 
             // Interactive TRY_NEW/TRY_OLD switch the FW's active depth table in RAM. The running stream keeps the

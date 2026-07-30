@@ -693,6 +693,11 @@ namespace librealsense
         {
             _coefficients_table_raw.reset();
             _new_calib_table_raw.reset();
+            // _left_right_extrinsics is derived from _coefficients_table_raw (baseline in mm), but its own lazy<>
+            // caches the computed rs2_extrinsics — without this reset, get_extrinsics(depth, right_ir) keeps
+            // returning the pre-calibration baseline forever, even though the coefficients table cache is fresh.
+            if( _left_right_extrinsics )
+                _left_right_extrinsics->reset();
         } );
     }
 
