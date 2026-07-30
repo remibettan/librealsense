@@ -191,8 +191,10 @@ namespace rs2
 
         // D5x5 interactive TC needs a live depth stream during the RUN phase (algorithm consumes depth frames).
         // Mirrors the D400 pattern: 1280x720 @ 30fps on Z16. Skip for TRY/COMMIT/ABORT — those reuse the already-live stream.
-        // Start is deferred until FW reports progress >= 3, so the FW enters its calibration state before the host
-        // contends for USB bandwidth with a 1280x720@30 depth stream.
+        // Auto-start fires on the first progress callback of a RUN — cannot key on the progress value itself while FW
+        // still reports 0xFF (parsed as -1). If try_start_viewer throws, swallow it locally: rs2::update_progress_callback
+        // has no try/catch (rs_device.hpp:231), so letting the exception escape aborts RUN without a CANCEL and the
+        // precondition check on the next RUN would then wedge the device.
         bool streaming_started = false;
 
         try
@@ -205,13 +207,25 @@ namespace rs2
                 [&](const float progress)
                 {
                     _progress = progress;
-                    if (interactive_run && !streaming_started && progress >= 3.f)
+                    if (interactive_run && !streaming_started)
                     {
-                        streaming_started = true;
+                        streaming_started = true;  // set before start attempt — even a failure must not retry every poll
                         _saved_ui = std::make_shared<subdevice_ui_selection>(_sub->ui);
                         _saved_stream_enabled = _sub->stream_enabled;
                         _was_streaming = _sub->streaming;
-                        try_start_viewer(1280, 720, 30, invoke);
+                        try
+                        {
+                            try_start_viewer(1280, 720, 30, invoke);
+                        }
+                        catch (const std::exception & e)
+                        {
+                            // Continue un-streamed; FW will surface a FAILED_TO_CONVERGE terminal state if it needed frames.
+                            _saved_ui.reset();
+                            _saved_stream_enabled.clear();
+                            _was_streaming = false;
+                            LOG_WARNING("Interactive TC: depth auto-start failed (" << e.what()
+                                        << ") — calibration will proceed without a viewer stream");
+                        }
                     }
                 }, timeout_ms);
 
