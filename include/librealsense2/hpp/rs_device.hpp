@@ -142,7 +142,11 @@ namespace rs2
         }
 
         /**
-        * Retrieve the current device hardware clock time
+        * Retrieve the current device hardware clock time.
+        * \note Raw ASIC clock, NOT host time and NOT the frame's global-time domain.
+        * \note Underlying counter is 32-bit microseconds — wraps roughly every 71.6 min.
+        * \note Each call is a blocking hardware-monitor round-trip (few ms); do not poll per frame.
+        * \note Not supported on every device/backend; throws if the device lacks RS2_EXTENSION_GLOBAL_TIMER.
         */
         double get_device_time_ms() const
         {

@@ -170,7 +170,7 @@ Java_com_intel_realsense_librealsense_Device_nGetDeviceTimeMs(
     jlong handle)
 {
     rs2_error* e = nullptr;
-    auto const device_time_ms = rs2_get_device_time_ms(reinterpret_cast<rs2_device*>(handle), &e);
+    auto const device_time_ms = rs2_get_device_time_ms(reinterpret_cast<const rs2_device*>(handle), &e);
 
     handle_error(env, e);
     return static_cast<jdouble>(device_time_ms);
