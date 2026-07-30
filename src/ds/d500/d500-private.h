@@ -101,6 +101,44 @@ namespace librealsense
             { D585_GMSL_PID,          "RealSense D585 GMSL" }
         };
 
+        // D500-only HWM opcodes. Shared opcodes are in ds::fw_cmd (ds/ds-private.h).
+        enum d500_fw_cmd : uint8_t
+        {
+            HKR_THERMAL_COMPENSATION = 0x84, // Control HKR thermal compensation
+            SAFETY_PRESET_READ       = 0x94, // Read safety preset from given index
+            SAFETY_PRESET_WRITE      = 0x95, // Write safety preset to given index
+            APM_STROBE_SET           = 0x96, // Control if Laser on constantly or pulse
+            APM_STROBE_GET           = 0x99, // Query if Laser on constantly or pulse
+            SET_HKR_CONFIG_TABLE     = 0xA6, // HKR Set Internal sub calibration table
+            GET_HKR_CONFIG_TABLE     = 0xA7, // HKR Get Internal sub calibration table
+            CALIBRESTOREEPROM        = 0xA8, // HKR Store EEPROM Calibration
+            RGB_TNR                  = 0xAA, // RGB Temporal Noise Reduction
+            GET_FW_LOGS              = 0xB4, // Get FW logs extended format
+            SET_CALIB_MODE           = 0xB8, // Set Calibration Mode
+            GET_CALIB_STATUS         = 0xB9, // Get Calibration Status
+        };
+
+        inline std::string d500_fw_cmd2str(const d500_fw_cmd state)
+        {
+            switch (state)
+            {
+                ENUM2STR(HKR_THERMAL_COMPENSATION);
+                ENUM2STR(SAFETY_PRESET_READ);
+                ENUM2STR(SAFETY_PRESET_WRITE);
+                ENUM2STR(APM_STROBE_SET);
+                ENUM2STR(APM_STROBE_GET);
+                ENUM2STR(SET_HKR_CONFIG_TABLE);
+                ENUM2STR(GET_HKR_CONFIG_TABLE);
+                ENUM2STR(CALIBRESTOREEPROM);
+                ENUM2STR(RGB_TNR);
+                ENUM2STR(GET_FW_LOGS);
+                ENUM2STR(SET_CALIB_MODE);
+                ENUM2STR(GET_CALIB_STATUS);
+            default:
+                return ( rsutils::string::from() << "Unrecognized D500 FW command " << state );
+            }
+        }
+
         //TODO
         //static std::map<uint16_t, std::string> d500_device_to_fw_min_version = {
         //    {D585_LEGACY_PID, "0.0.0.0"},
