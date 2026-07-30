@@ -25,51 +25,50 @@ namespace librealsense
             // MIPI/GMSL V4L2 control ids. Mirrors the driver's RS_CAMERA_CID_BASE range.
             static constexpr uint32_t RS_STREAM_CONFIG_0                    = 0x4000;
             static constexpr uint32_t RS_CAMERA_CID_BASE                    = ( V4L2_CTRL_CLASS_CAMERA | RS_STREAM_CONFIG_0 );
-            static constexpr uint32_t RS_CAMERA_CID_LASER_POWER             = ( RS_CAMERA_CID_BASE + 1 );
-            static constexpr uint32_t RS_CAMERA_CID_MANUAL_LASER_POWER      = ( RS_CAMERA_CID_BASE + 2 );
-            static constexpr uint32_t RS_CAMERA_DEPTH_CALIBRATION_TABLE_GET = ( RS_CAMERA_CID_BASE + 3 );
-            static constexpr uint32_t RS_CAMERA_DEPTH_CALIBRATION_TABLE_SET = ( RS_CAMERA_CID_BASE + 4 );
-            static constexpr uint32_t RS_CAMERA_COEFF_CALIBRATION_TABLE_GET = ( RS_CAMERA_CID_BASE + 5 );
-            static constexpr uint32_t RS_CAMERA_COEFF_CALIBRATION_TABLE_SET = ( RS_CAMERA_CID_BASE + 6 );
-            static constexpr uint32_t RS_CAMERA_CID_FW_VERSION              = ( RS_CAMERA_CID_BASE + 7 );
-            static constexpr uint32_t RS_CAMERA_CID_GVD                     = ( RS_CAMERA_CID_BASE + 8 );
-            static constexpr uint32_t RS_CAMERA_CID_AE_ROI_GET              = ( RS_CAMERA_CID_BASE + 9 );
-            static constexpr uint32_t RS_CAMERA_CID_AE_ROI_SET              = ( RS_CAMERA_CID_BASE + 10 );
-            static constexpr uint32_t RS_CAMERA_CID_AE_SETPOINT_GET         = ( RS_CAMERA_CID_BASE + 11 );
-            static constexpr uint32_t RS_CAMERA_CID_AE_SETPOINT_SET         = ( RS_CAMERA_CID_BASE + 12 );
-            static constexpr uint32_t RS_CAMERA_CID_ERB                     = ( RS_CAMERA_CID_BASE + 13 );
-            static constexpr uint32_t RS_CAMERA_CID_EWB                     = ( RS_CAMERA_CID_BASE + 14 );
-            static constexpr uint32_t RS_CAMERA_CID_HWMC_LEGACY             = ( RS_CAMERA_CID_BASE + 15 );
-            static constexpr uint32_t RS_CAMERA_CID_SYNC_MODE               = ( RS_CAMERA_CID_BASE + 16 );
-            static constexpr uint32_t RS_CAMERA_CID_MANUAL_EXPOSURE         = ( RS_CAMERA_CID_BASE + 17 );
-            static constexpr uint32_t RS_CAMERA_CID_LASER_POWER_LEVEL       = ( RS_CAMERA_CID_BASE + 18 ); // RS_CAMERA_CID_MANUAL_LASER_POWER ??
-            static constexpr uint32_t RS_CAMERA_CID_EXPOSURE_MODE           = ( RS_CAMERA_CID_BASE + 19 );
-            static constexpr uint32_t RS_CAMERA_CID_WHITE_BALANCE_MODE      = ( RS_CAMERA_CID_BASE + 20 ); // Similar to RS_CAMERA_CID_EWB ??
-            static constexpr uint32_t RS_CAMERA_CID_PRESET                  = ( RS_CAMERA_CID_BASE + 21 );
-            static constexpr uint32_t RS_CAMERA_CID_EMITTER_FREQUENCY       = ( RS_CAMERA_CID_BASE + 22 ); // [MIPI - Select projector frequency values: 0->57[KHZ], 1->91[KHZ]
-            static constexpr uint32_t RS_CAMERA_CID_HWMC                    = ( RS_CAMERA_CID_BASE + 32 );
-            static constexpr uint32_t RS_CAMERA_CID_READOUT_SHAPING         = ( RS_CAMERA_CID_BASE + 34 );
-            static constexpr uint32_t RS_CAMERA_CID_AE_MODE                 = ( RS_CAMERA_CID_BASE + 35 );
-
+            static constexpr uint32_t RS_CAMERA_CID_LASER_POWER             = ( RS_CAMERA_CID_BASE + 0x01 );
+            static constexpr uint32_t RS_CAMERA_CID_MANUAL_LASER_POWER      = ( RS_CAMERA_CID_BASE + 0x02 );
+            static constexpr uint32_t RS_CAMERA_DEPTH_CALIBRATION_TABLE_GET = ( RS_CAMERA_CID_BASE + 0x03 );
+            static constexpr uint32_t RS_CAMERA_DEPTH_CALIBRATION_TABLE_SET = ( RS_CAMERA_CID_BASE + 0x04 );
+            static constexpr uint32_t RS_CAMERA_COEFF_CALIBRATION_TABLE_GET = ( RS_CAMERA_CID_BASE + 0x05 );
+            static constexpr uint32_t RS_CAMERA_COEFF_CALIBRATION_TABLE_SET = ( RS_CAMERA_CID_BASE + 0x06 );
+            static constexpr uint32_t RS_CAMERA_CID_FW_VERSION              = ( RS_CAMERA_CID_BASE + 0x07 );
+            static constexpr uint32_t RS_CAMERA_CID_GVD                     = ( RS_CAMERA_CID_BASE + 0x08 );
+            static constexpr uint32_t RS_CAMERA_CID_AE_ROI_GET              = ( RS_CAMERA_CID_BASE + 0x09 );
+            static constexpr uint32_t RS_CAMERA_CID_AE_ROI_SET              = ( RS_CAMERA_CID_BASE + 0x0A );
+            static constexpr uint32_t RS_CAMERA_CID_AE_SETPOINT_GET         = ( RS_CAMERA_CID_BASE + 0x0B );
+            static constexpr uint32_t RS_CAMERA_CID_AE_SETPOINT_SET         = ( RS_CAMERA_CID_BASE + 0x0C );
+            static constexpr uint32_t RS_CAMERA_CID_ERB                     = ( RS_CAMERA_CID_BASE + 0x0D );
+            static constexpr uint32_t RS_CAMERA_CID_EWB                     = ( RS_CAMERA_CID_BASE + 0x0E );
+            static constexpr uint32_t RS_CAMERA_CID_HWMC_LEGACY             = ( RS_CAMERA_CID_BASE + 0x0F );
+            static constexpr uint32_t RS_CAMERA_CID_SYNC_MODE               = ( RS_CAMERA_CID_BASE + 0x10 );
+            static constexpr uint32_t RS_CAMERA_CID_MANUAL_EXPOSURE         = ( RS_CAMERA_CID_BASE + 0x11 );
+            static constexpr uint32_t RS_CAMERA_CID_LASER_POWER_LEVEL       = ( RS_CAMERA_CID_BASE + 0x12 );
+            static constexpr uint32_t RS_CAMERA_CID_EXPOSURE_MODE           = ( RS_CAMERA_CID_BASE + 0x13 );
+            static constexpr uint32_t RS_CAMERA_CID_WHITE_BALANCE_MODE      = ( RS_CAMERA_CID_BASE + 0x14 );
+            static constexpr uint32_t RS_CAMERA_CID_PRESET                  = ( RS_CAMERA_CID_BASE + 0x15 );
+            static constexpr uint32_t RS_CAMERA_CID_EMITTER_FREQUENCY       = ( RS_CAMERA_CID_BASE + 0x16 ); // MIPI projector frequency: 0->57[KHz], 1->91[KHz]
             static constexpr uint32_t RS_CAMERA_CID_SOC_PVT_TEMPERATURE     = ( RS_CAMERA_CID_BASE + 0x18 );
             static constexpr uint32_t RS_CAMERA_CID_PROJECTOR_TEMPERATURE   = ( RS_CAMERA_CID_BASE + 0x19 );
             static constexpr uint32_t RS_CAMERA_CID_OHM_TEMPERATURE         = ( RS_CAMERA_CID_BASE + 0x1A );
             static constexpr uint32_t RS_CAMERA_CID_ERROR_CODE              = ( RS_CAMERA_CID_BASE + 0x1B );
+            static constexpr uint32_t RS_CAMERA_CID_HWMC                    = ( RS_CAMERA_CID_BASE + 0x20 );
+            static constexpr uint32_t RS_CAMERA_CID_READOUT_SHAPING         = ( RS_CAMERA_CID_BASE + 0x22 );
+            static constexpr uint32_t RS_CAMERA_CID_AE_MODE                 = ( RS_CAMERA_CID_BASE + 0x23 );
 
             static constexpr uint8_t GVD_VALID_OPCODE = 0x10;
 
             // MIPI depth-XU selector identifiers (subdevice 0).
-            static constexpr uint8_t RS_HWMONITOR                       = 1;
-            static constexpr uint8_t RS_DEPTH_EMITTER_ENABLED           = 2;
-            static constexpr uint8_t RS_EXPOSURE                        = 3;
-            static constexpr uint8_t RS_LASER_POWER                     = 4;
-            static constexpr uint8_t RS_HARDWARE_PRESET                 = 6;
-            static constexpr uint8_t RS_ERROR_REPORTING                 = 7;
-            static constexpr uint8_t RS_EXT_TRIGGER                     = 8;
-            static constexpr uint8_t RS_ASIC_AND_PROJECTOR_TEMPERATURES = 9;
-            static constexpr uint8_t RS_ENABLE_AUTO_WHITE_BALANCE       = 0xA;
-            static constexpr uint8_t RS_ENABLE_AUTO_EXPOSURE            = 0xB;
-            static constexpr uint8_t RS_LED_PWR                         = 0xE;
+            static constexpr uint8_t RS_HWMONITOR                       = 0x01;
+            static constexpr uint8_t RS_DEPTH_EMITTER_ENABLED           = 0x02;
+            static constexpr uint8_t RS_EXPOSURE                        = 0x03;
+            static constexpr uint8_t RS_LASER_POWER                     = 0x04;
+            static constexpr uint8_t RS_HARDWARE_PRESET                 = 0x06;
+            static constexpr uint8_t RS_ERROR_REPORTING                 = 0x07;
+            static constexpr uint8_t RS_EXT_TRIGGER                     = 0x08;
+            static constexpr uint8_t RS_ASIC_AND_PROJECTOR_TEMPERATURES = 0x09;
+            static constexpr uint8_t RS_ENABLE_AUTO_WHITE_BALANCE       = 0x0A;
+            static constexpr uint8_t RS_ENABLE_AUTO_EXPOSURE            = 0x0B;
+            static constexpr uint8_t RS_LED_PWR                         = 0x0E;
             static constexpr uint8_t RS_EMITTER_FREQUENCY               = 0x10; // Match to DS5_EMITTER_FREQUENCY
             static constexpr uint8_t RS_DEPTH_AUTO_EXPOSURE_MODE        = 0x11;
             static constexpr uint8_t RS_EXTERNAL_SYNC                   = 0x12;
@@ -277,8 +276,8 @@ namespace librealsense
                 case RS2_OPTION_BACKLIGHT_COMPENSATION: return V4L2_CID_BACKLIGHT_COMPENSATION;
                 case RS2_OPTION_BRIGHTNESS: return V4L2_CID_BRIGHTNESS;
                 case RS2_OPTION_CONTRAST: return V4L2_CID_CONTRAST;
-                case RS2_OPTION_EXPOSURE: return V4L2_CID_EXPOSURE_ABSOLUTE; // Is this actually valid? I'm getting a lot of VIDIOC error 22s...
-                case RS2_OPTION_GAIN: return V4L2_CTRL_CLASS_IMAGE_SOURCE | 0x903; // v4l2-ctl --list-ctrls -d /dev/video0
+                case RS2_OPTION_EXPOSURE: return V4L2_CID_EXPOSURE_ABSOLUTE;
+                case RS2_OPTION_GAIN: return V4L2_CTRL_CLASS_IMAGE_SOURCE | 0x903;
                 case RS2_OPTION_GAMMA: return V4L2_CID_GAMMA;
                 // case RS2_OPTION_HUE: return V4L2_CID_HUE;
                 case RS2_OPTION_LASER_POWER: return V4L2_CID_EXPOSURE_ABSOLUTE;
@@ -303,10 +302,10 @@ namespace librealsense
                     {
                     case RS_HWMONITOR: return RS_CAMERA_CID_HWMC;
                     case RS_DEPTH_EMITTER_ENABLED: return RS_CAMERA_CID_LASER_POWER;
-                    case RS_EXPOSURE: return V4L2_CID_EXPOSURE_ABSOLUTE;//RS_CAMERA_CID_MANUAL_EXPOSURE; V4L2_CID_EXPOSURE_ABSOLUTE
+                    case RS_EXPOSURE: return V4L2_CID_EXPOSURE_ABSOLUTE;
                     case RS_LASER_POWER: return RS_CAMERA_CID_MANUAL_LASER_POWER;
                     case RS_ENABLE_AUTO_WHITE_BALANCE : return RS_CAMERA_CID_WHITE_BALANCE_MODE;
-                    case RS_ENABLE_AUTO_EXPOSURE: return V4L2_CID_EXPOSURE_AUTO; //RS_CAMERA_CID_EXPOSURE_MODE;
+                    case RS_ENABLE_AUTO_EXPOSURE: return V4L2_CID_EXPOSURE_AUTO;
                     case RS_HARDWARE_PRESET : return RS_CAMERA_CID_PRESET;
                     case RS_EMITTER_FREQUENCY : return RS_CAMERA_CID_EMITTER_FREQUENCY;
                     case RS_DEPTH_AUTO_EXPOSURE_MODE : return RS_CAMERA_CID_AE_MODE;
