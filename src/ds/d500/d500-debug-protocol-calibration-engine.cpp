@@ -6,8 +6,6 @@
 #include "d500-device.h"
 
 #include <cstring>
-#include <iomanip>
-#include <sstream>
 
 
 namespace librealsense
@@ -66,19 +64,6 @@ void d500_debug_protocol_calibration_engine::update_triggered_calibration_status
     {
         if (!check_buffer_size_interactive(res))
             throw std::runtime_error("GET_CALIB_STATUS (interactive) returned struct with wrong size");
-
-        // Temporary debug: dump the header + health block (first 23 bytes) so we can tell whether the FW
-        // is populating the health payload at all. Rect_health is coming back as 0.000 on the current FW image,
-        // and either the FW isn't writing it or the parser reads the wrong offset — this log resolves it.
-        // Remove once the source is confirmed.
-        if (res.size() >= 23)
-        {
-            std::stringstream hex;
-            hex << "GET_CALIB_STATUS (interactive) hdr+health [" << res.size() << " bytes]:";
-            for (size_t i = 0; i < 23; ++i)
-                hex << " " << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(res[i]);
-            LOG_DEBUG(hex.str().c_str());
-        }
 
         // Header (3 bytes) is always present; health + candidate table (532 more) only from HEALTH_CHECK onward.
         _interactive_ans = {};

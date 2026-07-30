@@ -273,11 +273,16 @@ namespace librealsense
                 log_flashed_depth_crc( "after COMMIT" );
             }
 
-            // A RUN that ended without SUCCESS leaves FW in a non-IDLE state (typically HEALTH_CHECK with a
-            // stale candidate, or PROCESS on FAILED_TO_RUN). Send a best-effort CANCEL so FW returns to IDLE,
-            // matching the pre-run recovery above.
-            if( ( _mode == calibration_mode::RUN || _mode == calibration_mode::DRY_RUN )
-                && _result != calibration_result::SUCCESS )
+            // A RUN or COMMIT that didn't reach a clean terminal (SUCCESS + expected state) leaves FW in a non-IDLE
+            // state (HEALTH_CHECK with a stale candidate on failed RUN, mid-FLASH_UPDATE on failed COMMIT, PROCESS
+            // on FAILED_TO_RUN, etc.). Send a best-effort CANCEL so FW returns to IDLE and the next RUN's precondition
+            // guard doesn't reject the retry.
+            const bool run_failed    = ( _mode == calibration_mode::RUN || _mode == calibration_mode::DRY_RUN )
+                                    && _result != calibration_result::SUCCESS;
+            const bool commit_failed = _mode == calibration_mode::COMMIT
+                                    && ( _state != calibration_state::COMPLETE
+                                         || _result != calibration_result::SUCCESS );
+            if( run_failed || commit_failed )
             {
                 cancel_and_wait_for_idle();
             }
