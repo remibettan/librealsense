@@ -170,6 +170,11 @@ namespace librealsense
             if( _mode == calibration_mode::TRY )
             {
                 _calib_engine->run_triggered_calibration_try( _try_selection );
+                // FW switched the active table in RAM — invalidate host-side calibration caches so any
+                // subsequent get_intrinsics() re-reads from FW. The viewer stops+restarts its depth stream
+                // right after this returns so the preview actually reflects the switch.
+                for( auto & cb : _depth_write_callbacks )
+                    cb();
                 return {};
             }
 
@@ -182,12 +187,23 @@ namespace librealsense
             // RUN / DRY_RUN / COMMIT — poll until we hit a terminal state for this mode.
             auto res = update_interactive_calibration_status( timeout_ms, progress_callback );
 
+            // COMMIT flashed a new depth calibration — invalidate host caches. Callers restart streams
+            // (see viewer's restore_workspace) so the new table is picked up on the next intrinsics query.
+            if( _mode == calibration_mode::COMMIT && _state == calibration_state::COMPLETE )
+            {
+                for( auto & cb : _depth_write_callbacks )
+                    cb();
+            }
+
             if( health )
             {
-                // Only trust the health payload once the FW has actually populated it (from HEALTH_CHECK onward).
-                // If FAILED_TO_CONVERGE / FAILED_TO_RUN broke the loop before that, _interactive_ans.health is still zero-initialized
-                // and 0.0 would spuriously read as "PASS" (< 0.40 threshold) in the viewer — return the -1 sentinel instead.
-                if( _state == calibration_state::HEALTH_CHECK || _state == calibration_state::COMPLETE )
+                // Trust health only when FW reports SUCCESS and populated the HEALTH_CHECK/COMPLETE payload.
+                // Anything else (UNKNOWN because FW never wrote the result byte, FAILED_TO_CONVERGE, FAILED_TO_RUN,
+                // or a mid-run terminal state) → -1.f sentinel so the viewer's health_passes() locks the Commit
+                // button rather than treating a zero-initialized rect_health as PASS.
+                const bool have_payload = _state == calibration_state::HEALTH_CHECK
+                                       || _state == calibration_state::COMPLETE;
+                if( have_payload && _result == calibration_result::SUCCESS )
                 {
                     auto h = _calib_engine->get_triggered_calibration_health();
                     *health = h.rect_health;   // primary pass/fail metric; full struct available via engine

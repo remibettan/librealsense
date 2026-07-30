@@ -238,9 +238,25 @@ namespace rs2
                 return;         // leave streaming on — TRY/COMMIT/ABORT need it live
             }
 
-            // Interactive TRY_NEW/TRY_OLD are one-shot live-preview toggles — mark done, keep stream live.
+            // Interactive TRY_NEW/TRY_OLD switch the FW's active depth table in RAM. The running stream keeps the
+            // intrinsics it computed at start(), so the preview is invisible unless we stop and restart it — same
+            // problem the D500 auto-calibration flow has after write_calibration(). Only touch the stream if it was
+            // us who started it (auto-start recorded state in _saved_ui); otherwise leave the user's stream alone.
             if (interactive_try)
             {
+                if (_saved_ui)
+                {
+                    stop_viewer(invoke);
+                    try
+                    {
+                        try_start_viewer(1280, 720, 30, invoke);
+                    }
+                    catch (const std::exception & e)
+                    {
+                        LOG_WARNING("Interactive TC: depth restart on TRY failed (" << e.what()
+                                    << ") — preview will not reflect the switch until stream is restarted manually");
+                    }
+                }
                 _done = true;
                 return;
             }
