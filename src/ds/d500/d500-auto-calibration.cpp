@@ -209,6 +209,34 @@ namespace librealsense
             }
         };
 
+        // Diagnostic: read the RAM-active depth calibration table (as opposed to the flashed one above) and log its
+        // CRC32. Used around TRY_NEW / TRY_OLD to tell whether the FW is actually switching the RAM-active table on
+        // TRY — CRC change confirms the switch; same CRC means FW acked the TRY but didn't swap the active table.
+        auto log_ram_depth_crc = [this]( const char * label )
+        {
+            try
+            {
+                auto cmd = _debug_dev->build_command(
+                    ds::GET_HKR_CONFIG_TABLE,
+                    static_cast< int >( ds::d500_calib_location::d500_calib_ram_memory ),
+                    static_cast< int >( ds::d500_calibration_table_id::depth_calibration_id ),
+                    static_cast< int >( ds::d500_calib_type::d500_calib_dynamic ) );
+                auto raw = _debug_dev->send_receive_raw_data( cmd );
+                // Slice the 4-byte opcode prefix that HW-monitor commands echo back.
+                if( raw.size() > 4 + sizeof( ds::table_header ) )
+                {
+                    raw.erase( raw.begin(), raw.begin() + 4 );
+                    auto hdr = reinterpret_cast< const ds::table_header * >( raw.data() );
+                    LOG_INFO( "Interactive TC: RAM depth calibration CRC32 "
+                              << label << " = 0x" << std::hex << hdr->crc32 << std::dec );
+                }
+            }
+            catch( ... )
+            {
+                // best-effort diagnostic — silence
+            }
+        };
+
         try
         {
             get_mode_from_json( json );
@@ -246,12 +274,14 @@ namespace librealsense
             // TRY is a live-preview toggle at HEALTH_CHECK; does not change state and does not poll.
             if( _mode == calibration_mode::TRY )
             {
+                const std::string sel = ( _try_selection == try_calibration_selection::NEW ) ? "NEW" : "OLD";
+                log_ram_depth_crc( ( "before TRY " + sel ).c_str() );
                 _calib_engine->run_triggered_calibration_try( _try_selection );
                 // FW switched the active table in RAM — invalidate host-side calibration caches so any
-                // subsequent get_intrinsics() re-reads from FW. The viewer stops+restarts its depth stream
-                // right after this returns so the preview actually reflects the switch.
+                // subsequent get_intrinsics() re-reads from FW.
                 for( auto & cb : _depth_write_callbacks )
                     cb();
+                log_ram_depth_crc( ( "after TRY " + sel ).c_str() );
                 return {};
             }
 
