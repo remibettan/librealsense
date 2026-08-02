@@ -48,8 +48,14 @@ namespace librealsense
 
     double d500_motion::get_gyro_default_scale() const
     {
-        // D585S outputs raw 16 bit register value, dynamic range +/-125 [deg/sec] --> 250/65536=0.003814697265625 [deg/sec/LSB]
-        return 0.003814697265625;
+        if( get_pid() == ds::D585S_PID )
+        {
+            // D585S outputs raw 16 bit register value, dynamic range +/-125 [deg/sec] --> 250/65536=0.003814697265625 [deg/sec/LSB]
+            return 0.003814697265625;
+        }
+        // Non-D585S D5X5: mirror d400_motion_base::get_gyro_default_scale() for FW >= 5.16 — FW ships values
+        // pre-scaled by 1000 in the HID feature report; combined with set_gyro_scale_factor(10000) yields [deg/sec].
+        return 0.0001;
     }
 
     std::shared_ptr<synthetic_sensor> d500_motion::create_hid_device( std::shared_ptr<context> ctx,
@@ -99,6 +105,10 @@ namespace librealsense
                 _motion_module_device_idx = static_cast<uint8_t>(add_sensor(sensor_ep));
                 sensor_ep->get_raw_sensor()->register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_hid_header_parser(&hid_header::timestamp));
                 register_gyro_sensitivity();
+                // Non-D585S D5X5: mirror d400_motion FW >= 5.16 — mf-hid multiplies raw HID values by 10000
+                // to undo the FW's 1000-scale packing, so combined with get_gyro_default_scale() = 0.0001 the pipeline gets [deg/sec].
+                if( get_pid() != D585S_PID )
+                    get_raw_motion_sensor()->set_gyro_scale_factor( 10000.0 );
             }
 #endif
         }
