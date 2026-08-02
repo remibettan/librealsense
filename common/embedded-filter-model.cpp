@@ -69,12 +69,22 @@ namespace rs2
     {
         for (option_value option : _embedded_filter->get_supported_option_values())
         {
-            _options_id_to_model[option->id] = create_option_model( option,
-                                                                opt_base_label,
-                                                                model,
-                                                                _embedded_filter,
-                                                                model ? &model->_options_invalidated : nullptr,
-                                                                error_message );
+            // An option whose range cannot be read throws here - skip it and keep the rest of the controls.
+            try
+            {
+                auto om = create_option_model( option,
+                                               opt_base_label,
+                                               model,
+                                               _embedded_filter,
+                                               model ? &model->_options_invalidated : nullptr,
+                                               error_message );
+                insert_option_model( _options_id_to_model, option->id, std::move( om ) );
+            }
+            catch( const std::exception & e )
+            {
+                if( _viewer.not_model )
+                    _viewer.not_model->add_log( e.what(), RS2_LOG_SEVERITY_WARN );
+            }
         }
         _enabled = _embedded_filter->get_option(RS2_OPTION_EMBEDDED_FILTER_ENABLED);
 

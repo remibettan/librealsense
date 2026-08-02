@@ -23,25 +23,43 @@ namespace rs2
         bool* options_invalidated,
         std::string& error_message)
     {
-        option_model option = {};
+        return option_model( opt, opt_base_label, model, options, options_invalidated );
+    }
 
-        std::string const option_name = options->get_option_name( opt->id );
-        option.id = rsutils::string::from() << opt_base_label << '/' << option_name;
-        option.opt = opt->id;
-        option.endpoint = options;
-        option.label = rsutils::string::from() << option_name << "##" << option.id;
-        option.invalidate_flag = options_invalidated;
-        option.dev = model;
-        option.value = opt;
-        option.supported = opt->is_valid;  // i.e., supported-and-enabled!
-        option.range = options->get_option_range( opt->id );
-        option.read_only = options->is_option_read_only( opt->id );
-        option.last_slider_hold_stopwatch.reset( {} ); // Avoids seeming as if a slider was dragged and just released.
-        return option;
+    void insert_option_model( std::map< rs2_option, option_model > & models, rs2_option id, option_model && model )
+    {
+        auto it = models.find( id );
+        if( it != models.end() )
+            it->second = std::move( model );
+        else
+            models.emplace( id, std::move( model ) );
     }
 }
 
 using namespace rs2;
+
+option_model::option_model( const option_value & opt_value,
+                            const std::string & opt_base_label,
+                            subdevice_model * subdev,
+                            std::shared_ptr< options > ep,
+                            bool * options_invalidated )
+    : opt( opt_value->id )
+    , endpoint( ep )
+{
+    if( ! endpoint )
+        throw std::runtime_error( "option_model requires an endpoint" );
+
+    const std::string option_name = endpoint->get_option_name( opt );
+    id = rsutils::string::from() << opt_base_label << '/' << option_name;
+    label = rsutils::string::from() << option_name << "##" << id;
+    invalidate_flag = options_invalidated;
+    dev = subdev;
+    value = opt_value;
+    supported = opt_value->is_valid;  // i.e., supported-and-enabled!
+    range = endpoint->get_option_range( opt );
+    read_only = endpoint->is_option_read_only( opt );
+    last_slider_hold_stopwatch.reset( {} ); // Avoids seeming as if a slider was dragged and just released.
+}
 
 std::string option_model::adjust_description(const std::string& str_in, const std::string& to_be_replaced, const std::string& to_replace)
 {

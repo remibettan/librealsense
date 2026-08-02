@@ -55,6 +55,29 @@ namespace librealsense
         }
     }
 
+    // A MIPI group holds every video node of the camera (depth, color, IR, IMU), so the color node has to be
+    // picked by identity. The driver names it "video-rs-color-<n>"; positional access breaks as soon as a node
+    // is missing or enumerates out of order, and copying an out-of-range entry faults on the copied strings.
+    static const platform::uvc_device_info &
+    select_mipi_color_node( const std::vector< platform::uvc_device_info > & devs )
+    {
+        auto color_node = std::find_if( devs.begin(), devs.end(),
+            []( const platform::uvc_device_info & info )
+            {
+                return info.device_path.find( "color" ) != std::string::npos
+                    && info.device_path.find( "-md" ) == std::string::npos; // not the metadata node
+            } );
+        if( color_node != devs.end() )
+            return *color_node;
+
+        if( devs.size() > 1 )
+            return devs[1]; // nodes without the rs links: depth, color, IR, IMU
+
+        for( auto && info : devs )
+            LOG_ERROR( "MIPI group node: " << std::string( info ) );
+        throw backend_exception( "cannot access color sensor - no MIPI color node found" );
+    }
+
     void d400_color::create_color_device(std::shared_ptr<context> ctx, const platform::backend_device_group& group)
     {
         using namespace ds;
@@ -93,7 +116,7 @@ namespace librealsense
             auto enable_global_time_option = std::shared_ptr<global_time_option>(new global_time_option());
             platform::uvc_device_info info;
             if (_is_mipi_device)
-                info = color_devs_info[1];
+                info = select_mipi_color_node(color_devs_info);
             else
                 info = color_devs_info.front();
             auto uvcd = get_backend()->create_uvc_device( info );
@@ -110,7 +133,7 @@ namespace librealsense
 
             color_ep->register_option(RS2_OPTION_GLOBAL_TIME_ENABLED, enable_global_time_option);
 
-            color_ep->register_info(RS2_CAMERA_INFO_PHYSICAL_PORT, color_devs_info.front().device_path);
+            color_ep->register_info(RS2_CAMERA_INFO_PHYSICAL_PORT, info.device_path);
 
             _color_device_idx = add_sensor(color_ep);
         }

@@ -85,7 +85,7 @@ namespace rs2
             // Software filter: write synchronously (no FW round-trip) so the value is read back
             // and the control doesn't revert to a stale value.
             om.write_synchronously = true;
-            _options_id_to_model[option->id] = om;
+            insert_option_model( _options_id_to_model, option->id, std::move( om ) );
         }
     }
 
