@@ -12,6 +12,8 @@
 #include <rsutils/json.h>
 #include <rsutils/string/from.h>
 
+#include <sstream>   // std::stringstream + drags <ios> for std::hex / std::dec used in the CRC diagnostic logs
+
 namespace librealsense
 {
     static constexpr const size_t hwm_header_size = 4;
@@ -62,29 +64,41 @@ namespace librealsense
                     break;
             }
         }
-        catch( ... )
+        catch( const std::exception & e )
         {
-            // best-effort — leave FW where it is if CANCEL itself fails
+            LOG_WARNING( "Interactive TC: CANCEL / status poll failed (" << e.what()
+                         << ") — FW may not be in Idle when this returns" );
         }
 
         // Belt-and-suspenders: on some FW builds CANCEL does not restore the flashed depth table into the RAM
         // slot that the depth pipeline reads, so the stream can end up rendering a half-baked candidate that
-        // looks visibly worse than the pre-RUN calibration. Copy the flashed table back into RAM ourselves and
-        // fire the depth-write observers so host caches (intrinsics) re-fetch on next query.
+        // looks visibly worse than the pre-RUN calibration. Write the flashed depth table back to the RAM slot
+        // ourselves via SET_HKR_CONFIG_TABLE — issued directly rather than through set_calibration_table() so we
+        // don't clobber _curr_calibration, which is the shared staging buffer for the manual-calibration API.
         try
         {
             std::vector< uint8_t > dummy;
             auto flash_table = _calib_engine->get_calibration_table( dummy );
-            if( ! flash_table.empty() )
+            if( flash_table.size() >= sizeof( ds::table_header ) )
             {
-                set_calibration_table( flash_table );
+                auto hdr = reinterpret_cast< const ds::table_header * >( flash_table.data() );
+                auto cmd = _debug_dev->build_command(
+                    ds::SET_HKR_CONFIG_TABLE,
+                    static_cast< int >( ds::d500_calib_location::d500_calib_ram_memory ),
+                    static_cast< int >( hdr->table_type ),
+                    static_cast< int >( ds::d500_calib_type::d500_calib_dynamic ),
+                    0,
+                    flash_table.data(),
+                    flash_table.size() );
+                _debug_dev->send_receive_raw_data( cmd );
                 for( auto & cb : _depth_write_callbacks )
                     cb();
             }
         }
-        catch( ... )
+        catch( const std::exception & e )
         {
-            // best-effort — the depth stream may still look wrong if FW didn't revert, but nothing else we can do
+            LOG_WARNING( "Interactive TC: flash→RAM revert failed (" << e.what()
+                         << ") — depth stream may still reflect the candidate table until next stream restart" );
         }
     }
 
@@ -277,8 +291,10 @@ namespace librealsense
                 const std::string sel = ( _try_selection == try_calibration_selection::NEW ) ? "NEW" : "OLD";
                 log_ram_depth_crc( ( "before TRY " + sel ).c_str() );
                 _calib_engine->run_triggered_calibration_try( _try_selection );
-                // FW switched the active table in RAM — invalidate host-side calibration caches so any
-                // subsequent get_intrinsics() re-reads from FW.
+                // FW switched the active table in RAM — invalidate host-side calibration caches so any subsequent
+                // get_intrinsics() re-reads. The viewer does NOT restart the depth stream (per FW-team guidance —
+                // a USB reconfigure at this point prevents FW from applying the swap), so the running pipeline
+                // keeps its baked intrinsics until the next stream restart; only a fresh query sees the switch.
                 for( auto & cb : _depth_write_callbacks )
                     cb();
                 log_ram_depth_crc( ( "after TRY " + sel ).c_str() );
@@ -304,15 +320,18 @@ namespace librealsense
             }
 
             // A RUN or COMMIT that didn't reach a clean terminal (SUCCESS + expected state) leaves FW in a non-IDLE
-            // state (HEALTH_CHECK with a stale candidate on failed RUN, mid-FLASH_UPDATE on failed COMMIT, PROCESS
-            // on FAILED_TO_RUN, etc.). Send a best-effort CANCEL so FW returns to IDLE and the next RUN's precondition
-            // guard doesn't reject the retry.
+            // state (HEALTH_CHECK with a stale candidate on failed RUN, PROCESS on FAILED_TO_RUN, etc.). Send a
+            // best-effort CANCEL so FW returns to IDLE and the next RUN's precondition guard doesn't reject the retry.
+            //
+            // Hard exception: never issue CANCEL while FW is in FLASH_UPDATE — spec §5.2 explicitly forbids it, and
+            // interrupting a mid-flash write has bricked devices in the field. Reachable here via the
+            // FAILED_TO_RUN/FAILED_TO_CONVERGE break in the poll loop, which fires before the state check.
             const bool run_failed    = ( _mode == calibration_mode::RUN || _mode == calibration_mode::DRY_RUN )
                                     && _result != calibration_result::SUCCESS;
             const bool commit_failed = _mode == calibration_mode::COMMIT
                                     && ( _state != calibration_state::COMPLETE
                                          || _result != calibration_result::SUCCESS );
-            if( run_failed || commit_failed )
+            if( ( run_failed || commit_failed ) && _state != calibration_state::FLASH_UPDATE )
             {
                 cancel_and_wait_for_idle();
             }
