@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_each("D500*"),
-    pytest.mark.device_exclude("D555"),  # DDS device, no RS2_EXTENSION_GLOBAL_TIMER
+    pytest.mark.device_type_exclude("DDS"),  # DDS devices do not implement RS2_EXTENSION_GLOBAL_TIMER
 ]
 
 
