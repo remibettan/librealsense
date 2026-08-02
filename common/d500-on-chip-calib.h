@@ -138,6 +138,11 @@ namespace rs2
         // "apply the HEALTH_CHECK-cached candidate live". So on entry the active table is the flashed (OLD) one; the
         // user must click NEW to preview the candidate. Pending FW confirmation; flip to 0 if FW auto-applies at HC.
         int _try_side = 1;
+        // Side to restore _try_side to if the currently-pending TRY fails on the FW side. -1 = no TRY pending.
+        // ImGui::RadioButton mutates _try_side inside the widget call, so on a failure the UI would keep asserting
+        // the wrong side without this rollback. draw_health_check reads update_manager->done()/failed() to detect
+        // settlement and restores or clears the pending state accordingly.
+        int _pending_try_revert_to = -1;
     };
 
 }

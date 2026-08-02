@@ -618,6 +618,23 @@ namespace rs2
                             && !update_manager->failed();
         const bool commit_enabled = passes && !in_flight;
 
+        // Settle a pending TRY: if the phase finished, either roll _try_side back (on failure) or clear the flag
+        // (on success). Without this, RadioButton's inline write leaves the UI asserting a candidate is active
+        // while FW never actually switched — same UI-lies-about-FW-state hazard as the in-flight race, reached
+        // via the failure path.
+        if (_pending_try_revert_to != -1 && update_manager)
+        {
+            if (update_manager->failed())
+            {
+                _try_side = _pending_try_revert_to;
+                _pending_try_revert_to = -1;
+            }
+            else if (update_manager->done())
+            {
+                _pending_try_revert_to = -1;
+            }
+        }
+
         ImGui::SetCursorScreenPos({ float(x + 9), float(y + 27) });
         ImGui::Text("%s", passes ? "Health check: PASS" : "Health check: FAIL");
 
@@ -657,9 +674,15 @@ namespace rs2
         const bool try_old_clicked = ImGui::RadioButton(try_old_id.c_str(), &_try_side, 1);
         ImGui::EndDisabled();
         if (try_new_clicked)
+        {
+            _pending_try_revert_to = 1;   // roll back to OLD if this TRY fails
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW);
+        }
         else if (try_old_clicked)
+        {
+            _pending_try_revert_to = 0;   // roll back to NEW if this TRY fails
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_OLD);
+        }
 
         ImGui::SameLine();
         // Commit is health-gated AND in-flight-gated: dim on either condition; swallow the click accordingly.
