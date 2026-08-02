@@ -285,7 +285,10 @@ namespace librealsense
         // init_fisheye only reports availability when a node was found, but don't let a future change there
         // turn into a crash here
         if (fisheye_infos.empty())
-            throw backend_exception("cannot access fisheye sensor - reported available with no UVC node");
+        {
+            LOG_ERROR("FishEye sensor reported available with no UVC node - sensor not created");
+            return;
+        }
 
         std::unique_ptr< frame_timestamp_reader > ds_timestamp_reader_backup( new ds_timestamp_reader() );
         std::unique_ptr<frame_timestamp_reader> ds_timestamp_reader_metadata(new ds_timestamp_reader_from_metadata(std::move(ds_timestamp_reader_backup)));
