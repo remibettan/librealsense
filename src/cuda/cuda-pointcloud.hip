@@ -104,11 +104,17 @@ void kernel_deproject_depth_cuda(float * points, const rs2_intrinsics* intrin, c
 }
 
 
-void rscuda::deproject_depth_cuda(float * points, const rs2_intrinsics & intrin, const uint16_t * depth, float depth_scale)
+// Class-based helper: matches the CUDA-side refactor in cuda-pointcloud.cu where
+// deproject_depth_cuda became a member of rscuda::pointcloud_cuda_helper. The HIP
+// port keeps the simpler per-call allocation path (no buffer reuse, no zero-copy)
+// so class members _d_points/_d_depth/_d_intrin declared in cuda-pointcloud.cuh
+// stay unused here; porting those optimisations to HIP is left as follow-up.
+void rscuda::pointcloud_cuda_helper::deproject_depth_cuda(float * points, const rs2_intrinsics & intrin, const uint16_t * depth, float depth_scale)
 {
     int count = intrin.height * intrin.width;
-    // Ceiling division: avoid numBlocks == 0 when count < RS2_CUDA_THREADS_PER_BLOCK.
-    int numBlocks = (count + RS2_CUDA_THREADS_PER_BLOCK - 1) / RS2_CUDA_THREADS_PER_BLOCK;
+    constexpr int threads_per_block = pointcloud_cuda_helper::THREADS_PER_BLOCK;
+    // Ceiling division: avoid numBlocks == 0 when count < threads_per_block.
+    int numBlocks = (count + threads_per_block - 1) / threads_per_block;
 
     // Use the RAII allocator from rscuda_utils.cuh so device memory is
     // automatically released on any exception thrown by RS_CUDA_CHECK
@@ -121,7 +127,7 @@ void rscuda::deproject_depth_cuda(float * points, const rs2_intrinsics & intrin,
     RS_CUDA_CHECK(hipMemcpy(d_depth.get(), depth, count * sizeof(uint16_t), hipMemcpyHostToDevice));
     RS_CUDA_CHECK(hipMemcpy(d_intrin.get(), &intrin, sizeof(rs2_intrinsics), hipMemcpyHostToDevice));
 
-    kernel_deproject_depth_cuda<<<numBlocks, RS2_CUDA_THREADS_PER_BLOCK>>>(d_points.get(), d_intrin.get(), d_depth.get(), depth_scale);
+    kernel_deproject_depth_cuda<<<numBlocks, threads_per_block>>>(d_points.get(), d_intrin.get(), d_depth.get(), depth_scale);
 
     // Kernel launches are asynchronous on HIP: synchronise before reading
     // the output back to the host, otherwise hipMemcpy may race with an
