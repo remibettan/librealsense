@@ -48,13 +48,16 @@ namespace librealsense
 
     double d500_motion::get_gyro_default_scale() const
     {
-        if( get_pid() == ds::D585S_PID )
+        // MIPI/UVC transport (D585 GMSL) and D585S both output raw register values that require the physical-range
+        // scale to be applied end-to-end here — there is no mf-hid multiplication on the UVC path, and D585S has
+        // its own raw-16-bit-register format regardless of transport. Dynamic range +/-125 [deg/sec] --> 250/65536.
+        if( _is_mipi_device || get_pid() == ds::D585S_PID )
         {
-            // D585S outputs raw 16 bit register value, dynamic range +/-125 [deg/sec] --> 250/65536=0.003814697265625 [deg/sec/LSB]
             return 0.003814697265625;
         }
-        // Non-D585S D5X5: mirror d400_motion_base::get_gyro_default_scale() for FW >= 5.16 — FW ships values
-        // pre-scaled by 1000 in the HID feature report; combined with set_gyro_scale_factor(10000) yields [deg/sec].
+        // Non-D585S D5X5 on the HID (USB) path: mirror d400_motion_base::get_gyro_default_scale() for FW >= 5.16 —
+        // FW ships values pre-scaled by 1000 in the HID feature report; combined with set_gyro_scale_factor(10000)
+        // yields [deg/sec].
         return 0.0001;
     }
 
