@@ -626,14 +626,13 @@ namespace rs2
         else         ImGui::Text("Rect health: %.3f px  (threshold %.3f)", h,
                                  d500_on_chip_calib_manager::k_rect_health_pass_threshold_px);
 
-        // Button row: Try New | Try Old | Commit | Discard. Ignore the caller's bar_width — it reserves a 115px
+        // Row: [radio Try New] [radio Try Old] [Commit] [Discard]. Ignore the caller's bar_width — it reserves a 115px
         // right gutter for the base Dismiss button, which we've hidden above; use the full popup width instead.
-        // Reserve 3 × ImGui default ItemSpacing.x (~8px each) between the four buttons so Discard doesn't clip the right edge.
         (void)bar_width;
         const float row_width = float(width - 10);
         const float spacing = ImGui::GetStyle().ItemSpacing.x;
-        const float btn_w = (row_width - 3.f * spacing) / 4.f;
         const float btn_y = float(y + height - 28);
+        const float btn_w = 100.f;   // Commit/Discard fixed; radio buttons occupy the remaining space
 
         std::string try_new_id  = rsutils::string::from() << "Try New##"  << index;
         std::string try_old_id  = rsutils::string::from() << "Try Old##"  << index;
@@ -642,24 +641,19 @@ namespace rs2
 
         // The notification base pushes a near-transparent ImGuiCol_Button (see notification_model::set_color_scheme),
         // so buttons on this row need their own scheme to read as clickable — matches calibration_button() and the
-        // rest of on-chip-calib.
+        // rest of on-chip-calib. Radio buttons use their own ImGui colors so no push is needed for them.
         const auto sat = 1.f + sin(duration_cast<milliseconds>(system_clock::now() - created_time).count() / 700.f) * 0.1f;
-        const float active_sat  = in_flight ? 0.4f : sat;
-        const float hover_sat   = in_flight ? 0.4f : 1.5f;
+        const float active_sat = in_flight ? 0.4f : sat;
+        const float hover_sat  = in_flight ? 0.4f : 1.5f;
 
+        // Radio pair — user selects which candidate is live. Each toggle fires the matching TRY action so FW switches
+        // the RAM-active depth table; the currently-selected radio then shows which table is being previewed.
         ImGui::SetCursorScreenPos({ float(x + 5), btn_y });
-        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, active_sat));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, hover_sat));
-        if (ImGui::Button(try_new_id.c_str(), { btn_w, 20.f }) && !in_flight)
+        if (ImGui::RadioButton(try_new_id.c_str(), &_try_side, 0) && !in_flight)
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW);
-        ImGui::PopStyleColor(2);
-
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, active_sat));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, hover_sat));
-        if (ImGui::Button(try_old_id.c_str(), { btn_w, 20.f }) && !in_flight)
+        if (ImGui::RadioButton(try_old_id.c_str(), &_try_side, 1) && !in_flight)
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_OLD);
-        ImGui::PopStyleColor(2);
 
         ImGui::SameLine();
         // Commit is health-gated AND in-flight-gated: dim on either condition; swallow the click accordingly.

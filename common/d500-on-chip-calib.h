@@ -132,6 +132,10 @@ namespace rs2
         std::string _error_message = "";
         bool reset_called = false;
         bool _has_abort_succeeded = false;
+        // Radio-button state on the HEALTH_CHECK screen: 0 = NEW (candidate) is active, 1 = OLD (flashed) is active.
+        // Initialized to NEW to match FW's default at HEALTH_CHECK entry. Toggled by the user, and each toggle fires
+        // the matching TRY action to swap the FW's RAM-active depth table.
+        int _try_side = 0;
     };
 
 }
