@@ -105,9 +105,11 @@ namespace librealsense
                 _motion_module_device_idx = static_cast<uint8_t>(add_sensor(sensor_ep));
                 sensor_ep->get_raw_sensor()->register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_hid_header_parser(&hid_header::timestamp));
                 register_gyro_sensitivity();
-                // Non-D585S D5X5: mirror d400_motion FW >= 5.16 — mf-hid multiplies raw HID values by 10000
-                // to undo the FW's 1000-scale packing, so combined with get_gyro_default_scale() = 0.0001 the pipeline gets [deg/sec].
-                if( get_pid() != D585S_PID )
+                // Non-D585S D5X5 on the HID (USB) path: mirror d400_motion FW >= 5.16 — mf-hid multiplies raw HID
+                // values by 10000 to undo the FW's 1000-scale packing, so combined with get_gyro_default_scale() = 0.0001
+                // the pipeline gets [deg/sec]. Skip on MIPI/UVC (get_raw_motion_sensor() returns nullptr on that path)
+                // and on D585S (its own scale flow).
+                if( get_pid() != D585S_PID && ! _is_mipi_device )
                     get_raw_motion_sensor()->set_gyro_scale_factor( 10000.0 );
             }
 #endif
@@ -204,6 +206,11 @@ namespace librealsense
 
     void d500_motion::register_gyro_sensitivity()
     {
+        // D585S uses a different FW versioning line (8.58.x) and a different gyro output format; skip.
+        // MIPI/UVC transport has no HID feature-report path, so the option would register with a null
+        // backing hid_sensor and fail on every set() — skip too.
+        if( get_pid() == ds::D585S_PID || _is_mipi_device )
+            return;
         if( _fw_version >= firmware_version( "7.58.40672.12546" ) && ! _has_motion_module_failed )
             register_feature(
                 std::make_shared< gyro_sensitivity_feature >( get_raw_motion_sensor(), get_motion_sensor() ) );
