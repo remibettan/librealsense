@@ -69,6 +69,10 @@ namespace librealsense
             LOG_WARNING( "Interactive TC: CANCEL / status poll failed (" << e.what()
                          << ") — FW may not be in Idle when this returns" );
         }
+        catch( ... )
+        {
+            LOG_WARNING( "Interactive TC: CANCEL / status poll failed (non-std exception) — swallowed to keep cancel_and_wait_for_idle non-throwing" );
+        }
 
         // Belt-and-suspenders: on some FW builds CANCEL does not restore the flashed depth table into the RAM
         // slot that the depth pipeline reads, so the stream can end up rendering a half-baked candidate that
@@ -79,7 +83,9 @@ namespace librealsense
         {
             std::vector< uint8_t > dummy;
             auto flash_table = _calib_engine->get_calibration_table( dummy );
-            if( flash_table.size() >= sizeof( ds::table_header ) )
+            // Require an exact size match — matches set_calibration_table's own guard. A longer-than-expected HWM
+            // reply must not be pushed verbatim into the RAM slot the depth pipeline reads.
+            if( flash_table.size() == sizeof( ds::d500_coefficients_table ) )
             {
                 auto hdr = reinterpret_cast< const ds::table_header * >( flash_table.data() );
                 auto cmd = _debug_dev->build_command(
@@ -94,11 +100,24 @@ namespace librealsense
                 for( auto & cb : _depth_write_callbacks )
                     cb();
             }
+            else if( ! flash_table.empty() )
+            {
+                LOG_WARNING( "Interactive TC: flash→RAM revert skipped — GET_HKR_CONFIG_TABLE returned "
+                             << flash_table.size() << " bytes, expected "
+                             << sizeof( ds::d500_coefficients_table ) );
+            }
         }
         catch( const std::exception & e )
         {
             LOG_WARNING( "Interactive TC: flash→RAM revert failed (" << e.what()
                          << ") — depth stream may still reflect the candidate table until next stream restart" );
+        }
+        catch( ... )
+        {
+            // Preserve the pre-refactor non-throwing property of this helper — the pre-run auto-cancel path relied
+            // on it. Non-std exceptions here are pathological (there is no code that throws non-std types on this
+            // path today), but a bare catch is cheap insurance.
+            LOG_WARNING( "Interactive TC: flash→RAM revert failed (non-std exception) — swallowed to keep cancel_and_wait_for_idle non-throwing" );
         }
     }
 

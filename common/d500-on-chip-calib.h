@@ -133,9 +133,11 @@ namespace rs2
         bool reset_called = false;
         bool _has_abort_succeeded = false;
         // Radio-button state on the HEALTH_CHECK screen: 0 = NEW (candidate) is active, 1 = OLD (flashed) is active.
-        // Initialized to NEW to match FW's default at HEALTH_CHECK entry. Toggled by the user, and each toggle fires
-        // the matching TRY action to swap the FW's RAM-active depth table.
-        int _try_side = 0;
+        // Initialised to OLD because per the SDK enum docs (src/calibration-engine-interface.h) the HEALTH_CHECK
+        // state "caches" the candidate awaiting COMMIT/CANCEL — cached is not applied — and TRY_NEW is documented as
+        // "apply the HEALTH_CHECK-cached candidate live". So on entry the active table is the flashed (OLD) one; the
+        // user must click NEW to preview the candidate. Pending FW confirmation; flip to 0 if FW auto-applies at HC.
+        int _try_side = 1;
     };
 
 }
