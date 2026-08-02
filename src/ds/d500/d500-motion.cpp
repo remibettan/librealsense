@@ -98,6 +98,7 @@ namespace librealsense
             {
                 _motion_module_device_idx = static_cast<uint8_t>(add_sensor(sensor_ep));
                 sensor_ep->get_raw_sensor()->register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_hid_header_parser(&hid_header::timestamp));
+                register_gyro_sensitivity();
             }
 #endif
         }

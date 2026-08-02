@@ -437,10 +437,6 @@ namespace librealsense
                 register_feature( std::make_shared< close_range_filter_feature >(
                     dynamic_cast< d500_depth_sensor & >( depth_sensor ) ) );
             }
-
-#if !defined(__APPLE__)
-            register_gyro_sensitivity();
-#endif
         }
 
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override
