@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.device_each("D455"),
     pytest.mark.device_each("D500*"),
+    pytest.mark.device_type_exclude("DDS"),  # USB-focused: DDS advertises the option through a separate transport
     pytest.mark.skipif(platform.machine() == "aarch64", reason="D455 not available on CI Jetson"),
 ]
 
@@ -30,10 +31,13 @@ def test_gyro_sensitivity_all_levels(test_device):
         cfg.enable_stream(rs.stream.accel)
         cfg.enable_stream(rs.stream.gyro)
 
+        started = False
         try:
             profile = pipe.start(cfg)
+            started = True
             sensor = profile.get_device().first_motion_sensor()
             readback = sensor.get_option(rs.option.gyro_sensitivity)
             assert readback == expected, f"level {value}: readback {readback}"
         finally:
-            pipe.stop()
+            if started:
+                pipe.stop()
