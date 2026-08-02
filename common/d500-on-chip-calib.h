@@ -52,7 +52,9 @@ namespace rs2
         // include, deliberately not surfaced through common/ to avoid a public API addition.
         bool uses_interactive_triggered_calibration() const;
         float get_scalar_health() const { return _scalar_health; }
-        static constexpr float k_rect_health_pass_threshold_px = 0.4f;   // provisional per spec §5.5
+        // Must match librealsense::rect_health_pass_threshold_px in src/calibration-engine-interface.h.
+        // The viewer cannot include that SDK-internal header, so the value is mirrored here.
+        static constexpr float k_rect_health_pass_threshold_px = 0.4f;
         bool health_passes() const { return _scalar_health >= 0.f && _scalar_health < k_rect_health_pass_threshold_px; }
 
     private:
@@ -130,6 +132,17 @@ namespace rs2
         std::string _error_message = "";
         bool reset_called = false;
         bool _has_abort_succeeded = false;
+        // Radio-button state on the HEALTH_CHECK screen: 0 = NEW (candidate) is active, 1 = OLD (flashed) is active.
+        // Initialised to OLD because per the SDK enum docs (src/calibration-engine-interface.h) the HEALTH_CHECK
+        // state "caches" the candidate awaiting COMMIT/CANCEL — cached is not applied — and TRY_NEW is documented as
+        // "apply the HEALTH_CHECK-cached candidate live". So on entry the active table is the flashed (OLD) one; the
+        // user must click NEW to preview the candidate. Pending FW confirmation; flip to 0 if FW auto-applies at HC.
+        int _try_side = 1;
+        // Side to restore _try_side to if the currently-pending TRY fails on the FW side. -1 = no TRY pending.
+        // ImGui::RadioButton mutates _try_side inside the widget call, so on a failure the UI would keep asserting
+        // the wrong side without this rollback. draw_health_check reads update_manager->done()/failed() to detect
+        // settlement and restores or clears the pending state accordingly.
+        int _pending_try_revert_to = -1;
     };
 
 }
