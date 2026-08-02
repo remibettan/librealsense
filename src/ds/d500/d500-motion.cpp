@@ -48,16 +48,13 @@ namespace librealsense
 
     double d500_motion::get_gyro_default_scale() const
     {
-        // MIPI/UVC transport (D585 GMSL) and D585S both output raw register values that require the physical-range
-        // scale to be applied end-to-end here — there is no mf-hid multiplication on the UVC path, and D585S has
-        // its own raw-16-bit-register format regardless of transport. Dynamic range +/-125 [deg/sec] --> 250/65536.
+        // Raw 16 bit register value, dynamic range +/-125 [deg/sec] --> 250/65536=0.003814697265625 [deg/sec/LSB].
+        // Used by D585S (its own flow) and MIPI/UVC (gyro sensitivity not supported there).
         if( _is_mipi_device || get_pid() == ds::D585S_PID )
         {
             return 0.003814697265625;
         }
-        // Non-D585S D5X5 on the HID (USB) path: mirror d400_motion_base::get_gyro_default_scale() for FW >= 5.16 —
-        // FW ships values pre-scaled by 1000 in the HID feature report; combined with set_gyro_scale_factor(10000)
-        // yields [deg/sec].
+        // Cameras on the HID (USB) path: FW ships values pre-scaled by 1000 in the HID feature report; combined with set_gyro_scale_factor(10000) yields [deg/sec].
         return 0.0001;
     }
 
@@ -108,10 +105,9 @@ namespace librealsense
                 _motion_module_device_idx = static_cast<uint8_t>(add_sensor(sensor_ep));
                 sensor_ep->get_raw_sensor()->register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_hid_header_parser(&hid_header::timestamp));
                 register_gyro_sensitivity();
-                // Non-D585S D5X5 on the HID (USB) path: mirror d400_motion FW >= 5.16 — mf-hid multiplies raw HID
-                // values by 10000 to undo the FW's 1000-scale packing, so combined with get_gyro_default_scale() = 0.0001
-                // the pipeline gets [deg/sec]. Skip on MIPI/UVC (get_raw_motion_sensor() returns nullptr on that path)
-                // and on D585S (its own scale flow).
+                // Cameras on the HID (USB) path: mf-hid multiplies raw HID values by 10000 to undo the FW's 1000-scale packing.
+                // Combined with get_gyro_default_scale() = 0.0001 the pipeline gets [deg/sec].
+                // Skip on MIPI/UVC (get_raw_motion_sensor() returns nullptr on that path) and on D585S (its own scale flow).
                 if( get_pid() != D585S_PID && ! _is_mipi_device )
                     get_raw_motion_sensor()->set_gyro_scale_factor( 10000.0 );
             }
