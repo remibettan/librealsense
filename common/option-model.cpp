@@ -206,8 +206,12 @@ void option_model::update_all_fields( std::string & error_message, notifications
         if( ! ep )
             return;
 
-        // After slider was dragged value updated using set_option, don't update value again here
+        // Don't refresh (and snap the slider back) while dragging, or while a user set is still
+        // awaiting its FW-write confirmation. The mask is dropped on the write event (draw_option)
+        // or the 2s fallback below - not a fixed timer that can outpace a slow write/echo (GMSL).
         if( last_slider_hold_stopwatch.get_elapsed_ms() < 500 )
+            return;
+        if( _has_user_request->load() && _user_request_stopwatch.get_elapsed_ms() < 2000 )
             return;
 
         value = ep->get_option_value( opt );
@@ -741,6 +745,13 @@ bool option_model::draw_option(bool update_read_only_options,
             if( invalidate_flag )
                 *invalidate_flag = true;
             model.add_log( rsutils::string::from() << "Setting " << opt << " to " << written_value );
+            // Event-driven mask drop: the FW write landed, so refresh the cached value and
+            // release the user-request mask now. Transitions the slider requested->confirmed
+            // on the write event rather than a fixed timer, which otherwise snaps back to a
+            // stale value on slow write/echo paths (e.g. GMSL).
+            try { value = endpoint->get_option_value( opt ); supported = value->is_valid; }
+            catch( ... ) { LOG_WARNING( "read-back of option " << opt << " have failed, displayed value may not be accurate"); }
+            _has_user_request->store( false );
         }
     }
 
@@ -976,8 +987,12 @@ void option_model::set_option_sync( float req_value )
 
 void option_model::update_value( const rs2::option_value & updated_value, notifications_model & model )
 {
-    // After slider was dragged, don't update value from outside (usually on_options_changed callback)
+    // After slider was dragged, don't update value from outside (usually on_options_changed callback).
+    // Also hold while a user set awaits its FW-write confirmation - dropped on the write event
+    // (draw_option) or the 2s fallback.
     if( last_slider_hold_stopwatch.get_elapsed_ms() < 1000 )
+        return;
+    if( _has_user_request->load() && _user_request_stopwatch.get_elapsed_ms() < 2000 )
         return;
 
     value = updated_value;
