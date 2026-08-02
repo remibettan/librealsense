@@ -667,6 +667,11 @@ namespace rs2
         // BeginDisabled blocks both the click AND the widget's internal _try_side write while a phase is in flight.
         // The action is deferred until AFTER EndDisabled so a throw from start_action_phase() (thread ctor,
         // allocation) cannot leak the disabled stack across frames.
+        // Capture _try_side BEFORE the RadioButton widgets get a chance to overwrite it — ImGui returns pressed=true
+        // on any click, including on the already-selected radio, so `1 - _try_side` (the previous version's guess)
+        // is only correct when the click actually changes selection. A re-click on the same radio would otherwise
+        // roll the UI to the opposite side on failure — precisely the inverse of what we want.
+        const int try_side_before_click = _try_side;
         ImGui::SetCursorScreenPos({ float(x + 5), btn_y });
         ImGui::BeginDisabled(in_flight);
         const bool try_new_clicked = ImGui::RadioButton(try_new_id.c_str(), &_try_side, 0);
@@ -675,12 +680,12 @@ namespace rs2
         ImGui::EndDisabled();
         if (try_new_clicked)
         {
-            _pending_try_revert_to = 1;   // roll back to OLD if this TRY fails
+            _pending_try_revert_to = try_side_before_click;
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW);
         }
         else if (try_old_clicked)
         {
-            _pending_try_revert_to = 0;   // roll back to NEW if this TRY fails
+            _pending_try_revert_to = try_side_before_click;
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_OLD);
         }
 
