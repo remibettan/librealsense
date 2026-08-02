@@ -2728,6 +2728,15 @@ namespace librealsense
                 if (errno == EIO || errno == EAGAIN) // TODO: Log?
                     return false;
 
+                // A control write that times out means the device did not ACK in time - it is resetting, busy or disconnecting
+                // (e.g. HWRST resets the camera before it can ACK). Propagate it so callers can react, but as a recoverable_exception
+                // so it is not logged as an error at construction (unrecoverable_exception logs ERROR); the reset path expects it.
+                if (errno == ETIMEDOUT)
+                    throw recoverable_exception(rsutils::string::from()
+                                                << "xioctl(VIDIOC_S_EXT_CTRLS) timed out on control "
+                                                << static_cast< int >( control ) << ", errno=" << errno,
+                                                RS2_EXCEPTION_TYPE_BACKEND );
+
                 throw linux_backend_exception(rsutils::string::from()
                                               << "xioctl(VIDIOC_S_EXT_CTRLS) failed on control "
                                               << static_cast< int >( control ) << ", errno=" << errno );

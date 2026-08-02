@@ -75,7 +75,16 @@ namespace librealsense
         // Pause options watchers over the reset so they won't try to query the device while unavailable.
         options_watcher_pause_guard guard( *this );
 
-        _hw_monitor->send( cmd );
+        try
+        {
+            _hw_monitor->send( cmd );
+        }
+        catch( const std::exception & e )
+        {
+            // On MIPI the device resets before it can ACK the control write, so the send times out ( ETIMEDOUT ) - this is
+            // expected during a reset, not an error (require_response = false).
+            LOG_DEBUG( "hardware_reset command send did not complete (expected during reset): " << e.what() );
+        }
 
         if( _is_mipi )
             simulate_device_reconnect( _owner->get_device_info(), reconnect_delay );
