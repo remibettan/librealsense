@@ -87,7 +87,8 @@ done
 # Locate the repo root and the build directory
 # -----------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Script lives at unit-tests/accelerators/AMD/; the repo root is three levels up.
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 if [[ -z "$BUILD_DIR" ]]; then
     # Prefer the AMD HIP build dir if it exists, then a generic build/.
