@@ -648,12 +648,17 @@ namespace rs2
 
         // Radio pair — user selects which candidate is live. Each toggle fires the matching TRY action so FW switches
         // the RAM-active depth table; the currently-selected radio then shows which table is being previewed.
+        // BeginDisabled blocks both the click AND the visual state change while a phase is in flight — using a plain
+        // `&& !in_flight` on the click check would let RadioButton mutate _try_side inside the widget call, showing
+        // the wrong side selected until the next redraw.
         ImGui::SetCursorScreenPos({ float(x + 5), btn_y });
-        if (ImGui::RadioButton(try_new_id.c_str(), &_try_side, 0) && !in_flight)
+        ImGui::BeginDisabled(in_flight);
+        if (ImGui::RadioButton(try_new_id.c_str(), &_try_side, 0))
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW);
         ImGui::SameLine();
-        if (ImGui::RadioButton(try_old_id.c_str(), &_try_side, 1) && !in_flight)
+        if (ImGui::RadioButton(try_old_id.c_str(), &_try_side, 1))
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_OLD);
+        ImGui::EndDisabled();
 
         ImGui::SameLine();
         // Commit is health-gated AND in-flight-gated: dim on either condition; swallow the click accordingly.
