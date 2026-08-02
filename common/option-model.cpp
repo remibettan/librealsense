@@ -723,11 +723,15 @@ bool option_model::draw_option(bool update_read_only_options,
         std::string async_err;
         bool did_write = false;
         float written_value = 0.f;
+        rs2::option_value read_back;
+        bool has_read_back = false;
         {
             std::lock_guard< std::mutex > lk( _async_state->mutex );
             async_err.swap( _async_state->last_error );
             did_write = _async_state->did_write;
             written_value = _async_state->written_value;
+            read_back = _async_state->read_back;
+            has_read_back = _async_state->has_read_back;
             _async_state->did_write = false;
         }
         if( ! async_err.empty() )
@@ -745,12 +749,15 @@ bool option_model::draw_option(bool update_read_only_options,
             if( invalidate_flag )
                 *invalidate_flag = true;
             model.add_log( rsutils::string::from() << "Setting " << opt << " to " << written_value );
-            // Event-driven mask drop: the FW write landed, so refresh the cached value and
-            // release the user-request mask now. Transitions the slider requested->confirmed
-            // on the write event rather than a fixed timer, which otherwise snaps back to a
-            // stale value on slow write/echo paths (e.g. GMSL).
-            try { value = endpoint->get_option_value( opt ); supported = value->is_valid; }
-            catch( ... ) { LOG_WARNING( "read-back of option " << opt << " have failed, displayed value may not be accurate"); }
+            // Event-driven mask drop: the FW write landed, so adopt the value the worker read
+            // back (no UI-thread FW call) and release the user-request mask now. Transitions the
+            // slider requested->confirmed on the write event rather than a fixed timer, which
+            // otherwise snaps back to a stale value on slow write/echo paths (e.g. GMSL).
+            if( has_read_back )
+            {
+                value = read_back;
+                supported = value->is_valid;
+            }
             _has_user_request->store( false );
         }
     }
@@ -938,11 +945,19 @@ void option_model::set_option_async( rs2_option opt, float value )
             }
             else
             {
+                // Read the accepted value back here (worker thread) so the UI adopts it without a
+                // UI-thread FW round-trip. Non-fatal if it fails - the periodic refresh catches up.
+                rs2::option_value read_back;
+                bool have_read_back = false;
+                try { read_back = endpoint_copy->get_option_value( opt_copy ); have_read_back = true; }
+                catch( const std::exception & e ) { LOG_WARNING( "read-back of option " << opt_copy << " failed: " << e.what() ); }
                 // Record that a FW write completed so the UI thread can drive
                 // invalidate + add_log off the actual write, not off dispatch.
                 std::lock_guard< std::mutex > lk( state->mutex );
                 state->did_write     = true;
                 state->written_value = v;
+                state->read_back     = read_back;
+                state->has_read_back = have_read_back;
             }
             // FW-write floor between actions on this subdevice. 200 ms matches the
             // pre-PR `ignore_period` gate that used to live on the UI thread, so a
