@@ -193,8 +193,7 @@ namespace librealsense
 
         _ds_color_common->register_standard_options();
 
-        if( ! _is_mipi_device ) // no V4L2 MIPI CID mapping for Hue
-            color_ep.register_pu(RS2_OPTION_HUE);
+        color_ep.register_pu(RS2_OPTION_HUE);
 
         if( _thermal_monitor )
             _thermal_monitor->add_observer( [&]( float ) { _color_calib_table_raw.reset(); } );
