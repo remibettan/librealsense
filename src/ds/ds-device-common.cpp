@@ -81,9 +81,14 @@ namespace librealsense
         }
         catch( const std::exception & e )
         {
-            // On MIPI the device resets before it can ACK the control write, so the send times out ( ETIMEDOUT ) - this is
-            // expected during a reset, not an error (require_response = false).
-            LOG_DEBUG( "hardware_reset command send did not complete (expected during reset): " << e.what() );
+            if( _is_mipi )
+            {
+                // Device resets before it ACKs the control, so the send times out. Expected, so not an error (require_response = false).
+                // Workaround until FW will fix sending ACK before resetting. Removes many log prints.
+                LOG_DEBUG( "hardware_reset command send did not complete (expected during MIPI reset): " << e.what() );
+            }
+            else
+                throw;
         }
 
         if( _is_mipi )
@@ -125,6 +130,12 @@ namespace librealsense
                     }
                     if( auto strong = ctx.lock() )
                         strong->invoke_devices_changed_callbacks( {}, devs );
+                    else
+                    {
+                        // Context destroyed during the reconnect delay - normal teardown with a reset in flight, nothing is left stranded
+                        // Note it at DEBUG (an ERROR here would be misleading noise during shutdown).
+                        LOG_DEBUG( "simulate_device_reconnect: context destroyed before reconnect notification - skipping" );
+                    }
                 }
                 catch( const std::exception & e )
                 {
