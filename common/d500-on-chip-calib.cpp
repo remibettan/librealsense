@@ -234,11 +234,23 @@ namespace rs2
             if (interactive_run)
             {
                 _scalar_health = health;
-                _done = true;   // "done" here means "phase complete"; the notification UI transitions to HEALTH_CHECK
-                return;         // leave streaming on — TRY/COMMIT/ABORT need it live
+                // `health < 0.f` is the SDK's sentinel for "FW did not report SUCCESS" (see
+                // d500_auto_calibrated::run_interactive_triggered_calibration). In that case there is no meaningful
+                // candidate to Commit/Try/Discard — surface the run as failed so the notification model shows the
+                // FAILED popup (update_ui_on_failure) instead of the HEALTH_CHECK screen, matching the D585S legacy UX.
+                if (health < 0.f)
+                {
+                    restore_workspace(invoke);   // stop the auto-started depth stream, restore user's prior stream
+                    _failed = true;
+                }
+                else
+                {
+                    _done = true;   // "done" here means "phase complete"; the notification UI transitions to HEALTH_CHECK
+                }
+                return;             // on success, leave streaming on — TRY/COMMIT/ABORT need it live
             }
 
-            // Interactive TRY_NEW/TRY_OLD are one-shot live-preview toggles — mark done, keep stream live.
+            // TRY_NEW/TRY_OLD: do not stop/restart the stream — the USB reconfigure prevents FW from applying the switch.
             if (interactive_try)
             {
                 _done = true;
@@ -606,6 +618,23 @@ namespace rs2
                             && !update_manager->failed();
         const bool commit_enabled = passes && !in_flight;
 
+        // Settle a pending TRY: if the phase finished, either roll _try_side back (on failure) or clear the flag
+        // (on success). Without this, RadioButton's inline write leaves the UI asserting a candidate is active
+        // while FW never actually switched — same UI-lies-about-FW-state hazard as the in-flight race, reached
+        // via the failure path.
+        if (_pending_try_revert_to != -1 && update_manager)
+        {
+            if (update_manager->failed())
+            {
+                _try_side = _pending_try_revert_to;
+                _pending_try_revert_to = -1;
+            }
+            else if (update_manager->done())
+            {
+                _pending_try_revert_to = -1;
+            }
+        }
+
         ImGui::SetCursorScreenPos({ float(x + 9), float(y + 27) });
         ImGui::Text("%s", passes ? "Health check: PASS" : "Health check: FAIL");
 
@@ -614,14 +643,12 @@ namespace rs2
         else         ImGui::Text("Rect health: %.3f px  (threshold %.3f)", h,
                                  d500_on_chip_calib_manager::k_rect_health_pass_threshold_px);
 
-        // Button row: Try New | Try Old | Commit | Discard. Ignore the caller's bar_width — it reserves a 115px
-        // right gutter for the base Dismiss button, which we've hidden above; use the full popup width instead.
-        // Reserve 3 × ImGui default ItemSpacing.x (~8px each) between the four buttons so Discard doesn't clip the right edge.
+        // Row: [radio Try New] [radio Try Old] [Commit] [Discard]. Ignore the caller's bar_width — it reserves a 115px
+        // right gutter for the base Dismiss button, which we've hidden above; radio buttons + fixed-width buttons fit
+        // in the popup natively (ImGui::SameLine + ImGui default spacing).
         (void)bar_width;
-        const float row_width = float(width - 10);
-        const float spacing = ImGui::GetStyle().ItemSpacing.x;
-        const float btn_w = (row_width - 3.f * spacing) / 4.f;
         const float btn_y = float(y + height - 28);
+        const float btn_w = 100.f;   // Commit/Discard fixed; radio buttons occupy the remaining space
 
         std::string try_new_id  = rsutils::string::from() << "Try New##"  << index;
         std::string try_old_id  = rsutils::string::from() << "Try Old##"  << index;
@@ -630,24 +657,37 @@ namespace rs2
 
         // The notification base pushes a near-transparent ImGuiCol_Button (see notification_model::set_color_scheme),
         // so buttons on this row need their own scheme to read as clickable — matches calibration_button() and the
-        // rest of on-chip-calib.
+        // rest of on-chip-calib. Radio buttons use their own ImGui colors so no push is needed for them.
         const auto sat = 1.f + sin(duration_cast<milliseconds>(system_clock::now() - created_time).count() / 700.f) * 0.1f;
-        const float active_sat  = in_flight ? 0.4f : sat;
-        const float hover_sat   = in_flight ? 0.4f : 1.5f;
+        const float active_sat = in_flight ? 0.4f : sat;
+        const float hover_sat  = in_flight ? 0.4f : 1.5f;
 
+        // Radio pair — user selects which candidate is live. Each toggle fires the matching TRY action so FW switches
+        // the RAM-active depth table; the currently-selected radio then shows which table is being previewed.
+        // BeginDisabled blocks both the click AND the widget's internal _try_side write while a phase is in flight.
+        // The action is deferred until AFTER EndDisabled so a throw from start_action_phase() (thread ctor,
+        // allocation) cannot leak the disabled stack across frames.
+        // Capture _try_side BEFORE the RadioButton widgets get a chance to overwrite it — ImGui returns pressed=true
+        // on any click, including on the already-selected radio, so `1 - _try_side` (the previous version's guess)
+        // is only correct when the click actually changes selection. A re-click on the same radio would otherwise
+        // roll the UI to the opposite side on failure — precisely the inverse of what we want.
+        const int try_side_before_click = _try_side;
         ImGui::SetCursorScreenPos({ float(x + 5), btn_y });
-        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, active_sat));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, hover_sat));
-        if (ImGui::Button(try_new_id.c_str(), { btn_w, 20.f }) && !in_flight)
-            start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW);
-        ImGui::PopStyleColor(2);
-
+        ImGui::BeginDisabled(in_flight);
+        const bool try_new_clicked = ImGui::RadioButton(try_new_id.c_str(), &_try_side, 0);
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, saturate(sensor_header_light_blue, active_sat));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, saturate(sensor_header_light_blue, hover_sat));
-        if (ImGui::Button(try_old_id.c_str(), { btn_w, 20.f }) && !in_flight)
+        const bool try_old_clicked = ImGui::RadioButton(try_old_id.c_str(), &_try_side, 1);
+        ImGui::EndDisabled();
+        if (try_new_clicked)
+        {
+            _pending_try_revert_to = try_side_before_click;
+            start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_NEW);
+        }
+        else if (try_old_clicked)
+        {
+            _pending_try_revert_to = try_side_before_click;
             start_action_phase(d500_on_chip_calib_manager::RS2_CALIB_ACTION_ON_CHIP_CALIB_TRY_OLD);
-        ImGui::PopStyleColor(2);
+        }
 
         ImGui::SameLine();
         // Commit is health-gated AND in-flight-gated: dim on either condition; swallow the click accordingly.

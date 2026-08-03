@@ -93,9 +93,7 @@ namespace librealsense
 
     void d500_device::hardware_reset()
     {
-        command cmd(ds::HWRST);
-        cmd.require_response = false;
-        _hw_monitor->send(cmd);
+        _ds_device_common->hardware_reset( std::chrono::seconds( 5 ) );
     }
 
     void d500_device::enter_update_state() const
@@ -431,7 +429,7 @@ namespace librealsense
                                                      raw_sensor ), _hw_monitor_response);
         }
 
-        _ds_device_common = std::make_shared<ds_device_common>(this, _hw_monitor);
+        _ds_device_common = std::make_shared<ds_device_common>(this, _hw_monitor, _is_mipi_device);
 
         // Define Left-to-Right extrinsics calculation (lazy)
         // Reference CS - Right-handed; positive [X,Y,Z] point to [Left,Up,Forward] accordingly.
@@ -693,6 +691,11 @@ namespace librealsense
         {
             _coefficients_table_raw.reset();
             _new_calib_table_raw.reset();
+            // _left_right_extrinsics is derived from _coefficients_table_raw (baseline in mm), but its own lazy<>
+            // caches the computed rs2_extrinsics — without this reset, get_extrinsics(depth, right_ir) keeps
+            // returning the pre-calibration baseline forever, even though the coefficients table cache is fresh.
+            if( _left_right_extrinsics )
+                _left_right_extrinsics->reset();
         } );
     }
 
