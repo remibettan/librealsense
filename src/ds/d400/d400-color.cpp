@@ -97,12 +97,8 @@ namespace librealsense
                 // The color node is the second one in the group; reading past the end copies a
                 // uvc_device_info whose strings are not there, which faults on use.
                 if (color_devs_info.size() < 2)
-                {
-                    for (auto&& i : color_devs_info)
-                        LOG_ERROR("MIPI group node: " << std::string(i));
                     throw backend_exception("cannot access color sensor - MIPI group holds "
                                             + std::to_string(color_devs_info.size()) + " nodes");
-                }
                 info = color_devs_info[1];
             }
             else
