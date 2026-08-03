@@ -21,6 +21,7 @@
 #include "d500-safety.h"
 #include "d500-depth-mapping.h"
 #include "d500-object-detection.h"
+#include "d500-sensors-config-mode.h"
 #include "sync.h"
 #include <src/ds/ds-thermal-monitor.h>
 #include <src/ds/d500/d500-options.h>
@@ -127,6 +128,8 @@ namespace librealsense
             // Improved Close Range Depth - USB toggle
             register_feature( std::make_shared< close_range_filter_feature >(
                     dynamic_cast< d500_depth_sensor & >( get_depth_sensor() ) ) );
+
+            register_sensors_config_mode_option( *this );
         }
 
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override
@@ -182,6 +185,8 @@ namespace librealsense
             // Disabled on D585 GMSL: the MIPI V4L2 backend has no CID for the close-range depth-XU selector (0x14).
             //register_feature( std::make_shared< close_range_filter_feature >(
             //        dynamic_cast< d500_depth_sensor & >( get_depth_sensor() ) ) );
+
+            register_sensors_config_mode_option( *this );
         }
 
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override
@@ -239,6 +244,8 @@ namespace librealsense
             // Improved Close Range Depth - USB toggle
             register_feature( std::make_shared< close_range_filter_feature >(
                     dynamic_cast< d500_depth_sensor & >( get_depth_sensor() ) ) );
+
+            register_sensors_config_mode_option( *this );
         }
 
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override

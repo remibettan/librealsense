@@ -29,7 +29,12 @@ namespace rs2
         option.id = rsutils::string::from() << opt_base_label << '/' << option_name;
         option.opt = opt->id;
         option.endpoint = options;
-        option.label = rsutils::string::from() << option_name << "##" << option.id;
+        // Display-only overrides: keep the option's canonical name in option.id (used for logs and
+        // widget uniqueness) but show a shorter/friendlier label to the user in the viewer.
+        std::string display_name = option_name;
+        if( opt->id == RS2_OPTION_SENSORS_CONFIG_MODE )
+            display_name = "Sensors Config";
+        option.label = rsutils::string::from() << display_name << "##" << option.id;
         option.invalidate_flag = options_invalidated;
         option.dev = model;
         option.value = opt;
@@ -294,8 +299,11 @@ bool option_model::draw_combobox( notifications_model & model,
                                   bool use_option_name )
 {
     bool item_clicked = false;
+    std::string opt_display_name = endpoint->get_option_name( opt );
+    if( opt == RS2_OPTION_SENSORS_CONFIG_MODE )
+        opt_display_name = "Sensors Config";
     std::string txt = rsutils::string::from()
-                   << ( use_option_name ? endpoint->get_option_name( opt ) : description ) << ":";
+                   << ( use_option_name ? opt_display_name : description ) << ":";
 
     float text_length = ImGui::CalcTextSize( txt.c_str() ).x;
     float combo_position_x = ImGui::GetCursorPosX() + text_length + 5;
@@ -405,7 +413,10 @@ bool option_model::draw_slider( notifications_model & model,
                                 bool use_cm_units )
 {
     bool slider_clicked = false;
-    std::string txt = rsutils::string::from() << endpoint->get_option_name( opt ) << ":";
+    std::string opt_display_name = endpoint->get_option_name( opt );
+    if( opt == RS2_OPTION_SENSORS_CONFIG_MODE )
+        opt_display_name = "Sensors Config";
+    std::string txt = rsutils::string::from() << opt_display_name << ":";
     ImGui::Text( "%s", txt.c_str() );
 
     ImGui::SameLine();

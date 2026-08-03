@@ -140,6 +140,7 @@ extern "C" {
         RS2_OPTION_DOWNSCALE_RATIO, /**< Embedded filter: secondary-frame downscale ratio (pre-stream only) */
         RS2_OPTION_READOUT_SHAPING, /**< IR/depth sensor readout shaping [0-100%]; higher slows readout to avoid dropped frames */
         RS2_OPTION_DETECTION_DISTANCE, /**< Enable firmware calculation of per-detection distance (meters) on the object-detection stream */
+        RS2_OPTION_SENSORS_CONFIG_MODE, /**< D5x5: 0 = dedicated color sensor (3C), 1 = dual RGB (2C). Setting triggers hardware_reset; device re-enumerates under the new PID. */
         RS2_OPTION_COUNT /**< Number of enumeration values. Not a valid input: intended to be used in for-loops. */
     } rs2_option;
 

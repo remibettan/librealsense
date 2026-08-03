@@ -36,6 +36,7 @@ namespace librealsense
         {
             DETECTION_DISTANCE    = 0x01,  // Enable FW depth-derived distance for detections
             ALIGN_DEPTH           = 0x10,  // Enable depth-to-RGB alignment for OD distance; must be sent before depth streaming starts
+            DUAL_RGB_MODE         = 0x12,  // FW spec: csEU_CONTROL_ADVANCED_DEVICE_MODE. 1-byte GET/SET: 0 = dedicated color sensor (3C), 1 = dual RGB (2C). SET triggers PID change on next enumeration.
             PVT_TEMPERATURE       = 0x15,
             PROJECTOR_TEMPERATURE = 0x16,
             OHM_TEMPERATURE       = 0x17
