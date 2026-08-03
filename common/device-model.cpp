@@ -2618,6 +2618,12 @@ namespace rs2
 
                 for (auto& opt : drawing_order)
                 {
+                    // Skip options this sensor doesn't advertise. drawing_order includes some
+                    // options that only exist on specific SKUs / sensors (e.g. SENSORS_CONFIG_MODE
+                    // on D5x5 depth) — draw_option's own map lookup already returns silently for
+                    // missing options, so this check is a documented, explicit pre-filter.
+                    if (!sub->s->supports(opt))
+                        continue;
                     if (sub->draw_option(opt, dev.is<playback>() || update_read_only_options, error_message, *viewer.not_model))
                     {
                         get_curr_advanced_controls = true;

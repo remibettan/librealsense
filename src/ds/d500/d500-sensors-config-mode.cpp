@@ -7,6 +7,7 @@
 
 #include <src/sensor.h>
 #include <src/uvc-sensor.h>
+#include <src/librealsense-exception.h>
 
 #include <rsutils/easylogging/easyloggingpp.h>
 
@@ -25,6 +26,12 @@ namespace librealsense
 
     void sensors_config_mode_option::set( float value )
     {
+        // Reject anything outside {0, 1} up-front — a rogue set (e.g. sensor.set_option(..., 5))
+        // would otherwise slice to a valid uint8_t and reboot the device with a garbage mode.
+        if( value != 0.f && value != 1.f )
+            throw invalid_value_exception( rsutils::string::from()
+                                           << "Sensors Config Mode: value must be 0 or 1, got " << value );
+
         // Skip the write + reboot when the FW is already in the requested mode. If the read
         // itself fails, fall through to the write path so the user's intent is honored.
         try
@@ -81,9 +88,22 @@ namespace librealsense
             return;
         }
 
+        // Probe the FW once before advertising the option. Old FW builds on 2C/3C SKUs may not
+        // implement XU selector 0x12 yet; skip registration cleanly in that case so the option
+        // never shows in the UI (rather than showing broken and throwing on the first read).
+        auto option = std::make_shared< sensors_config_mode_option >( raw_depth, dev );
+        try
+        {
+            option->query();
+        }
+        catch( std::exception const & e )
+        {
+            LOG_DEBUG( "XU DUAL_RGB_MODE (0x12) not supported by this FW, option not registered: " << e.what() );
+            return;
+        }
+
         auto & depth_sensor = dev.get_depth_sensor();
-        depth_sensor.register_option( RS2_OPTION_SENSORS_CONFIG_MODE,
-                                      std::make_shared< sensors_config_mode_option >( raw_depth, dev ) );
+        depth_sensor.register_option( RS2_OPTION_SENSORS_CONFIG_MODE, option );
         LOG_INFO( "RS2_OPTION_SENSORS_CONFIG_MODE registered on Stereo Module (XU DUAL_RGB_MODE = 0x12)" );
     }
 }
