@@ -213,6 +213,40 @@ std::string viewer_test::get_control_value( rs2::device_model & model,
     return get_value_by_seed( opt, seed );
 }
 
+void viewer_test::set_controls_filter( rs2::device_model & model,
+                                       std::shared_ptr< rs2::subdevice_model > sub,
+                                       const std::string & text )
+{
+    imgui->SetRef( "Control Panel" );
+    imgui->ItemInput( ImHashStr( "##options_filter", 0, controls_id_seed( model, sub ) ) );
+    imgui->KeyCharsReplaceEnter( text.c_str() );
+    imgui->SleepNoSkip( 0.3f, 0.1f );
+}
+
+std::vector< rs2_option > viewer_test::controls_options( rs2::device_model & model,
+                                                         std::shared_ptr< rs2::subdevice_model > sub )
+{
+    imgui->SetRef( "Control Panel" );
+    ImGuiID seed = controls_id_seed( model, sub );
+    ImGuiTestItemList items;
+    imgui->GatherItems( &items, seed, -1 );
+
+    std::vector< rs2_option > result;
+    for( auto & kvp : sub->options_metadata )
+    {
+        auto & opt = kvp.second;
+        const std::string & widget = opt.is_checkbox() ? opt.label : opt.id;
+        ImGuiID id = ImHashStr( widget.c_str(), 0, seed );
+        for( auto const & item : items )
+            if( item.ID == id )
+            {
+                result.push_back( kvp.first );
+                break;
+            }
+    }
+    return result;
+}
+
 void viewer_test::select_combo_item( ImGuiID combo_id, const std::string & item )
 {
     imgui->ItemClick( combo_id );
