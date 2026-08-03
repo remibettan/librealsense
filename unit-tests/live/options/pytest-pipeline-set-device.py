@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.device_each("D455"),
     pytest.mark.device_each("D555"),
+    pytest.mark.device_type_exclude("DDS"),  # USB-focused: DDS advertises the option through a separate transport
     pytest.mark.skipif(platform.machine() == "aarch64", reason="D455 not available on CI Jetson"),
 ]
 
