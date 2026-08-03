@@ -5,7 +5,6 @@
 #include <librealsense2/rs.hpp>
 #include <rsutils/time/stopwatch.h>
 #include <atomic>
-#include <map>
 #include <mutex>
 namespace rs2
 {
@@ -32,16 +31,6 @@ namespace rs2
     class option_model
     {
     public:
-        // No default state: every option_model is bound to an endpoint for its whole life. This is what keeps
-        // std::map::operator[] from silently inserting an unusable entry when construction throws - use
-        // insert_option_model() instead.
-        option_model() = delete;
-        option_model( const option_value & opt_value,
-                      const std::string & opt_base_label,
-                      subdevice_model * subdev,
-                      std::shared_ptr< options > ep,
-                      bool * options_invalidated );
-
         bool draw( std::string& error_message, notifications_model& model, bool new_line = true, bool use_option_name = true );
         void update_supported( std::string& error_message );
         void update_read_only_status( std::string& error_message );
@@ -176,7 +165,4 @@ namespace rs2
         std::shared_ptr<options> options,
         bool* options_invalidated,
         std::string& error_message);
-
-    // option_model has no default state, so `map[id] = model` does not compile. Insert through this instead.
-    void insert_option_model( std::map< rs2_option, option_model > & models, rs2_option id, option_model && model );
 }

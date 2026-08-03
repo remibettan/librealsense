@@ -94,34 +94,16 @@ namespace librealsense
             platform::uvc_device_info info;
             if (_is_mipi_device)
             {
-                // A MIPI group holds every video node of the camera (depth, color, IR, IMU), so the color node
-                // must be picked by identity - the driver names it "video-rs-color-<n>". Positional access breaks
-                // as soon as a node is missing or enumerates out of order, and copying an out-of-range entry
-                // faults on the copied strings.
-                auto color_node = std::find_if(color_devs_info.begin(), color_devs_info.end(),
-                    [](const platform::uvc_device_info& i)
-                    {
-                        return i.device_path.find("video-rs-color") != std::string::npos
-                            && i.device_path.find("-md") == std::string::npos; // not the metadata node
-                    });
-                // Nodes enumerated without the rs links (e.g. IPU6) keep the positional layout: depth, color,
-                // IR, IMU. If the links are in use but the color one is missing, position 1 is the IR node.
-                bool enumerated_by_rs_links = std::any_of(color_devs_info.begin(), color_devs_info.end(),
-                    [](const platform::uvc_device_info& i)
-                    { return i.device_path.find("video-rs-") != std::string::npos; });
-                if (color_node != color_devs_info.end())
-                    info = *color_node;
-                else if (!enumerated_by_rs_links && color_devs_info.size() > 1)
-                {
-                    info = color_devs_info[1];
-                    LOG_DEBUG("MIPI group has no rs links, using positional color node " << info.device_path);
-                }
-                else
+                // The color node is the second one in the group; reading past the end copies a
+                // uvc_device_info whose strings are not there, which faults on use.
+                if (color_devs_info.size() < 2)
                 {
                     for (auto&& i : color_devs_info)
                         LOG_ERROR("MIPI group node: " << std::string(i));
-                    throw backend_exception("cannot access color sensor - no MIPI color node found");
+                    throw backend_exception("cannot access color sensor - MIPI group holds "
+                                            + std::to_string(color_devs_info.size()) + " nodes");
                 }
+                info = color_devs_info[1];
             }
             else
                 info = color_devs_info.front();
@@ -139,7 +121,7 @@ namespace librealsense
 
             color_ep->register_option(RS2_OPTION_GLOBAL_TIME_ENABLED, enable_global_time_option);
 
-            color_ep->register_info(RS2_CAMERA_INFO_PHYSICAL_PORT, info.device_path);
+            color_ep->register_info(RS2_CAMERA_INFO_PHYSICAL_PORT, color_devs_info.front().device_path);
 
             _color_device_idx = add_sensor(color_ep);
         }

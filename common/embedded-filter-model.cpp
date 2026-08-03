@@ -69,7 +69,9 @@ namespace rs2
     {
         for (option_value option : _embedded_filter->get_supported_option_values())
         {
-            // An option whose range cannot be read throws here - skip it and keep the rest of the controls.
+            // Build the model first and insert only on success: an option whose range cannot be read
+            // throws, and map::operator[] would leave a default-constructed (null-endpoint) entry
+            // behind. Isolate per option so one bad control does not drop the rest.
             try
             {
                 auto om = create_option_model( option,
@@ -78,7 +80,7 @@ namespace rs2
                                                _embedded_filter,
                                                model ? &model->_options_invalidated : nullptr,
                                                error_message );
-                insert_option_model( _options_id_to_model, option->id, std::move( om ) );
+                _options_id_to_model[option->id] = std::move( om );
             }
             catch( const std::exception & e )
             {
