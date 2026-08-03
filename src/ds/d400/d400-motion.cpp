@@ -279,16 +279,8 @@ namespace librealsense
 
         bool is_fisheye_avaialable = false;
         auto fisheye_infos = _ds_motion_common->init_fisheye(group, is_fisheye_avaialable);
-        if (!is_fisheye_avaialable)
+        if (!is_fisheye_avaialable || fisheye_infos.empty())
             return;
-
-        // init_fisheye only reports availability when a node was found, but don't let a future change there
-        // turn into a crash here
-        if (fisheye_infos.empty())
-        {
-            LOG_ERROR("FishEye sensor reported available with no UVC node - sensor not created");
-            return;
-        }
 
         std::unique_ptr< frame_timestamp_reader > ds_timestamp_reader_backup( new ds_timestamp_reader() );
         std::unique_ptr<frame_timestamp_reader> ds_timestamp_reader_metadata(new ds_timestamp_reader_from_metadata(std::move(ds_timestamp_reader_backup)));

@@ -104,12 +104,17 @@ namespace librealsense
                         return i.device_path.find("video-rs-color") != std::string::npos
                             && i.device_path.find("-md") == std::string::npos; // not the metadata node
                     });
+                // Nodes enumerated without the rs links (e.g. IPU6) keep the positional layout: depth, color,
+                // IR, IMU. If the links are in use but the color one is missing, position 1 is the IR node.
+                bool enumerated_by_rs_links = std::any_of(color_devs_info.begin(), color_devs_info.end(),
+                    [](const platform::uvc_device_info& i)
+                    { return i.device_path.find("video-rs-") != std::string::npos; });
                 if (color_node != color_devs_info.end())
                     info = *color_node;
-                else if (color_devs_info.size() > 1)
+                else if (!enumerated_by_rs_links && color_devs_info.size() > 1)
                 {
-                    info = color_devs_info[1]; // nodes enumerated without the rs links: depth, color, IR, IMU
-                    LOG_WARNING("No video-rs-color node in MIPI group, falling back to " << info.device_path);
+                    info = color_devs_info[1];
+                    LOG_DEBUG("MIPI group has no rs links, using positional color node " << info.device_path);
                 }
                 else
                 {
