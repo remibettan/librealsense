@@ -232,8 +232,8 @@ namespace librealsense
                 if( raw.size() >= sizeof( ds::table_header ) )
                 {
                     auto hdr = reinterpret_cast< const ds::table_header * >( raw.data() );
-                    LOG_INFO( "Interactive TC: depth calibration CRC32 "
-                              << label << " = 0x" << std::hex << hdr->crc32 << std::dec );
+                    LOG_DEBUG( "Interactive TC: depth calibration CRC32 "
+                               << label << " = 0x" << std::hex << hdr->crc32 << std::dec );
                 }
             }
             catch( ... )
@@ -260,8 +260,8 @@ namespace librealsense
                 {
                     raw.erase( raw.begin(), raw.begin() + 4 );
                     auto hdr = reinterpret_cast< const ds::table_header * >( raw.data() );
-                    LOG_INFO( "Interactive TC: RAM depth calibration CRC32 "
-                              << label << " = 0x" << std::hex << hdr->crc32 << std::dec );
+                    LOG_DEBUG( "Interactive TC: RAM depth calibration CRC32 "
+                               << label << " = 0x" << std::hex << hdr->crc32 << std::dec );
                 }
             }
             catch( ... )
