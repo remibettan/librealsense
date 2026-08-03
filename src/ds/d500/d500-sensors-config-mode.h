@@ -4,6 +4,8 @@
 
 #include <src/platform/uvc-option.h>
 
+#include <mutex>
+
 
 namespace librealsense
 {
@@ -16,6 +18,10 @@ namespace librealsense
     //   1 = dual RGB, no dedicated color sensor (2C variants)
     // Single-byte GET/SET; set() writes the XU and triggers hardware_reset so the device
     // re-enumerates under the target PID.
+    //
+    // set() is a no-op when the requested value equals the value currently reported by the FW
+    // (avoids a needless reboot); get_range() caches the FW-reported range on first successful
+    // query (falls back to the hardcoded 0/1 range if the FW query fails).
     class sensors_config_mode_option : public uvc_xu_option< uint8_t >
     {
     public:
@@ -27,6 +33,8 @@ namespace librealsense
 
     private:
         d500_device & _dev;
+        mutable std::once_flag _range_cached_flag;
+        mutable option_range _cached_range = { 0.f, 1.f, 1.f, 0.f };
     };
 
     // Registers RS2_OPTION_SENSORS_CONFIG_MODE on the given device's depth sensor. Call from

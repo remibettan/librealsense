@@ -25,6 +25,20 @@ namespace librealsense
 
     void sensors_config_mode_option::set( float value )
     {
+        // Skip the write + reboot when the FW is already in the requested mode. If the read
+        // itself fails, fall through to the write path so the user's intent is honored.
+        try
+        {
+            float current = uvc_xu_option< uint8_t >::query();
+            if( static_cast< uint8_t >( current ) == static_cast< uint8_t >( value ) )
+            {
+                LOG_INFO( "Sensors Config Mode already at " << static_cast< int >( value )
+                          << "; skipping XU write + hardware_reset" );
+                return;
+            }
+        }
+        catch( ... ) { /* read failed — proceed with the write */ }
+
         uvc_xu_option< uint8_t >::set( value );
         // The mode selector only takes effect on next enumeration.
         _dev.hardware_reset();
@@ -32,7 +46,21 @@ namespace librealsense
 
     option_range sensors_config_mode_option::get_range() const
     {
-        return option_range{ 0.f, 1.f, 1.f, 0.f };
+        // Cache the FW-reported range on first successful query; the range is stable per FW
+        // build so a single round-trip suffices. If the query fails (e.g. FW without the
+        // control) the initialized default {0,1,1,0} stays in place.
+        std::call_once( _range_cached_flag, [this]()
+        {
+            try
+            {
+                _cached_range = uvc_xu_option< uint8_t >::get_range();
+            }
+            catch( std::exception const & e )
+            {
+                LOG_DEBUG( "sensors_config_mode: FW range query failed, keeping default {0,1,1,0}: " << e.what() );
+            }
+        } );
+        return _cached_range;
     }
 
     const char * sensors_config_mode_option::get_value_description( float value ) const
