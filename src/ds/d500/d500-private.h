@@ -80,7 +80,7 @@ namespace librealsense
         //   - interactive Triggered Calibration flow (D555 stays on the D400 OCC path;
         //     D585S and D585_LEGACY_PID stay on the current D500 triggered-calibration flow)
         //   - the DUAL_RGB_MODE XU (0x12) selector that toggles Dual-RGB (2C) vs Dedicated-Color (3C)
-        static const std::set<std::uint16_t> d5x5_interactive_triggered_calibration_pids = {
+        static const std::set<std::uint16_t> d5x5_family_pids = {
             D535_2C_PID,
             D535_3C_PID,
             D535F_PID,
@@ -93,7 +93,7 @@ namespace librealsense
 
         inline bool uses_interactive_triggered_calibration( uint16_t pid )
         {
-            return d5x5_interactive_triggered_calibration_pids.find( pid ) != d5x5_interactive_triggered_calibration_pids.end();
+            return d5x5_family_pids.find( pid ) != d5x5_family_pids.end();
         }
 
         static const std::map< std::uint16_t, std::string > rs500_sku_names = {
