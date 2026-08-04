@@ -25,12 +25,6 @@ namespace librealsense
 
     void sensors_config_mode_option::set( float value )
     {
-        // Reject anything outside {0, 1} up-front — a rogue set (e.g. sensor.set_option(..., 5))
-        // would otherwise slice to a valid uint8_t and reboot the device with a garbage mode.
-        if( value != 0.f && value != 1.f )
-            throw invalid_value_exception( rsutils::string::from()
-                                           << "Sensors Config Mode: value must be 0 or 1, got " << value );
-
         // Skip the write + reboot when the FW is already in the requested mode. If the read
         // itself fails, fall through to the write path so the user's intent is honored.
         try
