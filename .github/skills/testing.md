@@ -80,7 +80,7 @@ So when using `-r`, omit the `test-` filename prefix and join subdirectories wit
 Use `--skip-regex` to exclude tests whose names match:
 
 ```bash
-python3 run-unit-tests.py -s --skip-regex "test-hdr"
+python3 run-unit-tests.py -s --skip-regex "test-rsutils-string-hexarray"
 ```
 
 ### By Tag

@@ -1,5 +1,5 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2021 RealSense, Inc. All Rights Reserved.
+# Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 import sys
 import os
@@ -21,9 +21,8 @@ log = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_each("D555"),
-    # device_each("D585") below name-matches D585S too (substring match); the test itself refuses
-    # to flash the D585 custom FW onto a D585S device (see the product_name check below).
     pytest.mark.device_each("D585"),
+    pytest.mark.device_exclude("D585S"),
     pytest.mark.priority(1),
     pytest.mark.timeout(500),
     pytest.mark.skipif(bool(os.environ.get('GITHUB_ACTIONS')), reason="not runnable on GHA"),
@@ -255,9 +254,7 @@ def test_fw_update( request, module_device_setup, test_context_var ):
         custom_fw_path = custom_fw_d400
     elif "D555" in product_name and custom_fw_d555:
         custom_fw_path = custom_fw_d555
-    # "D585" also matches "D585S" (safety SKU) as a substring, so explicitly exclude it here:
-    # this custom FW is for the non-safety D585 (name may read "D585 Prototype" etc.) only.
-    elif "D585" in product_name and "D585S" not in product_name and custom_fw_d585:
+    elif "D585" in product_name and custom_fw_d585:
         custom_fw_path = custom_fw_d585
 
     if not custom_fw_path:

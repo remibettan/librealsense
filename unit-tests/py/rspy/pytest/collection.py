@@ -141,7 +141,8 @@ def filter_and_sort_items(config, items):
     module_priority = {}
     for item in items:
         module = item.module.__name__
-        module_priority[module] = min(module_priority.get(module, 500), get_priority(item))
+        p = get_priority(item)
+        module_priority[module] = min(module_priority.get(module, p), p)
 
     def get_device_group_key(item):
         module = item.module.__name__
