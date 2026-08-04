@@ -139,21 +139,6 @@ namespace librealsense
         std::weak_ptr< hw_monitor > _hwm;
     };
     
-    class d500_device;
-
-    // depth_xu DUAL_RGB_MODE (0x12) toggle: 0 = dedicated color (3C), 1 = dual RGB (2C).
-    // set() writes the XU and triggers hardware_reset — device re-enumerates under target PID.
-    class sensors_config_mode_option : public uvc_xu_option< uint8_t >
-    {
-    public:
-        sensors_config_mode_option( const std::weak_ptr< uvc_sensor > & ep, d500_device & dev );
-
-        void set( float value ) override;
-
-    private:
-        d500_device & _dev;
-    };
-
     class power_line_freq_option : public uvc_pu_option
     {
     public:

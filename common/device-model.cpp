@@ -1377,6 +1377,8 @@ namespace rs2
                             try
                             {
                                 depth_sub->s->set_option(RS2_OPTION_SENSORS_CONFIG_MODE, is_dual_rgb ? 0.f : 1.f);
+                                // XU write only takes effect on the next enumeration.
+                                dev.hardware_reset();
                             }
                             catch (const error& e)
                             {

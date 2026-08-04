@@ -4,40 +4,9 @@
 
 #include "d500-options.h"
 #include "d500-private.h"
-#include "d500-device.h"
-
-#include <src/uvc-sensor.h>
-#include <src/librealsense-exception.h>
 
 namespace librealsense
 {
-    sensors_config_mode_option::sensors_config_mode_option( const std::weak_ptr< uvc_sensor > & ep, d500_device & dev )
-        : uvc_xu_option< uint8_t >( ep,
-                                    ds::depth_xu,
-                                    ds::d500_xu_id::DUAL_RGB_MODE,
-                                    "Dedicated color sensor (0) vs dual RGB (1). Setting reboots the device.",
-                                    { { 0.f, "Dedicated Color Sensor" }, { 1.f, "Dual RGB" } },
-                                    false /* not settable while streaming */ )
-        , _dev( dev )
-    {
-    }
-
-    void sensors_config_mode_option::set( float value )
-    {
-        // Skip the write + reboot when the FW is already in the requested mode. If the read
-        // itself fails, fall through to the write path so the user's intent is honored.
-        try
-        {
-            if( static_cast< uint8_t >( uvc_xu_option< uint8_t >::query() ) == static_cast< uint8_t >( value ) )
-                return;
-        }
-        catch( ... ) { /* read failed — proceed with the write */ }
-
-        uvc_xu_option< uint8_t >::set( value );
-        _dev.hardware_reset();
-    }
-
-
     rgb_tnr_option::rgb_tnr_option(std::shared_ptr<hw_monitor> hwm, const std::weak_ptr< sensor_base > & ep)
         : _hwm(hwm), _sensor(ep)
     {
