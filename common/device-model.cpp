@@ -2689,6 +2689,13 @@ namespace rs2
                     label = rsutils::string::from() << "Controls ##" << sub->s->get_info(RS2_CAMERA_INFO_NAME) << "," << id;
                     if (ImGui::TreeNode(label.c_str()))
                     {
+                        char filter_buf[TEXT_BUFF_SIZE];
+                        std::snprintf(filter_buf, sizeof(filter_buf), "%s", sub->options_filter.c_str());
+                        ImGui::PushItemWidth(295 - ImGui::GetCursorPosX()); // align with the sliders' right edge
+                        if (ImGui::InputTextWithHint("##options_filter", "Search controls...", filter_buf, sizeof(filter_buf)))
+                            sub->options_filter = filter_buf;
+                        ImGui::PopItemWidth();
+
                         auto const & supported_options = sub->options_metadata;
 
                         // moving the color dedicated options to the end of the vector
@@ -2722,9 +2729,15 @@ namespace rs2
                                                so_ordered.push_back( opt );
                                        } );
 
+                        const std::string filter_lc = rsutils::string::to_lower( sub->options_filter );
                         for (auto opt : so_ordered)
                         {
                             if( viewer.is_option_skipped( opt ) )
+                                continue;
+                            auto it = supported_options.find( opt );
+                            if( ! filter_lc.empty() && it != supported_options.end()
+                                && rsutils::string::to_lower( it->second.label.substr( 0, it->second.label.find( "##" ) ) )
+                                       .find( filter_lc ) == std::string::npos )
                                 continue;
                             if (std::find(drawing_order.begin(), drawing_order.end(), opt) == drawing_order.end())
                             {
