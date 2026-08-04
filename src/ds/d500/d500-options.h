@@ -10,6 +10,7 @@
 #include "option.h"
 
 #include <rsutils/lazy.h>
+#include <mutex>
 
 
 namespace librealsense
@@ -139,6 +140,30 @@ namespace librealsense
         std::weak_ptr< hw_monitor > _hwm;
     };
     
+    class d500_device;
+
+    // Boolean D5x5 sensor-configuration selector, exposed as RS2_OPTION_SENSORS_CONFIG_MODE.
+    // Writes the FW's depth_xu DUAL_RGB_MODE (0x12) control — FW-spec name
+    // csEU_CONTROL_ADVANCED_DEVICE_MODE — and triggers hardware_reset so the device
+    // re-enumerates under the target PID (0 = dedicated color sensor / 3C, 1 = dual RGB / 2C).
+    // set() rejects out-of-range values, skips the write when the FW is already in the
+    // requested mode, and only reboots the device when a real state change happens.
+    // get_range() caches the FW-reported range on first successful query.
+    class sensors_config_mode_option : public uvc_xu_option< uint8_t >
+    {
+    public:
+        sensors_config_mode_option( const std::weak_ptr< uvc_sensor > & ep, d500_device & dev );
+
+        void set( float value ) override;
+        option_range get_range() const override;
+        const char * get_value_description( float value ) const override;
+
+    private:
+        d500_device & _dev;
+        mutable std::once_flag _range_cached_flag;
+        mutable option_range _cached_range = { 0.f, 1.f, 1.f, 0.f };
+    };
+
     class power_line_freq_option : public uvc_pu_option
     {
     public:
