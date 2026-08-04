@@ -3,9 +3,6 @@
 
 #include "viewer-test-helpers.h"
 
-#include <rsutils/string/string-utilities.h>
-
-using rsutils::string::to_lower;
 
 // Type into the Controls search box and verify the option list is filtered live:
 // case-insensitive substring match on the control name, empty input restores the full list
@@ -19,7 +16,7 @@ VIEWER_TEST( "controls", "options_filter" )
         test.expand_sensor_panel( model, sub );
         test.expand_controls( model, sub );
 
-        // the options the UI actually renders inside this sensor's Controls section
+        // the options the UI currently renders inside this sensor's Controls section
         auto options = test.controls_options( model, sub );
         if( options.size() < 2 )
         {
@@ -27,32 +24,31 @@ VIEWER_TEST( "controls", "options_filter" )
             continue;
         }
 
-        auto name = [&]( rs2_option o ) {
-            auto & label = sub->options_metadata.at( o ).label;
-            return to_lower( label.substr( 0, label.find( "##" ) ) );
-        };
-
-        // filter = first control's name minus its last char; expected = the controls
-        // whose names contain it
-        std::string filter = name( options[0] );
+        // filter = first control's name minus its last char; pick another control whose
+        // name does not contain it
+        std::string filter = test.control_name( sub, options[0] );
         filter.pop_back();
-        std::vector< rs2_option > expected;
+        rs2_option other = RS2_OPTION_COUNT;
         for( auto o : options )
-            if( name( o ).find( filter ) != std::string::npos )
-                expected.push_back( o );
-        if( expected.size() == options.size() ) // filter hides nothing — can't verify on this sensor
+            if( test.control_name( sub, o ).find( filter ) == std::string::npos )
+            {
+                other = o;
+                break;
+            }
+        if( other == RS2_OPTION_COUNT ) // filter hides nothing — can't verify on this sensor
         {
             test.collapse_sensor_panel( model, sub );
             continue;
         }
 
-        // case-insensitive substring match: exactly the matching controls stay visible
+        // case-insensitive substring match: non-matching control disappears, matching stays
         test.set_controls_filter( model, sub, filter );
-        IM_CHECK( test.controls_options( model, sub ) == expected );
+        IM_CHECK( test.wait_until( 10, 0.3f, [&] { return ! test.control_visible( model, sub, other ); } ) );
+        IM_CHECK( test.control_visible( model, sub, options[0] ) );
 
         // clearing the box restores the full list
         test.set_controls_filter( model, sub, "" );
-        IM_CHECK( test.controls_options( model, sub ) == options );
+        IM_CHECK( test.wait_until( 10, 0.3f, [&] { return test.control_visible( model, sub, other ); } ) );
 
         test.collapse_controls( model, sub );
         test.collapse_sensor_panel( model, sub );

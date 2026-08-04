@@ -133,6 +133,11 @@ public:
     // (single gather pass; requires the sensor panel and Controls section to be expanded)
     std::vector< rs2_option > controls_options( rs2::device_model & model,
                                                 std::shared_ptr< rs2::subdevice_model > sub );
+    // Lowercased display name of an option's control
+    std::string control_name( std::shared_ptr< rs2::subdevice_model > sub, rs2_option option );
+    // Whether an option's control is currently rendered inside the Controls section
+    bool control_visible( rs2::device_model & model,
+                          std::shared_ptr< rs2::subdevice_model > sub, rs2_option option );
 
     // Open a combo dropdown by ID and select the named item
     void select_combo_item( ImGuiID combo_id, const std::string & item );

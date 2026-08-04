@@ -4,6 +4,9 @@
 #include "viewer-test-helpers.h"
 #include "imgui_te_context.h"
 
+#include <rsutils/string/string-utilities.h>
+#include <algorithm>
+
 
 // ---------------------------------------------------------------------------
 // viewer_test method implementations
@@ -245,6 +248,20 @@ std::vector< rs2_option > viewer_test::controls_options( rs2::device_model & mod
             }
     }
     return result;
+}
+
+std::string viewer_test::control_name( std::shared_ptr< rs2::subdevice_model > sub, rs2_option option )
+{
+    // label format is "<name>##<imgui id>"
+    auto & label = find_option( sub, option ).label;
+    return rsutils::string::to_lower( label.substr( 0, label.find( "##" ) ) );
+}
+
+bool viewer_test::control_visible( rs2::device_model & model,
+                                   std::shared_ptr< rs2::subdevice_model > sub, rs2_option option )
+{
+    auto v = controls_options( model, sub );
+    return std::find( v.begin(), v.end(), option ) != v.end();
 }
 
 void viewer_test::select_combo_item( ImGuiID combo_id, const std::string & item )
