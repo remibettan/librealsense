@@ -62,21 +62,6 @@ namespace librealsense
             D585_3C_PROTO_PID
         };
 
-        // d500 PIDs that expose the DUAL_RGB_MODE XU (0x12) selector — 2C/3C variants that can
-        // switch between the dedicated-color-sensor (3C) and dual-RGB (2C) FW configurations.
-        // The runtime FW query in sensors_config_mode_option::query() still gates final
-        // registration, so this list only decides which SKUs are worth probing at all.
-        static const std::set<std::uint16_t> d500_sensors_config_mode_pids = {
-            D535_2C_PID,
-            D535_3C_PID,
-            D535F_PID,
-            D585_2C_PID,
-            D585_3C_PID,
-            D585F_PID,
-            D585_2C_PROTO_PID,
-            D585_3C_PROTO_PID
-        };
-
         // d500 PIDs that expose the projector temperature via HKR selector 0x16
         static const std::set<std::uint16_t> d500_projector_temperature_pids = {
             D585S_PID,
@@ -90,8 +75,11 @@ namespace librealsense
             D585_3C_PROTO_PID
         };
 
-        // D5x5 (non-safety, non-legacy) interactive Triggered Calibration flow.
-        // D555 stays on the D400 OCC path; D585S and D585_LEGACY_PID stay on the current D500 triggered-calibration flow.
+        // D5x5 (non-safety, non-legacy) SKU family: D535 and D585 in their 2C/3C/F/proto variants.
+        // Used to gate features that are only exposed by the modern D5x5 FW branch — currently:
+        //   - interactive Triggered Calibration flow (D555 stays on the D400 OCC path;
+        //     D585S and D585_LEGACY_PID stay on the current D500 triggered-calibration flow)
+        //   - the DUAL_RGB_MODE XU (0x12) selector that toggles Dual-RGB (2C) vs Dedicated-Color (3C)
         static const std::set<std::uint16_t> d5x5_interactive_triggered_calibration_pids = {
             D535_2C_PID,
             D535_3C_PID,

@@ -569,7 +569,7 @@ namespace librealsense
                 depth_sensor.register_option(RS2_OPTION_PROJECTOR_TEMPERATURE, proj_temperature);
             }
 
-            if (d500_sensors_config_mode_pids.count(_pid))
+            if (d5x5_interactive_triggered_calibration_pids.count(_pid))
             {
                 // Probe the FW once before advertising the option — old FW builds on 2C/3C SKUs
                 // may not implement XU selector 0x12 yet; skip registration cleanly in that case
