@@ -571,20 +571,8 @@ namespace librealsense
 
             if (d5x5_family_pids.count(_pid))
             {
-                // Probe the FW once before advertising the option — old FW builds on 2C/3C SKUs
-                // may not implement XU selector 0x12 yet; skip registration cleanly in that case
-                // so the option never shows in the UI on unsupported FW.
-                auto sensors_config_mode = std::make_shared< sensors_config_mode_option >( raw_depth_sensor, *this );
-                try
-                {
-                    sensors_config_mode->query();
-                    depth_sensor.register_option( RS2_OPTION_SENSORS_CONFIG_MODE, sensors_config_mode );
-                }
-                catch( std::exception const & e )
-                {
-                    LOG_DEBUG( "XU DUAL_RGB_MODE (0x12) not supported by this FW, "
-                               "RS2_OPTION_SENSORS_CONFIG_MODE not registered: " << e.what() );
-                }
+                depth_sensor.register_option( RS2_OPTION_SENSORS_CONFIG_MODE,
+                                              std::make_shared< sensors_config_mode_option >( raw_depth_sensor, *this ) );
             }
 
             auto error_control = std::make_shared< uvc_xu_option< uint8_t > >( raw_depth_sensor,
