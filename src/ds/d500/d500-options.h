@@ -146,9 +146,10 @@ namespace librealsense
     // Writes the FW's depth_xu DUAL_RGB_MODE (0x12) control — FW-spec name
     // csEU_CONTROL_ADVANCED_DEVICE_MODE — and triggers hardware_reset so the device
     // re-enumerates under the target PID (0 = dedicated color sensor / 3C, 1 = dual RGB / 2C).
-    // set() rejects out-of-range values, skips the write when the FW is already in the
-    // requested mode, and only reboots the device when a real state change happens.
-    // get_range() caches the FW-reported range on first successful query.
+    // set() skips the write when the FW is already in the requested mode (so a no-op write
+    // doesn't reboot the device) and delegates range validation to the FW — the XU rejects
+    // values outside its declared 0..1 range and the base uvc_xu_option::set() surfaces
+    // that rejection. get_range() caches the FW-reported range on first successful query.
     class sensors_config_mode_option : public uvc_xu_option< uint8_t >
     {
     public:

@@ -1352,14 +1352,18 @@ namespace rs2
                 }
                 if (sensors_config_sub)
                 {
+                    // Read the CACHED option value populated by subdevice_model's periodic
+                    // option-value poll, not a fresh FW round-trip: the "more" popup redraws
+                    // every ImGui frame while open, and calling get_option here would spam
+                    // the FW with XU reads at the render rate.
                     bool is_dual_rgb = false;
                     bool can_query   = false;
-                    try
+                    auto opt_it = sensors_config_sub->options_metadata.find(RS2_OPTION_SENSORS_CONFIG_MODE);
+                    if (opt_it != sensors_config_sub->options_metadata.end())
                     {
-                        is_dual_rgb = sensors_config_sub->s->get_option(RS2_OPTION_SENSORS_CONFIG_MODE) != 0.f;
+                        is_dual_rgb = opt_it->second.value_as_float() != 0.f;
                         can_query   = true;
                     }
-                    catch (...) { /* leave hidden if the FW rejects the read */ }
 
                     if (can_query)
                     {
