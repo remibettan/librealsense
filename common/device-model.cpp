@@ -1341,16 +1341,16 @@ namespace rs2
                 // depth_xu 0x12 (DUAL_RGB_MODE). Backed by RS2_OPTION_SENSORS_CONFIG_MODE on
                 // the depth sensor; the option's set() writes the XU and triggers
                 // hardware_reset internally, so the device re-enumerates under the new PID.
-                std::shared_ptr<subdevice_model> sensors_config_sub;
+                std::shared_ptr<subdevice_model> depth_sub;
                 for (auto& sub : subdevices)
                 {
-                    if (sub->s->supports(RS2_OPTION_SENSORS_CONFIG_MODE))
+                    if (sub->s->is<depth_sensor>())
                     {
-                        sensors_config_sub = sub;
+                        depth_sub = sub;
                         break;
                     }
                 }
-                if (sensors_config_sub)
+                if (depth_sub)
                 {
                     // Read the CACHED option value populated by subdevice_model's periodic
                     // option-value poll, not a fresh FW round-trip: the "more" popup redraws
@@ -1358,8 +1358,8 @@ namespace rs2
                     // the FW with XU reads at the render rate.
                     bool is_dual_rgb = false;
                     bool can_query   = false;
-                    auto opt_it = sensors_config_sub->options_metadata.find(RS2_OPTION_SENSORS_CONFIG_MODE);
-                    if (opt_it != sensors_config_sub->options_metadata.end())
+                    auto opt_it = depth_sub->options_metadata.find(RS2_OPTION_SENSORS_CONFIG_MODE);
+                    if (opt_it != depth_sub->options_metadata.end())
                     {
                         is_dual_rgb = opt_it->second.value_as_float() != 0.f;
                         can_query   = true;
@@ -1376,7 +1376,7 @@ namespace rs2
                         {
                             try
                             {
-                                sensors_config_sub->s->set_option(RS2_OPTION_SENSORS_CONFIG_MODE, is_dual_rgb ? 0.f : 1.f);
+                                depth_sub->s->set_option(RS2_OPTION_SENSORS_CONFIG_MODE, is_dual_rgb ? 0.f : 1.f);
                             }
                             catch (const error& e)
                             {
