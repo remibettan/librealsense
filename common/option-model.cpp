@@ -16,18 +16,6 @@
 
 namespace rs2
 {
-    // Per-option display-name override. Returns nullptr for options that use their default
-    // enum-derived name (rs2_option_to_string / get_option_name). Keeps display strings out of
-    // the option's canonical id / logs. Extend by adding a case here.
-    static char const * display_name_override( rs2_option opt )
-    {
-        switch( opt )
-        {
-            case RS2_OPTION_SENSORS_CONFIG_MODE: return "Sensors Config";
-            default:                             return nullptr;
-        }
-    }
-
     option_model create_option_model( option_value const & opt,
         const std::string& opt_base_label,
         subdevice_model* model,
@@ -41,11 +29,7 @@ namespace rs2
         option.id = rsutils::string::from() << opt_base_label << '/' << option_name;
         option.opt = opt->id;
         option.endpoint = options;
-        // Display-only override: keep the option's canonical name in option.id (used for logs and
-        // widget uniqueness) but show a shorter/friendlier label to the user in the viewer.
-        char const * override_name = display_name_override( opt->id );
-        std::string const display_name = override_name ? override_name : option_name;
-        option.label = rsutils::string::from() << display_name << "##" << option.id;
+        option.label = rsutils::string::from() << option_name << "##" << option.id;
         option.invalidate_flag = options_invalidated;
         option.dev = model;
         option.value = opt;
@@ -310,10 +294,8 @@ bool option_model::draw_combobox( notifications_model & model,
                                   bool use_option_name )
 {
     bool item_clicked = false;
-    char const * override_name = display_name_override( opt );
-    std::string const opt_display_name = override_name ? override_name : endpoint->get_option_name( opt );
     std::string txt = rsutils::string::from()
-                   << ( use_option_name ? opt_display_name : description ) << ":";
+                   << ( use_option_name ? endpoint->get_option_name( opt ) : description ) << ":";
 
     float text_length = ImGui::CalcTextSize( txt.c_str() ).x;
     float combo_position_x = ImGui::GetCursorPosX() + text_length + 5;
@@ -423,9 +405,7 @@ bool option_model::draw_slider( notifications_model & model,
                                 bool use_cm_units )
 {
     bool slider_clicked = false;
-    char const * override_name = display_name_override( opt );
-    std::string const opt_display_name = override_name ? override_name : endpoint->get_option_name( opt );
-    std::string txt = rsutils::string::from() << opt_display_name << ":";
+    std::string txt = rsutils::string::from() << endpoint->get_option_name( opt ) << ":";
     ImGui::Text( "%s", txt.c_str() );
 
     ImGui::SameLine();

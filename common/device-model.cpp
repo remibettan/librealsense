@@ -1337,6 +1337,62 @@ namespace rs2
                     }
                 }
 
+                // Dual-RGB (2C) / Dedicated-RGB (3C) toggle for D5x5 SKUs whose FW exposes
+                // depth_xu 0x12 (DUAL_RGB_MODE). Backed by RS2_OPTION_SENSORS_CONFIG_MODE on
+                // the depth sensor; the option's set() writes the XU and triggers
+                // hardware_reset internally, so the device re-enumerates under the new PID.
+                std::shared_ptr<subdevice_model> sensors_config_sub;
+                for (auto& sub : subdevices)
+                {
+                    if (sub->s->supports(RS2_OPTION_SENSORS_CONFIG_MODE))
+                    {
+                        sensors_config_sub = sub;
+                        break;
+                    }
+                }
+                if (sensors_config_sub)
+                {
+                    bool is_dual_rgb = false;
+                    bool can_query   = false;
+                    try
+                    {
+                        is_dual_rgb = sensors_config_sub->s->get_option(RS2_OPTION_SENSORS_CONFIG_MODE) != 0.f;
+                        can_query   = true;
+                    }
+                    catch (...) { /* leave hidden if the FW rejects the read */ }
+
+                    if (can_query)
+                    {
+                        const std::string toggle_label = is_dual_rgb
+                            ? "Switch to Dedicated-RGB Mode"
+                            : "Switch to Dual-RGB Mode";
+                        const ImGuiSelectableFlags toggle_flags = is_streaming
+                            ? ImGuiSelectableFlags_Disabled : ImGuiSelectableFlags_None;
+                        if (ImGui::Selectable(toggle_label.c_str(), false, toggle_flags))
+                        {
+                            try
+                            {
+                                sensors_config_sub->s->set_option(RS2_OPTION_SENSORS_CONFIG_MODE, is_dual_rgb ? 0.f : 1.f);
+                            }
+                            catch (const error& e)
+                            {
+                                error_message = error_to_string(e);
+                            }
+                            catch (const std::exception& e)
+                            {
+                                error_message = e.what();
+                            }
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            std::string tooltip = rsutils::string::from()
+                                << "Switch Dual-RGB / Dedicated Color Sensor Mode"
+                                << (is_streaming ? " (Disabled while streaming)" : "");
+                            RsImGui::CustomTooltip("%s", tooltip.c_str());
+                        }
+                    }
+                }
+
                 // fw update disabled when any sensor is streaming
                 ImGuiSelectableFlags updateFwFlags = (is_streaming) ? ImGuiSelectableFlags_Disabled : 0;
 
@@ -2613,8 +2669,8 @@ namespace rs2
                     sub->draw_stream_selection(error_message);
 
                 static const std::vector<rs2_option> drawing_order = serialize ?
-                    std::vector<rs2_option>{ RS2_OPTION_SENSORS_CONFIG_MODE,                            RS2_OPTION_EMITTER_ENABLED, RS2_OPTION_ENABLE_AUTO_EXPOSURE, RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE }
-                : std::vector<rs2_option>{ RS2_OPTION_SENSORS_CONFIG_MODE, RS2_OPTION_VISUAL_PRESET, RS2_OPTION_EMITTER_ENABLED, RS2_OPTION_ENABLE_AUTO_EXPOSURE, RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE };
+                    std::vector<rs2_option>{                           RS2_OPTION_EMITTER_ENABLED, RS2_OPTION_ENABLE_AUTO_EXPOSURE, RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE }
+                : std::vector<rs2_option>{ RS2_OPTION_VISUAL_PRESET, RS2_OPTION_EMITTER_ENABLED, RS2_OPTION_ENABLE_AUTO_EXPOSURE, RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE };
 
                 for (auto& opt : drawing_order)
                 {
