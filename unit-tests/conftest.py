@@ -193,6 +193,27 @@ def pytest_addoption(parser):
         dest="repeat_count",
         help="Run all tests in each file N times (module-scoped alias for pytest-repeat's --count). Use --count for per-test repetition."
     )
+    group.addoption(
+        "--custom-fw-d400",
+        action="store",
+        default=None,
+        help="Path to a custom D400 firmware image; pytest-fw-update flashes it if it differs "
+             "from the installed FW."
+    )
+    group.addoption(
+        "--custom-fw-d555",
+        action="store",
+        default=None,
+        help="Path to a custom D555 firmware image; pytest-fw-update flashes it if it differs "
+             "from the installed FW."
+    )
+    group.addoption(
+        "--custom-fw-d585",
+        action="store",
+        default=None,
+        help="Path to a custom D585 (non-safety) firmware image; pytest-fw-update flashes it if "
+             "it differs from the installed FW. Applies to D585 only -- never flashed onto D585S."
+    )
     # --debug and -r/--regex conflict with pytest built-ins and are consumed before
     # pytest parses args. Document them here so they show up in --help:
     group.addoption(
@@ -210,7 +231,7 @@ def pytest_addoption(parser):
         action="append",
         default=[],
         help="Restrict pytest discovery to tests under this directory or file. "
-             "May be repeated (e.g. `--test-dir live/image-quality --test-dir test-fw-update.py`). "
+             "May be repeated (e.g. `--test-dir live/image-quality --test-dir pytest-fw-update.py`). "
              "Matches run-unit-tests.py --test-dir for shared UNIT_TESTS_ARGS."
     )
 
