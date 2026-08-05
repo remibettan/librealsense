@@ -99,7 +99,7 @@ class ApiClient {
     status: string
     file_available?: boolean
   }> {
-    const response = await this.client.get(`/devices/${deviceId}/status`)
+    const response = await this.client.get(`/devices/${deviceId}/firmware/`)
     return response.data
   }
 

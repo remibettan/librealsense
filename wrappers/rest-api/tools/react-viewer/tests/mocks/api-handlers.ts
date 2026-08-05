@@ -165,7 +165,7 @@ export const handlers = [
   }),
 
   // Firmware status (bundled FW removed; recommended is always null)
-  http.get(`${API_BASE}/devices/:deviceId/status`, ({ params }) => {
+  http.get(`${API_BASE}/devices/:deviceId/firmware/`, ({ params }) => {
     const device = mockDeviceList.find((d) => d.device_id === params.deviceId)
     return HttpResponse.json({
       device_id: params.deviceId,
