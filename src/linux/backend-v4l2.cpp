@@ -1441,6 +1441,15 @@ namespace librealsense
 
         void v4l_uvc_device::poll()
         {
+            // A prior iteration observed ENODEV on a real DQBUF/QBUF call (set explicitly at the point of
+            // failure, never inferred from ambient errno). Throttle retries until the device-removal
+            // notification unwinds streaming, instead of spinning select() on an fd the kernel already dropped.
+            if (_device_disconnected.exchange(false) || _video_md_syncer.consume_device_disconnected())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                return;
+            }
+
              fd_set fds{};
              FD_ZERO(&fds);
              for (auto fd : _fds)
@@ -1548,6 +1557,8 @@ namespace librealsense
                             }
                             if(xioctl(_fd, VIDIOC_DQBUF, &buf) < 0)
                             {
+                                if (errno == ENODEV)
+                                    _device_disconnected = true;
                                 LOG_DEBUG_V4L("Dequeued empty buf for fd " << std::dec << _fd);
                             }
                             LOG_DEBUG_V4L("Dequeued buf " << std::dec << buf.index << " for fd " << _fd << " seq " << buf.sequence);
@@ -3036,6 +3047,8 @@ namespace librealsense
             LOG_DEBUG_V4L("video_md_syncer - Enqueue buf " << std::dec << sb._buffer_index << " for fd " << sb._fd << " before dropping it");
             if (xioctl(sb._fd, VIDIOC_QBUF, sb._v4l2_buf.get()) < 0)
             {
+                if (errno == ENODEV)
+                    _device_disconnected = true;
                 LOG_ERROR("xioctl(VIDIOC_QBUF) failed when requesting new frame! fd: " << sb._fd << " error: " << strerror(errno));
             }
         }
@@ -3046,6 +3059,8 @@ namespace librealsense
             LOG_DEBUG_V4L("video_md_syncer - Enqueue buf " << std::dec << sync_queue.front()._buffer_index << " for fd " << sync_queue.front()._fd << " before dropping it");
             if (xioctl(sync_queue.front()._fd, VIDIOC_QBUF, sync_queue.front()._v4l2_buf.get()) < 0)
             {
+                if (errno == ENODEV)
+                    _device_disconnected = true;
                 LOG_ERROR("xioctl(VIDIOC_QBUF) failed when requesting new frame! fd: " << sync_queue.front()._fd << " error: " << strerror(errno));
             }
             sync_queue.pop();

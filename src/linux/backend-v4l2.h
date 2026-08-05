@@ -279,6 +279,10 @@ namespace librealsense
             inline void start() {_is_ready = true;}
             void stop();
 
+            // true if a buffer discarded via QBUF revealed the device was physically removed (ENODEV).
+            // Consumed (and reset) once by the owning device's poll(), so a real disconnect is reported exactly once.
+            inline bool consume_device_disconnected() { return _device_disconnected.exchange(false); }
+
         private:
             void enqueue_buffer_before_throwing_it(const sync_buffer& sb) const;
             void enqueue_front_buffer_before_throwing_it(std::queue<sync_buffer>& sync_queue);
@@ -288,6 +292,7 @@ namespace librealsense
             std::queue<sync_buffer> _video_queue;
             std::queue<sync_buffer> _md_queue;
             bool _is_ready;
+            mutable std::atomic<bool> _device_disconnected{ false };
         };
 
         // The aim of the frame_drop_monitor is to check the frames drops kpi - which requires
@@ -458,6 +463,9 @@ namespace librealsense
             frame_drop_monitor _frame_drop_monitor;           // used to check the frames drops kpi
             v4l2_video_md_syncer _video_md_syncer;
             bool _are_device_capabilities_assigned;
+            // true if a video buffer DQBUF revealed the device was physically removed (ENODEV).
+            // Consumed (and reset) once at the top of the next poll(), see poll() for details.
+            std::atomic<bool> _device_disconnected{ false };
 
         private:
             int _stop_pipe_fd[2]; // write to _stop_pipe_fd[1] and read from _stop_pipe_fd[0]
