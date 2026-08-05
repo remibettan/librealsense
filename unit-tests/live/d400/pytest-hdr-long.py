@@ -508,9 +508,9 @@ def _hdr_start_stop_recover_manual_exposure_and_gain(dev, ctx):
 
                     if iteration == iteration_to_check_after_disable:
                         # The frames already carry the restored exposure/gain at this point, but the
-                        # queried (UVC control-DB) value is restored by a separate FW path - the one
-                        # DSO-18682 regressed. Query it too, or the test stays green on FW that
-                        # leaves the query stuck at the last HDR sub-preset value.
+                        # queried (UVC control-DB) value is restored by a separate FW path. Query it
+                        # too, or the test stays green on FW that leaves the query stuck at the last
+                        # HDR sub-preset value.
                         queried_exposure = depth_sensor.get_option(rs.option.exposure)
                         queried_gain = depth_sensor.get_option(rs.option.gain)
                         log.info(f"queried exposure: {queried_exposure}, gain: {queried_gain}")

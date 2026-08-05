@@ -632,8 +632,8 @@ namespace librealsense
         firmware_version hdr_firmware_version("5.12.8.100");
 
         // Minimal firmware version that restores the pre-HDR manual exposure/gain by itself when
-        // the HDR sub-preset is disabled. FW 5.14 .. this version lost that restore (DSO-18682),
-        // so for those the SDK compensates host-side - see hdr_config::_use_workaround.
+        // the HDR sub-preset is disabled. FW from 5.14 up to this version lost that restore, so for
+        // those the SDK compensates host-side - see hdr_config::_use_workaround.
         firmware_version hdr_exposure_restore_firmware_version("5.17.4.11");
 
         std::string optic_serial, asic_serial, pid_hex_str, usb_type_str;
@@ -812,7 +812,7 @@ namespace librealsense
             {
                 auto d400_depth = As<d400_depth_sensor, synthetic_sensor>(&get_depth_sensor());
                 bool use_exposure_restore_workaround = _fw_version < hdr_exposure_restore_firmware_version;
-                LOG_INFO( "HDR pre-HDR manual exposure restore is done by "
+                LOG_INFO( "HDR manual exposure restore is performed by "
                           << ( use_exposure_restore_workaround ? "the SDK (workaround)" : "the FW" ) );
                 d400_depth->init_hdr_config(exposure_range, gain_range, use_exposure_restore_workaround);
                 auto&& hdr_cfg = d400_depth->get_hdr_config();

@@ -31,7 +31,7 @@ namespace librealsense
     {
     public:
         // use_workaround - when true, the SDK compensates host-side for FW that does not
-        //                  restore the pre-HDR manual exposure on HDR disable (see DSO-18682).
+        //                  restore the pre-HDR manual exposure on HDR disable.
         //                  Pass false for FW that restores it by itself.
         hdr_config(hw_monitor& hwm, std::shared_ptr<sensor_base> depth_ep,
             const option_range& exposure_range, const option_range& gain_range, hwmon_response_type no_data_to_return_opcode,
