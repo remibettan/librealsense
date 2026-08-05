@@ -33,7 +33,9 @@ inline double encode_gyro_sensitivity( float value, gyro_sensitivity_encoding en
     if( encoding == gyro_sensitivity_encoding::hkr_range_index )
         return index;
 
-    return index * 0.1;
+    // Preserve the exact HID tokens used by the original D400 lookup table.
+    static constexpr double d400_hid_tokens[] = { 0., 0.1, 0.2, 0.3, 0.4 };
+    return d400_hid_tokens[index];
 }
 
 
