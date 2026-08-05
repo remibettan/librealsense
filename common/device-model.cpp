@@ -1337,22 +1337,35 @@ namespace rs2
                     }
                 }
 
-                // PID toggle between Dual-RGB (2C) and Dedicated-RGB (3C) variants:
-                //   D535:       0x0C01 <-> 0x0C02
-                //   D585:       0x0C04 <-> 0x0C05
-                //   D585 Proto: 0x0C07 <-> 0x0C08
-                if (dev.supports(RS2_CAMERA_INFO_PRODUCT_ID) && dev.is<debug_protocol>())
+                // Dual-RGB (2C) / Dedicated-RGB (3C) toggle for D5x5 SKUs whose FW exposes
+                // depth_xu 0x12 (DUAL_RGB_MODE). Backed by RS2_OPTION_SENSORS_CONFIG_MODE on
+                // the depth sensor; the option's set() writes the XU and triggers
+                // hardware_reset internally, so the device re-enumerates under the new PID.
+                std::shared_ptr<subdevice_model> depth_sub;
+                for (auto& sub : subdevices)
                 {
-                    static constexpr uint32_t MWD_OPCODE          = 0x02U;
-                    static constexpr uint32_t MODE_REG_START_ADDR = 0x80000064U;
-                    static constexpr uint32_t MODE_REG_END_ADDR   = 0x80000068U;
-                    static constexpr uint32_t MODE_DEDICATED_RGB  = 0U;
-                    static constexpr uint32_t MODE_DUAL_RGB       = 1U;
+                    if (sub->s->is<depth_sensor>())
+                    {
+                        depth_sub = sub;
+                        break;
+                    }
+                }
+                if (depth_sub)
+                {
+                    // Read the CACHED option value populated by subdevice_model's periodic
+                    // option-value poll, not a fresh FW round-trip: the "more" popup redraws
+                    // every ImGui frame while open, and calling get_option here would spam
+                    // the FW with XU reads at the render rate.
+                    bool is_dual_rgb = false;
+                    bool can_query   = false;
+                    auto opt_it = depth_sub->options_metadata.find(RS2_OPTION_SENSORS_CONFIG_MODE);
+                    if (opt_it != depth_sub->options_metadata.end())
+                    {
+                        is_dual_rgb = opt_it->second.value_as_float() != 0.f;
+                        can_query   = true;
+                    }
 
-                    std::string current_pid = dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID);
-                    const bool is_dual_rgb      = (current_pid == "0C01") || (current_pid == "0C04") || (current_pid == "0C07");
-                    const bool is_dedicated_rgb = (current_pid == "0C02") || (current_pid == "0C05") || (current_pid == "0C08");
-                    if (is_dual_rgb || is_dedicated_rgb)
+                    if (can_query)
                     {
                         const std::string toggle_label = is_dual_rgb
                             ? "Switch to Dedicated-RGB Mode"
@@ -1363,18 +1376,8 @@ namespace rs2
                         {
                             try
                             {
-                                const uint32_t value = is_dual_rgb ? MODE_DEDICATED_RGB : MODE_DUAL_RGB;
-                                const std::vector<uint8_t> data = {
-                                    static_cast<uint8_t>( value         & 0xFF),
-                                    static_cast<uint8_t>((value >>  8 ) & 0xFF),
-                                    static_cast<uint8_t>((value >> 16 ) & 0xFF),
-                                    static_cast<uint8_t>((value >> 24 ) & 0xFF) };
-
-                                auto dp = dev.as<debug_protocol>();
-                                auto cmd = dp.build_command(MWD_OPCODE, MODE_REG_START_ADDR, MODE_REG_END_ADDR, 0, 0, data);
-
-                                dp.send_and_receive_raw_data(cmd);
-                                restarting_device_info = get_device_info(dev, false);
+                                depth_sub->s->set_option(RS2_OPTION_SENSORS_CONFIG_MODE, is_dual_rgb ? 0.f : 1.f);
+                                // XU write only takes effect on the next enumeration.
                                 dev.hardware_reset();
                             }
                             catch (const error& e)

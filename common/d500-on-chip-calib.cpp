@@ -170,8 +170,8 @@ namespace rs2
 
     bool d500_on_chip_calib_manager::uses_interactive_triggered_calibration() const
     {
-        // Mirrors ds::d5x5_interactive_triggered_calibration_pids in src/ds/d500/d500-private.h —
-        // the viewer cannot include SDK-internal headers. Keep the two lists in sync when adding new PIDs.
+        // Mirrors ds::d5x5_family_pids in src/ds/d500/d500-private.h — the viewer cannot include
+        // SDK-internal headers. Keep the two lists in sync when adding new PIDs.
         static const std::set< std::string > interactive_triggered_calibration_pids = {
             "0C01", "0C02", "0C03", "0C04", "0C05", "0C06", "0C07", "0C08"
         };
