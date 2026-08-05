@@ -59,12 +59,8 @@ jobs:
       PRERELEASE: true
       BASEDIR: ${{ github.workspace }}/.work
       # industrial_ci defaults the prerelease host container to ros:noetic-ros-core
-      # (Ubuntu focal, EOL — its apt archives are no longer reliably reachable).
-      # This container only generates and launches the prerelease script; the actual
-      # binarydeb builds run in nested containers whose OS comes from ROS_DISTRO,
-      # so the host image is independent of the distro being tested. Must stay a
-      # ros:* image: setting DOCKER_IMAGE disables industrial_ci's ROS apt setup,
-      # so colcon has to already be available.
+      # (focal, EOL). Must stay a ros:* image — setting DOCKER_IMAGE disables
+      # industrial_ci's ROS apt setup, so colcon must be installable already.
       DOCKER_IMAGE: ros:jazzy-ros-core
 
     steps:
