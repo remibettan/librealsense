@@ -413,8 +413,8 @@ jobs:
         python3 -m pytest unit-tests/ --color=no --debug -s --not-live --context "linux"
 
   #--------------------------------------------------------------------------------
-  U24_SH_Py_CI_SYS_JSON:  # Ubuntu 24.04, Shared, Python, LibCI with executables and system provided nlohmann_json library
-    runs-on: ubuntu-24.04
+  U26_SH_Py_CI_SYS_JSON:  # Ubuntu 26.04, Shared, Python, LibCI with executables and system provided nlohmann_json library
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
