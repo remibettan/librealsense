@@ -581,6 +581,7 @@ std::string const & get_string_( rs2_option value )
         CASE( DOWNSCALE_RATIO )
         CASE( READOUT_SHAPING )
         CASE( DETECTION_DISTANCE )
+        CASE( SENSORS_CONFIG_MODE )
 #undef CASE
         return arr;
     }();
