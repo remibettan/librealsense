@@ -1,0 +1,19 @@
+name: Check API
+
+inputs:
+  pr-check:
+    description: Run pr_check.sh
+    default: "false"
+
+runs:
+  using: composite
+
+  steps:
+    - shell: bash
+      run: |
+        cd scripts
+        ./api_check.sh
+
+        if [ "${{ inputs.pr-check }}" = "true" ]; then
+            ./pr_check.sh
+        fi

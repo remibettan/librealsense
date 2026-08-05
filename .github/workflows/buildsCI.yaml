@@ -46,13 +46,8 @@ jobs:
       shell: powershell
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-    
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        cd ..
+
+    - uses: ./.github/actions/pre-build-checks
 
     - name: PreBuild
       shell: bash
@@ -88,13 +83,8 @@ jobs:
       shell: powershell
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-    
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        cd ..
+
+    - uses: ./.github/actions/pre-build-checks
 
     - name: PreBuild
       shell: bash
@@ -134,12 +124,7 @@ jobs:
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
 
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        cd ..   
+    - uses: ./.github/actions/pre-build-checks
 
     - name: PreBuild
       shell: bash
@@ -199,13 +184,8 @@ jobs:
       shell: powershell
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-        
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        cd ..   
+
+    - uses: ./.github/actions/pre-build-checks
 
     - name: PreBuild
       shell: bash
@@ -252,13 +232,8 @@ jobs:
       shell: powershell
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-        
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        cd ..   
+
+    - uses: ./.github/actions/pre-build-checks
 
     - name: PreBuild
       shell: bash
@@ -297,12 +272,7 @@ jobs:
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
 
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        cd ..   
+    - uses: ./.github/actions/pre-build-checks
 
     - name: PreBuild
       shell: bash
@@ -346,10 +316,11 @@ jobs:
       with:
         cmake-version: '4.x'
 
+    - uses: ./.github/actions/pre-build-checks
+
     - name: Prebuild
       shell: bash
       run: |
-        cd scripts && ./api_check.sh && cd ..
         mkdir build && cd build
         export LRS_LOG_LEVEL="DEBUG";
         sudo apt-get update;
@@ -384,18 +355,14 @@ jobs:
         sudo apt-get install libglfw3-dev libglfw3;
         python3 -m pip install numpy
 
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        ./pr_check.sh
-        cd ..
-        mkdir build
+    - uses: ./.github/actions/pre-build-checks
+      with:
+        pr-check: true
 
     - name: Build
       shell: bash
       run: |
+        mkdir build
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DUNIT_TESTS_ARGS="--not-live --context=linux" -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DENABLE_STATS=OFF
         cmake --build . -- -j4  
@@ -432,18 +399,14 @@ jobs:
         # for debugging purpose
         dpkg -s nlohmann-json3-dev | grep "Package\|Version" | xargs
 
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        ./pr_check.sh
-        cd ..
-        mkdir build
+    - uses: ./.github/actions/pre-build-checks
+      with:
+        pr-check: true
 
     - name: Build
       shell: bash
       run: |
+        mkdir build
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DUNIT_TESTS_ARGS="--not-live --context=linux" -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DUSE_EXTERNAL_NLOHMANN_JSON=ON
         cmake --build . -- -j4
@@ -477,14 +440,9 @@ jobs:
         sudo apt-get install libglfw3-dev libglfw3;
         python3 -m pip install numpy
 
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        ./pr_check.sh
-        cd ..
-        mkdir build
+    - uses: ./.github/actions/pre-build-checks
+      with:
+        pr-check: true
 
     - name: Build
       # Note: we force RSUSB because, on Linux, the context creation will fail on GHA:
@@ -492,6 +450,7 @@ jobs:
       # And, well, we don't need any specific platform for DDS!
       shell: bash
       run: |
+        mkdir build
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DFORCE_RSUSB_BACKEND=true -DENABLE_SECURITY_FLAGS=true
         cmake --build . -- -j4
@@ -538,19 +497,15 @@ jobs:
         sudo apt-get install libglfw3-dev libglfw3;
         sudo apt-get install python3-numpy
 
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        ./pr_check.sh
-        cd ..  
-        mkdir build
+    - uses: ./.github/actions/pre-build-checks
+      with:
+        pr-check: true
 
     - name: Build
       shell: bash
       # Adding -DENABLE_SECURITY_FLAGS=true here to also check DDS. See RSDSO-RSDSO-20629.
       run: | 
+        mkdir build
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DBUILD_UNIT_TESTS=true -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DENABLE_SECURITY_FLAGS=true
         cmake --build . -- -j4
@@ -572,11 +527,12 @@ jobs:
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
-    
+
+    - uses: ./.github/actions/pre-build-checks
+
     - name: Prebuild
       shell: bash
       run: |
-        cd scripts && ./api_check.sh && cd ..
         mkdir build && cd build
         export LRS_LOG_LEVEL="DEBUG";
         sudo apt-get update;
@@ -629,12 +585,8 @@ jobs:
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        cd ..
+    - uses: ./.github/actions/pre-build-checks
+
     - name: Prebuild 
       shell: bash
       run: |
@@ -670,17 +622,12 @@ jobs:
         sudo apt-get install -qq libgtk-3-dev;
         sudo apt-get install libglfw3-dev libglfw3;
 
-    - name: Check_API
-      shell: bash
-      run: |
-        cd scripts
-        ./api_check.sh
-        cd ..
-        mkdir build
+    - uses: ./.github/actions/pre-build-checks
 
     - name: Build
       shell: bash
       run: |
+        mkdir build
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DBUILD_ROSBAG2=OFF
         cmake --build . -- -j4
