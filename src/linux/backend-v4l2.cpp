@@ -1440,6 +1440,15 @@ namespace librealsense
             return oss.str();
         }
 
+        bool v4l_uvc_device::handle_enodev_on_dqbuf(const char* fd_label, int fd)
+        {
+            if (errno != ENODEV)
+                return false;
+            _device_disconnected = true;
+            LOG_WARNING("Device disconnected: DQBUF failed with ENODEV for " << fd_label << " " << fd);
+            return true;
+        }
+
         void v4l_uvc_device::poll()
         {
             // A prior iteration observed ENODEV on a real DQBUF/QBUF call (set explicitly at the point of
@@ -1561,12 +1570,8 @@ namespace librealsense
                             }
                             if(xioctl(_fd, VIDIOC_DQBUF, &buf) < 0)
                             {
-                                if (errno == ENODEV)
-                                {
-                                    _device_disconnected = true;
-                                    LOG_WARNING("Device disconnected: DQBUF failed with ENODEV for fd " << _fd);
+                                if (handle_enodev_on_dqbuf("fd", _fd))
                                     return;
-                                }
                                 LOG_DEBUG_V4L("Dequeued empty buf for fd " << std::dec << _fd);
                             }
                             LOG_DEBUG_V4L("Dequeued buf " << std::dec << buf.index << " for fd " << _fd << " seq " << buf.sequence);
@@ -2651,12 +2656,8 @@ namespace librealsense
                 // W/O multiplexing this will create a blocking call for metadata node
                 if(xioctl(_md_fd, VIDIOC_DQBUF, &buf) < 0)
                 {
-                    if (errno == ENODEV)
-                    {
-                        _device_disconnected = true;
-                        LOG_WARNING("Device disconnected: DQBUF failed with ENODEV for md fd " << _md_fd);
+                    if (handle_enodev_on_dqbuf("md fd", _md_fd))
                         return;
-                    }
                     LOG_DEBUG_V4L("Dequeued empty buf for md fd " << std::dec << _md_fd);
                 }
 
@@ -3055,16 +3056,23 @@ namespace librealsense
             return false;
         }
 
+        void v4l2_video_md_syncer::report_qbuf_failure(int fd)
+        {
+            if (errno == ENODEV)
+            {
+                _qbuf_device_disconnected = true;
+                LOG_WARNING("Device disconnected: QBUF failed with ENODEV for fd " << fd);
+                return;
+            }
+            LOG_ERROR("xioctl(VIDIOC_QBUF) failed when requesting new frame! fd: " << fd << " error: " << strerror(errno));
+        }
+
         void v4l2_video_md_syncer::enqueue_buffer_before_throwing_it(const sync_buffer& sb)
         {
             // Enqueue of buffer before throwing its content away
             LOG_DEBUG_V4L("video_md_syncer - Enqueue buf " << std::dec << sb._buffer_index << " for fd " << sb._fd << " before dropping it");
             if (xioctl(sb._fd, VIDIOC_QBUF, sb._v4l2_buf.get()) < 0)
-            {
-                if (errno == ENODEV)
-                    _qbuf_device_disconnected = true;
-                LOG_ERROR("xioctl(VIDIOC_QBUF) failed when requesting new frame! fd: " << sb._fd << " error: " << strerror(errno));
-            }
+                report_qbuf_failure(sb._fd);
         }
 
         void v4l2_video_md_syncer::enqueue_front_buffer_before_throwing_it(std::queue<sync_buffer>& sync_queue)
@@ -3072,11 +3080,7 @@ namespace librealsense
             // Enqueue of buffer before throwing its content away
             LOG_DEBUG_V4L("video_md_syncer - Enqueue buf " << std::dec << sync_queue.front()._buffer_index << " for fd " << sync_queue.front()._fd << " before dropping it");
             if (xioctl(sync_queue.front()._fd, VIDIOC_QBUF, sync_queue.front()._v4l2_buf.get()) < 0)
-            {
-                if (errno == ENODEV)
-                    _qbuf_device_disconnected = true;
-                LOG_ERROR("xioctl(VIDIOC_QBUF) failed when requesting new frame! fd: " << sync_queue.front()._fd << " error: " << strerror(errno));
-            }
+                report_qbuf_failure(sync_queue.front()._fd);
             sync_queue.pop();
         }
 

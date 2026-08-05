@@ -287,6 +287,8 @@ namespace librealsense
             void enqueue_buffer_before_throwing_it(const sync_buffer& sb);
             void enqueue_front_buffer_before_throwing_it(std::queue<sync_buffer>& sync_queue);
             void flush_queues();
+            // Call immediately after a failed QBUF, before anything else touches errno.
+            void report_qbuf_failure(int fd);
 
             std::mutex _syncer_mutex;
             std::queue<sync_buffer> _video_queue;
@@ -397,6 +399,9 @@ namespace librealsense
             bool pend_for_ctrl_status_event();
             void upload_video_and_metadata_from_syncer(buffers_mgr& buf_mgr);
             void populate_imu_data(metadata_hid_raw& meta_data, uint8_t* frame_start, uint8_t& md_size, void** md_start) const;
+            // Call immediately after a failed DQBUF, before anything else touches errno. Returns true (and
+            // marks the device disconnected) if the failure was ENODEV; the caller should bail out on true.
+            bool handle_enodev_on_dqbuf(const char* fd_label, int fd);
             // checking if metadata is streamed
             virtual inline bool is_metadata_streamed() const { return false;}
             virtual inline std::shared_ptr<buffer> get_video_buffer(__u32 index) const {return _buffers[index];}
