@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <stdexcept>
 
 
@@ -16,12 +17,19 @@ enum class gyro_sensitivity_encoding
 };
 
 
+inline bool is_valid_gyro_sensitivity( float value )
+{
+    return std::isfinite( value ) && value >= 0.f && value <= 4.f
+        && std::floor( value ) == value;
+}
+
+
 inline double encode_gyro_sensitivity( float value, gyro_sensitivity_encoding encoding )
 {
-    const auto index = static_cast< int >( value );
-    if( value != index || index < 0 || index > 4 )
+    if( ! is_valid_gyro_sensitivity( value ) )
         throw std::out_of_range( "unsupported gyro sensitivity" );
 
+    const auto index = static_cast< int >( value );
     if( encoding == gyro_sensitivity_encoding::hkr_range_index )
         return index;
 

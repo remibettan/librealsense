@@ -5,6 +5,8 @@
 
 #include "../catch.h"
 
+#include <limits>
+
 
 using namespace librealsense;
 
@@ -15,6 +17,7 @@ TEST_CASE( "gyro sensitivity encoding is transport specific", "[options]" )
 
     for( int value = 0; value <= 4; ++value )
     {
+        CHECK( is_valid_gyro_sensitivity( static_cast< float >( value ) ) );
         CHECK( encode_gyro_sensitivity(
                    static_cast< float >( value ),
                    gyro_sensitivity_encoding::d400_hid_token )
@@ -31,4 +34,13 @@ TEST_CASE( "gyro sensitivity encoding is transport specific", "[options]" )
                      std::out_of_range );
     CHECK_THROWS_AS( encode_gyro_sensitivity( 4.5f, gyro_sensitivity_encoding::d400_hid_token ),
                      std::out_of_range );
+    CHECK_FALSE( is_valid_gyro_sensitivity( -1.f ) );
+    CHECK_FALSE( is_valid_gyro_sensitivity( 4.5f ) );
+    CHECK_FALSE( is_valid_gyro_sensitivity( 5.f ) );
+    CHECK_FALSE( is_valid_gyro_sensitivity( std::numeric_limits< float >::infinity() ) );
+    CHECK_FALSE( is_valid_gyro_sensitivity( std::numeric_limits< float >::quiet_NaN() ) );
+    CHECK_THROWS_AS(
+        encode_gyro_sensitivity( std::numeric_limits< float >::quiet_NaN(),
+                                 gyro_sensitivity_encoding::hkr_range_index ),
+        std::out_of_range );
 }

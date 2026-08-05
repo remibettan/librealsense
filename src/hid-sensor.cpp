@@ -352,6 +352,12 @@ uint32_t hid_sensor::fps_to_sampling_frequency( rs2_stream stream, uint32_t fps 
 }
 void hid_sensor::set_imu_sensitivity( rs2_stream stream, float value ) 
 {
+    // Validate before storing so an invalid gyro option cannot surface later from
+    // get_imu_sensitivity_values() while the sensor is being opened.
+    if( stream == RS2_STREAM_GYRO && ! is_valid_gyro_sensitivity( value ) )
+        throw invalid_value_exception( rsutils::string::from()
+                                       << "unsupported gyro sensitivity " << value );
+
     _imu_sensitivity_per_rs2_stream[stream] = value;
 }
 

@@ -136,8 +136,10 @@ namespace librealsense
                 _motion_module_device_idx = static_cast<uint8_t>(add_sensor(sensor_ep));
                 sensor_ep->get_raw_sensor()->register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_hid_header_parser(&hid_header::timestamp));
                 register_gyro_sensitivity();
-                // Select the 38-byte report in direct HID backends. Linux IIO derives
-                // the report size from the HID descriptor and ignores this setting.
+                // Select the 38-byte report in direct HID backends. Do not apply this
+                // to legacy FW: its 16-bit ABI uses the backend defaults of a 32-byte
+                // report and a scale factor of 10. Linux IIO derives the report size
+                // from the HID descriptor and ignores this setting.
                 if( supports_hkr_physical_imu() )
                     get_raw_motion_sensor()->set_gyro_scale_factor( 10000.0 );
             }
