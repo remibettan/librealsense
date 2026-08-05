@@ -69,7 +69,7 @@
 #pragma GCC diagnostic ignored "-Woverflow"
 
 const double DEFAULT_KPI_FRAME_DROPS_PERCENTAGE = 0.05;
-const std::chrono::milliseconds DISCONNECT_RETRY_DELAY( 100 );
+constexpr std::chrono::milliseconds DISCONNECT_RETRY_DELAY( 100 );
 
 
 #ifdef ANDROID
@@ -1445,7 +1445,7 @@ namespace librealsense
             // A prior iteration observed ENODEV on a real DQBUF/QBUF call (set explicitly at the point of
             // failure, never inferred from ambient errno). Throttle retries until the device-removal
             // notification unwinds streaming, instead of spinning select() on an fd the kernel already dropped.
-            // Both flags are always consumed (no short-circuiting) so neither is left stale for the next call.
+            // Both flags are read into locals before the check below, so neither is left unconsumed by the ||.
             bool device_disconnected = _device_disconnected.exchange(false);
             bool syncer_disconnected = _video_md_syncer.consume_device_disconnected();
             if (device_disconnected || syncer_disconnected)
@@ -1565,9 +1565,9 @@ namespace librealsense
                                 {
                                     _device_disconnected = true;
                                     LOG_WARNING("Device disconnected: DQBUF failed with ENODEV for fd " << _fd);
+                                    return;
                                 }
-                                else
-                                    LOG_DEBUG_V4L("Dequeued empty buf for fd " << std::dec << _fd);
+                                LOG_DEBUG_V4L("Dequeued empty buf for fd " << std::dec << _fd);
                             }
                             LOG_DEBUG_V4L("Dequeued buf " << std::dec << buf.index << " for fd " << _fd << " seq " << buf.sequence);
                             buf.type = _dev.buf_type;
@@ -2651,6 +2651,12 @@ namespace librealsense
                 // W/O multiplexing this will create a blocking call for metadata node
                 if(xioctl(_md_fd, VIDIOC_DQBUF, &buf) < 0)
                 {
+                    if (errno == ENODEV)
+                    {
+                        _device_disconnected = true;
+                        LOG_WARNING("Device disconnected: DQBUF failed with ENODEV for md fd " << _md_fd);
+                        return;
+                    }
                     LOG_DEBUG_V4L("Dequeued empty buf for md fd " << std::dec << _md_fd);
                 }
 
@@ -3056,7 +3062,7 @@ namespace librealsense
             if (xioctl(sb._fd, VIDIOC_QBUF, sb._v4l2_buf.get()) < 0)
             {
                 if (errno == ENODEV)
-                    _device_disconnected = true;
+                    _qbuf_device_disconnected = true;
                 LOG_ERROR("xioctl(VIDIOC_QBUF) failed when requesting new frame! fd: " << sb._fd << " error: " << strerror(errno));
             }
         }
@@ -3068,7 +3074,7 @@ namespace librealsense
             if (xioctl(sync_queue.front()._fd, VIDIOC_QBUF, sync_queue.front()._v4l2_buf.get()) < 0)
             {
                 if (errno == ENODEV)
-                    _device_disconnected = true;
+                    _qbuf_device_disconnected = true;
                 LOG_ERROR("xioctl(VIDIOC_QBUF) failed when requesting new frame! fd: " << sync_queue.front()._fd << " error: " << strerror(errno));
             }
             sync_queue.pop();
