@@ -103,6 +103,16 @@ namespace librealsense
     };
 
 
+    void add_motion_streams( const std::shared_ptr< ds_motion_common > & motion_common,
+                             std::vector< std::shared_ptr< librealsense::stream_interface > > & streams )
+    {
+        if( motion_common )
+        {
+            streams.push_back( motion_common->get_accel_stream() );
+            streams.push_back( motion_common->get_gyro_stream() );
+        }
+    }
+
     // D585 or D535, dual color variant. No dedicated color sensor.
     class rs5x5_device
         : public d500_active
@@ -133,9 +143,8 @@ namespace librealsense
         {
 
             std::vector< std::shared_ptr< stream_interface > > streams = { _depth_stream, _left_ir_stream, _right_ir_stream,
-                                                                           _color_stream_1, _color_stream_2,
-                                                                           _ds_motion_common->get_accel_stream(),
-                                                                           _ds_motion_common->get_gyro_stream() };
+                                                                           _color_stream_1, _color_stream_2 };
+            add_motion_streams( _ds_motion_common, streams );
             return create_default_matcher( streams );
         }
 
@@ -188,11 +197,7 @@ namespace librealsense
 
             std::vector< std::shared_ptr< stream_interface > > streams = { _depth_stream, _left_ir_stream, _right_ir_stream, _color_stream,
                                                                            _object_detection_stream };
-            if( ! _has_motion_module_failed && _ds_motion_common )
-            {
-                streams.push_back( _ds_motion_common->get_accel_stream() );
-                streams.push_back( _ds_motion_common->get_gyro_stream() );
-            }
+            add_motion_streams( _ds_motion_common, streams );
             return create_default_matcher( streams );
         }
 
@@ -243,9 +248,8 @@ namespace librealsense
         {
 
             std::vector< std::shared_ptr< stream_interface > > streams = { _depth_stream, _left_ir_stream, _right_ir_stream, _color_stream,
-                                                                           _ds_motion_common->get_accel_stream(),
-                                                                           _ds_motion_common->get_gyro_stream(),
                                                                            _object_detection_stream };
+            add_motion_streams( _ds_motion_common, streams );
             return create_default_matcher( streams );
         }
 
@@ -305,9 +309,8 @@ namespace librealsense
         std::shared_ptr<matcher> create_matcher(const frame_holder& frame) const override
         {
             std::vector< std::shared_ptr< stream_interface > > streams = { _depth_stream, _left_ir_stream, _right_ir_stream, _color_stream,
-                                                                           _safety_stream, _occupancy_stream, _point_cloud_stream,
-                                                                           _ds_motion_common->get_accel_stream(),
-                                                                           _ds_motion_common->get_gyro_stream() };
+                                                                           _safety_stream, _occupancy_stream, _point_cloud_stream };
+            add_motion_streams( _ds_motion_common, streams );
             return create_default_matcher( streams );
         }
 
@@ -392,9 +395,8 @@ namespace librealsense
         {
 
             std::vector< std::shared_ptr< stream_interface > > streams = { _depth_stream, _left_ir_stream, _right_ir_stream, _color_stream,
-                                                                           _ds_motion_common->get_accel_stream(),
-                                                                           _ds_motion_common->get_gyro_stream(),
                                                                            _object_detection_stream };
+            add_motion_streams( _ds_motion_common, streams );
             return create_default_matcher( streams );
         }
 
