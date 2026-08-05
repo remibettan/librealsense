@@ -69,6 +69,7 @@
 #pragma GCC diagnostic ignored "-Woverflow"
 
 const double DEFAULT_KPI_FRAME_DROPS_PERCENTAGE = 0.05;
+const std::chrono::milliseconds DISCONNECT_RETRY_DELAY( 100 );
 
 
 #ifdef ANDROID
@@ -1444,9 +1445,12 @@ namespace librealsense
             // A prior iteration observed ENODEV on a real DQBUF/QBUF call (set explicitly at the point of
             // failure, never inferred from ambient errno). Throttle retries until the device-removal
             // notification unwinds streaming, instead of spinning select() on an fd the kernel already dropped.
-            if (_device_disconnected.exchange(false) || _video_md_syncer.consume_device_disconnected())
+            // Both flags are always consumed (no short-circuiting) so neither is left stale for the next call.
+            bool device_disconnected = _device_disconnected.exchange(false);
+            bool syncer_disconnected = _video_md_syncer.consume_device_disconnected();
+            if (device_disconnected || syncer_disconnected)
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::this_thread::sleep_for(DISCONNECT_RETRY_DELAY);
                 return;
             }
 
@@ -1558,8 +1562,12 @@ namespace librealsense
                             if(xioctl(_fd, VIDIOC_DQBUF, &buf) < 0)
                             {
                                 if (errno == ENODEV)
+                                {
                                     _device_disconnected = true;
-                                LOG_DEBUG_V4L("Dequeued empty buf for fd " << std::dec << _fd);
+                                    LOG_WARNING("Device disconnected: DQBUF failed with ENODEV for fd " << _fd);
+                                }
+                                else
+                                    LOG_DEBUG_V4L("Dequeued empty buf for fd " << std::dec << _fd);
                             }
                             LOG_DEBUG_V4L("Dequeued buf " << std::dec << buf.index << " for fd " << _fd << " seq " << buf.sequence);
                             buf.type = _dev.buf_type;
@@ -3041,7 +3049,7 @@ namespace librealsense
             return false;
         }
 
-        void v4l2_video_md_syncer::enqueue_buffer_before_throwing_it(const sync_buffer& sb) const
+        void v4l2_video_md_syncer::enqueue_buffer_before_throwing_it(const sync_buffer& sb)
         {
             // Enqueue of buffer before throwing its content away
             LOG_DEBUG_V4L("video_md_syncer - Enqueue buf " << std::dec << sb._buffer_index << " for fd " << sb._fd << " before dropping it");

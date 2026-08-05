@@ -284,7 +284,7 @@ namespace librealsense
             inline bool consume_device_disconnected() { return _device_disconnected.exchange(false); }
 
         private:
-            void enqueue_buffer_before_throwing_it(const sync_buffer& sb) const;
+            void enqueue_buffer_before_throwing_it(const sync_buffer& sb);
             void enqueue_front_buffer_before_throwing_it(std::queue<sync_buffer>& sync_queue);
             void flush_queues();
 
@@ -292,7 +292,7 @@ namespace librealsense
             std::queue<sync_buffer> _video_queue;
             std::queue<sync_buffer> _md_queue;
             bool _is_ready;
-            mutable std::atomic<bool> _device_disconnected{ false };
+            std::atomic<bool> _device_disconnected{ false };
         };
 
         // The aim of the frame_drop_monitor is to check the frames drops kpi - which requires
