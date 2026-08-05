@@ -519,10 +519,24 @@ namespace librealsense
             {
                 std::map< float, std::string > description_per_value = { { 2.f, "Internal" },
                                                                          { 3.f, "External" } };
-                depth_sensor.register_option( RS2_OPTION_INTER_CAM_SYNC_MODE,
-                                              std::make_shared< d500_external_sync_mode >( *_hw_monitor,
-                                                                                           raw_depth_sensor,
-                                                                                           description_per_value ) );
+                if( _fw_version >= firmware_version( "7.58.40932.13310" ) )
+                {
+                    depth_sensor.register_option( RS2_OPTION_INTER_CAM_SYNC_MODE,
+                                                  std::make_shared< uvc_xu_option< uint8_t > >(
+                                                      raw_depth_sensor,
+                                                      depth_xu,
+                                                      d500_xu_id::EXTERNAL_SYNC_MODE,
+                                                      "Inter-camera synchronization mode: 2:Internal, 3:External",
+                                                      description_per_value,
+                                                      false /* allow_set_while_streaming */ ) );
+                }
+                else
+                {
+                    depth_sensor.register_option( RS2_OPTION_INTER_CAM_SYNC_MODE,
+                                                  std::make_shared< d500_external_sync_mode >( *_hw_monitor,
+                                                                                               raw_depth_sensor,
+                                                                                               description_per_value ) );
+                }
             }
 
             depth_sensor.register_option(RS2_OPTION_STEREO_BASELINE, std::make_shared<const_value_option>("Distance in mm between the stereo imagers",
