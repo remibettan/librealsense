@@ -313,10 +313,12 @@ namespace librealsense
         set_frame_metadata_modifier([&](frame_additional_data& data) {data.depth_units = _depth_units.load(); });
     }
 
-    void d400_depth_sensor::init_hdr_config( const option_range & exposure_range, const option_range & gain_range )
+    void d400_depth_sensor::init_hdr_config( const option_range & exposure_range, const option_range & gain_range,
+                                             bool use_exposure_restore_workaround )
     {
         _hdr_cfg = std::make_shared<hdr_config>(*(_owner->_hw_monitor), get_raw_sensor(),
-            exposure_range, gain_range, ds::d400_hwmon_response::opcodes::NO_DATA_TO_RETURN);
+            exposure_range, gain_range, ds::d400_hwmon_response::opcodes::NO_DATA_TO_RETURN,
+            use_exposure_restore_workaround);
     }
 
     float d400_depth_sensor::get_stereo_baseline_mm() const
@@ -629,6 +631,11 @@ namespace librealsense
         // minimal firmware version in which hdr feature is supported
         firmware_version hdr_firmware_version("5.12.8.100");
 
+        // Minimal firmware version that restores the pre-HDR manual exposure/gain by itself when
+        // the HDR sub-preset is disabled. FW 5.14 .. this version lost that restore (DSO-18682),
+        // so for those the SDK compensates host-side - see hdr_config::_use_workaround.
+        firmware_version hdr_exposure_restore_firmware_version("5.17.4.11");
+
         std::string optic_serial, asic_serial, pid_hex_str, usb_type_str;
         bool advanced_mode, usb_modality;
         group_multiple_fw_calls(depth_sensor, [&]() {
@@ -804,7 +811,10 @@ namespace librealsense
             if (_fw_version >= hdr_firmware_version)
             {
                 auto d400_depth = As<d400_depth_sensor, synthetic_sensor>(&get_depth_sensor());
-                d400_depth->init_hdr_config(exposure_range, gain_range);
+                bool use_exposure_restore_workaround = _fw_version < hdr_exposure_restore_firmware_version;
+                LOG_INFO( "HDR pre-HDR manual exposure restore is done by "
+                          << ( use_exposure_restore_workaround ? "the SDK (workaround)" : "the FW" ) );
+                d400_depth->init_hdr_config(exposure_range, gain_range, use_exposure_restore_workaround);
                 auto&& hdr_cfg = d400_depth->get_hdr_config();
 
                 // values from 4 to 14 - for internal use

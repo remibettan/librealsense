@@ -10,7 +10,8 @@
 namespace librealsense
 {
     hdr_config::hdr_config(hw_monitor& hwm, std::shared_ptr<sensor_base> depth_ep,
-        const option_range& exposure_range, const option_range& gain_range, hwmon_response_type no_data_to_return_opcode) :
+        const option_range& exposure_range, const option_range& gain_range, hwmon_response_type no_data_to_return_opcode,
+        bool use_workaround) :
         _hwm(hwm),
         _sensor(depth_ep),
         _is_enabled(false),
@@ -22,7 +23,7 @@ namespace librealsense
         _sequence_size(DEFAULT_HDR_SEQUENCE_SIZE),
         _exposure_range(exposure_range),
         _gain_range(gain_range),
-        _use_workaround(true),
+        _use_workaround(use_workaround),
         _pre_hdr_exposure(0.f),
         _no_data_to_return_opcode(no_data_to_return_opcode)
     {
