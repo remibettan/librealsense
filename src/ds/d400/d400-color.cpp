@@ -94,12 +94,23 @@ namespace librealsense
             platform::uvc_device_info info;
             if (_is_mipi_device)
             {
-                // The color node is the second one in the group; reading past the end copies a
-                // uvc_device_info whose strings are not there, which faults on use.
-                if (color_devs_info.size() < 2)
-                    throw backend_exception("cannot access color sensor - MIPI group holds "
-                                            + std::to_string(color_devs_info.size()) + " nodes");
-                info = color_devs_info[1];
+                // The driver names the color node "video-rs-color-<n>". Only when those links are absent
+                // does the group keep its positional layout: depth, color, IR, IMU. Indexing blindly copies
+                // a uvc_device_info that may be past the end, which faults on the copied strings.
+                auto find_path = [&color_devs_info](const char * hint)
+                {
+                    return std::find_if(color_devs_info.begin(), color_devs_info.end(),
+                        [hint](const platform::uvc_device_info& i)
+                        { return i.device_path.find(hint) != std::string::npos; });
+                };
+                auto color_node = find_path("video-rs-color");
+                if (color_node != color_devs_info.end())
+                    info = *color_node;
+                else if (find_path("video-rs-") == color_devs_info.end() && color_devs_info.size() > 1)
+                    info = color_devs_info[1];
+                else
+                    throw backend_exception("cannot access color sensor - no color node in a MIPI group of "
+                                            + std::to_string(color_devs_info.size()));
             }
             else
                 info = color_devs_info.front();
