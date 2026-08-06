@@ -55,6 +55,20 @@ namespace rs2
 
         rs2_option_value const * operator->() const { return _value.get(); }
         operator rs2_option_value const *() const { return _value.get(); }
+
+        bool has_range() const { return _value && _value->has_range; }
+
+        /**
+        * The range of values this option accepts, read together with the value (see
+        * options::get_supported_option_values). Throws if this option has no queryable range.
+        */
+        option_range const & range() const
+        {
+            if( ! has_range() )
+                throw std::runtime_error( std::string( "no range available for option " )
+                                          + rs2_option_to_string( _value ? _value->id : RS2_OPTION_COUNT ) );
+            return _value->range;
+        }
     };
 
     class options_list

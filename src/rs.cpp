@@ -120,6 +120,8 @@ struct rs2_option_value_wrapper : rs2_option_value
         id = option_id;
         type = option_type;
         is_valid = false;
+        has_range = 0;
+        range = {};
         if( p_json && ! p_json->is_null() )
         {
             switch( type )
@@ -1013,6 +1015,24 @@ rs2_options_list* rs2_get_options_list(const rs2_options* options, rs2_error** e
         if( option.is_enabled() )
             value = std::make_shared< const json >( option.get_value() );
         auto wrapper = new rs2_option_value_wrapper( option_id, option.get_value_type(), value );
+        // The range is read here, under the bulk operation, and not by a separate query per option: for a UVC sensor
+        // each standalone range query powers the device up and back down again.
+        // An option can be enumerated and have a value and still have no queryable range (e.g. a MIPI color control
+        // with no V4L2 CID mapping), so a failure marks that one range unavailable instead of failing the whole list.
+        try
+        {
+            auto const range = option.get_range();
+            wrapper->range = { range.min, range.max, range.def, range.step };
+            wrapper->has_range = 1;
+        }
+        catch( std::exception const & e )
+        {
+            LOG_DEBUG( "failed to query range of " << get_string( option_id ) << ": " << e.what() );
+        }
+        catch( ... )
+        {
+            LOG_DEBUG( "failed to query range of " << get_string( option_id ) );
+        }
         rs2_list->list.push_back( wrapper );
     }
     return rs2_list;

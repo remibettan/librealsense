@@ -34,7 +34,7 @@ namespace rs2
         option.dev = model;
         option.value = opt;
         option.supported = opt->is_valid;  // i.e., supported-and-enabled!
-        option.range = options->get_option_range( opt->id );
+        option.range = opt.range();
         option.read_only = options->is_option_read_only( opt->id );
         option.last_slider_hold_stopwatch.reset( {} ); // Avoids seeming as if a slider was dragged and just released.
         return option;

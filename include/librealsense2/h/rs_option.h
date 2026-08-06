@@ -187,6 +187,18 @@ extern "C" {
         int16_t x2, y2;
     } rs2_option_rect;
 
+    /**
+    * The range of values an option accepts, used with rs2_option_value::range.
+    * Same semantics as the outputs of rs2_get_option_range.
+    */
+    typedef struct rs2_option_range
+    {
+        float min;
+        float max;
+        float def;
+        float step;                       /**< granularity of options accepting discrete values; zero if continuous */
+    } rs2_option_range;
+
     /** \brief The value of an option, in a known option type.
     */
     typedef struct rs2_option_value
@@ -203,6 +215,8 @@ extern "C" {
             rs2_option_rect as_rect;
         };
 #pragma pack(pop)
+        int has_range;                    /**< 0 if no range available; 1 otherwise */
+        rs2_option_range range;           /**< valid only if has_range */
     } rs2_option_value;
 
     /** \brief For SR300 devices: provides optimized settings (presets) for specific types of usage. */
