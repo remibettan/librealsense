@@ -62,7 +62,8 @@ Write-Host "━━━━━━━━━━━━━━━━━━━━━━�
 Write-Host ""
 
 # Resolve project root for shared output locations
-$ProjectRoot = Resolve-Path "..\..\..\..\""
+$ScriptDir = $PSScriptRoot
+$ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..\..\..")
 $RestApiOutput = Join-Path $ProjectRoot "build\rest-api-dist"
 $RestApiWork = Join-Path $ProjectRoot "build\rest-api-work"
 
@@ -105,13 +106,8 @@ if (-not (Test-Path $BundleDir)) {
     Write-Error "FastAPI bundle directory not found at $BundleDir"; Pop-Location; exit 1
 }
 
-$ProjectRoot = Resolve-Path "..\..\..\..\""
-$TauriResources = Join-Path $ProjectRoot "build\tauri-resources"
+$TauriResources = Join-Path $ScriptDir "src-tauri\resources"
 if (-not (Test-Path $TauriResources)) { New-Item -ItemType Directory -Path $TauriResources | Out-Null }
-
-# Clean old in-source copy to keep repo clean
-$LegacyResources = ".\src-tauri\resources\realsense_api"
-if (Test-Path $LegacyResources) { Remove-Item $LegacyResources -Recurse -Force }
 
 # Remove previous staged bundle and copy fresh (exe + _internal/ with DLLs)
 $TargetBundle = Join-Path $TauriResources "realsense_api"
@@ -145,7 +141,6 @@ Write-Success "React UI built in $($Duration.TotalSeconds)s"
 Write-Info "Step 3/3: Building Tauri production bundles..."
 
 # Ensure Cargo outputs to project-level build/tauri-target
-$ProjectRoot = Resolve-Path "..\..\..\..\""
 $CargoTarget = Join-Path $ProjectRoot "build\tauri-target"
 Write-Info "Setting CARGO_TARGET_DIR to: $CargoTarget"
 if (-not (Test-Path $CargoTarget)) { New-Item -ItemType Directory -Path $CargoTarget | Out-Null }
@@ -159,7 +154,7 @@ if (Test-Path "src-tauri\target") {
 
 $Duration = Measure-Duration {
     Write-Host "This will compile Rust and create installers (this may take 2-5 minutes)..." -ForegroundColor Gray
-    & npm run tauri:build 2>&1 | ForEach-Object { Write-Host $_ }
+    & npm run tauri:build -- --bundles msi 2>&1 | ForEach-Object { Write-Host $_ }
     if (-not $?) {
         Write-Error "Tauri build failed!"
         Pop-Location
