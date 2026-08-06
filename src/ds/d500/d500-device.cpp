@@ -517,12 +517,12 @@ namespace librealsense
 
             if ((_device_capabilities & ds_caps::CAP_INTERCAM_HW_SYNC) == ds_caps::CAP_INTERCAM_HW_SYNC)
             {
-                std::map< float, std::string > description_per_value = { { 2.f, "Internal" },
-                                                                         { 3.f, "External" } };
                 if( _fw_version >= firmware_version( "7.58.40932.13310" ) )
                 {
+                    std::map< float, std::string > description_per_value = { { 2.f, "Internal" },
+                                                                             { 3.f, "External" } };
                     depth_sensor.register_option( RS2_OPTION_INTER_CAM_SYNC_MODE,
-                                                  std::make_shared< uvc_xu_option< uint8_t > >(
+                                                  std::make_shared< uvc_xu_option< uint16_t > >(
                                                       raw_depth_sensor,
                                                       depth_xu,
                                                       d500_xu_id::EXTERNAL_SYNC_MODE,
@@ -532,6 +532,13 @@ namespace librealsense
                 }
                 else
                 {
+                    // Legacy FW may still report modes 0 or 1 from a persistent state written
+                    // before the enumeration was narrowed; keep labels for those so the
+                    // current-value string resolves. Selectable set stays 2/3 (option range).
+                    std::map< float, std::string > description_per_value = { { 0.f, "No Sync" },
+                                                                             { 1.f, "RGB master" },
+                                                                             { 2.f, "Internal" },
+                                                                             { 3.f, "External" } };
                     depth_sensor.register_option( RS2_OPTION_INTER_CAM_SYNC_MODE,
                                                   std::make_shared< d500_external_sync_mode >( *_hw_monitor,
                                                                                                raw_depth_sensor,

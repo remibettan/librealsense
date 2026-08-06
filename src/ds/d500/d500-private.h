@@ -40,7 +40,7 @@ namespace librealsense
             PVT_TEMPERATURE       = 0x15,
             PROJECTOR_TEMPERATURE = 0x16,
             OHM_TEMPERATURE       = 0x17,
-            EXTERNAL_SYNC_MODE    = 0x19   // tentative selector; confirm with FW team before merge
+            EXTERNAL_SYNC_MODE    = 0x1A
         };
 
         // Same GUID as safety_xu. FW publishes as either safety or inference, not both.
