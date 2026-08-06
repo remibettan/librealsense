@@ -53,7 +53,8 @@ namespace librealsense
 
     bool d500_motion::supports_hkr_physical_imu() const
     {
-        return ! _is_mipi_device && _fw_version >= hkr_physical_imu_min_fw;
+        return get_pid() != ds::D585S_PID && ! _is_mipi_device
+            && _fw_version >= hkr_physical_imu_min_fw;
     }
 
     bool d500_motion::is_imu_high_accuracy() const
