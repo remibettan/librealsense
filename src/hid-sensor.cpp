@@ -24,6 +24,9 @@ static const std::map< rs2_stream, fourcc::value_type > stream_and_fourcc
         { RS2_STREAM_ACCEL, fourcc( 'A', 'C', 'C', 'L' ) },
         { RS2_STREAM_GPIO,  fourcc( 'G', 'P', 'I', 'O' ) } };
 
+static const std::map< float, double > gyro_sensitivity_convert
+    = { { 0.0f, 0 }, { 1.0f, 0.1 }, { 2.0f, 0.2 }, { 3.0f, 0.3 }, { 4.0f, 0.4 } };
+
     // in sensor.cpp
 void log_callback_end( uint32_t fps,
                        rs2_time_t callback_start_time,
@@ -352,18 +355,7 @@ uint32_t hid_sensor::fps_to_sampling_frequency( rs2_stream stream, uint32_t fps 
 }
 void hid_sensor::set_imu_sensitivity( rs2_stream stream, float value ) 
 {
-    // Validate before storing so an invalid gyro option cannot surface later from
-    // get_imu_sensitivity_values() while the sensor is being opened.
-    if( stream == RS2_STREAM_GYRO && ! is_valid_gyro_sensitivity( value ) )
-        throw invalid_value_exception( rsutils::string::from()
-                                       << "unsupported gyro sensitivity " << value );
-
     _imu_sensitivity_per_rs2_stream[stream] = value;
-}
-
-void hid_sensor::set_gyro_sensitivity_encoding( gyro_sensitivity_encoding encoding )
-{
-    _gyro_sensitivity_encoding = encoding;
 }
 
 void hid_sensor::set_gyro_scale_factor(double scale_factor) 
@@ -376,13 +368,13 @@ double hid_sensor::get_imu_sensitivity_values( rs2_stream stream )
     if( _imu_sensitivity_per_rs2_stream.find( stream ) != _imu_sensitivity_per_rs2_stream.end() )
     {
         const auto value = _imu_sensitivity_per_rs2_stream[stream];
-        if( stream == RS2_STREAM_GYRO )
-            return encode_gyro_sensitivity( value, _gyro_sensitivity_encoding );
+        if( stream == RS2_STREAM_GYRO && ! _gyro_sensitivity_is_range_index )
+            return gyro_sensitivity_convert.at( value );
         return value;
     }
 
     if( stream == RS2_STREAM_GYRO )
-        return default_gyro_sensitivity( _gyro_sensitivity_encoding );
+        return _gyro_sensitivity_is_range_index ? 4. : 0.1;
 
     // FW receives 0.001 and adjusts the accelerometer sensitivity to its default setting of 4g.
     return 0.001;

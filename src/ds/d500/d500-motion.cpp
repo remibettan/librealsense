@@ -18,7 +18,6 @@
 #include "ds/ds-options.h"
 #include "ds/ds-private.h"
 #include "d500-info.h"
-#include "d500-private.h"
 #include "stream.h"
 #include "proc/motion-transform.h"
 #include "proc/auto-exposure-processor.h"
@@ -36,23 +35,6 @@ namespace librealsense
     namespace
     {
         const firmware_version hkr_physical_imu_min_fw( "7.58.40672.12546" );
-
-        bool is_hkr_physical_imu_pid( uint16_t pid )
-        {
-            switch( pid )
-            {
-            case ds::D555_PID:
-            case ds::D585_LEGACY_PID:
-            case ds::D585_2C_PID:
-            case ds::D585_3C_PID:
-            case ds::D585F_PID:
-            case ds::D585_2C_PROTO_PID:
-            case ds::D585_3C_PROTO_PID:
-                return true;
-            default:
-                return false;
-            }
-        }
     }
 
     const std::map<fourcc::value_type, rs2_format> d500_motion_fourcc_to_rs2_format = {
@@ -71,8 +53,7 @@ namespace librealsense
 
     bool d500_motion::supports_hkr_physical_imu() const
     {
-        return ! _is_mipi_device && is_hkr_physical_imu_pid( get_pid() )
-            && _fw_version >= hkr_physical_imu_min_fw;
+        return ! _is_mipi_device && _fw_version >= hkr_physical_imu_min_fw;
     }
 
     bool d500_motion::is_imu_high_accuracy() const
@@ -237,24 +218,13 @@ namespace librealsense
 
     void d500_motion::register_gyro_sensitivity()
     {
-        // D585S uses a different FW versioning line (8.58.x) and a different gyro output format; skip.
-        // MIPI/UVC transport has no HID feature-report path, so the option would register with a null
-        // backing hid_sensor and fail on every set() — skip too.
-        if( get_pid() == ds::D585S_PID || _is_mipi_device )
-            return;
-        if( _fw_version >= hkr_physical_imu_min_fw && ! _has_motion_module_failed )
+        if( supports_hkr_physical_imu() && ! _has_motion_module_failed )
         {
             auto raw_motion_sensor = get_raw_motion_sensor();
-            auto default_value = 1.f;
-            if( supports_hkr_physical_imu() )
-            {
-                raw_motion_sensor->set_gyro_sensitivity_encoding(
-                    gyro_sensitivity_encoding::hkr_range_index );
-                default_value = 4.f;
-            }
+            raw_motion_sensor->enable_gyro_sensitivity_range_index();
             register_feature(
                 std::make_shared< gyro_sensitivity_feature >(
-                    raw_motion_sensor, get_motion_sensor(), default_value ) );
+                    raw_motion_sensor, get_motion_sensor(), 4.f ) );
         }
     }
 

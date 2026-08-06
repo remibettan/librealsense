@@ -5,7 +5,6 @@
 
 #include "sensor.h"
 #include "platform/hid-device.h"
-#include "ds/features/gyro-sensitivity-encoding.h"
 
 
 namespace librealsense {
@@ -54,7 +53,7 @@ public:
     void stop() override;
     void set_imu_sensitivity( rs2_stream stream, float value );
     double get_imu_sensitivity_values( rs2_stream stream );
-    void set_gyro_sensitivity_encoding( gyro_sensitivity_encoding encoding );
+    void enable_gyro_sensitivity_range_index() { _gyro_sensitivity_is_range_index = true; }
     void set_gyro_scale_factor(double scale_factor);
     std::vector< uint8_t > get_custom_report_data( const std::string & custom_sensor_name,
                                                    const std::string & report_name,
@@ -75,7 +74,7 @@ private:
     std::unique_ptr< frame_timestamp_reader > _custom_hid_timestamp_reader;
     //Keeps set sensitivity values for gyro and accel
     std::map< rs2_stream, float > _imu_sensitivity_per_rs2_stream;
-    gyro_sensitivity_encoding _gyro_sensitivity_encoding = gyro_sensitivity_encoding::d400_hid_token;
+    bool _gyro_sensitivity_is_range_index = false;
 
     stream_profiles get_sensor_profiles( std::string sensor_name ) const;
 
