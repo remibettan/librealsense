@@ -368,13 +368,19 @@ double hid_sensor::get_imu_sensitivity_values( rs2_stream stream )
     if( _imu_sensitivity_per_rs2_stream.find( stream ) != _imu_sensitivity_per_rs2_stream.end() )
     {
         const auto value = _imu_sensitivity_per_rs2_stream[stream];
-        if( stream == RS2_STREAM_GYRO && ! _gyro_sensitivity_is_range_index )
+        if( stream == RS2_STREAM_GYRO )
+        {
+            if( _gyro_sensitivity_uses_range_index )
+                return value;
             return gyro_sensitivity_convert.at( value );
+        }
         return value;
     }
 
     if( stream == RS2_STREAM_GYRO )
-        return _gyro_sensitivity_is_range_index ? 4. : 0.1;
+        // HKR range index 4 selects the default 125 dps range; D400 token 0.1
+        // selects its default 1000 dps range.
+        return _gyro_sensitivity_uses_range_index ? 4. : 0.1;
 
     // FW receives 0.001 and adjusts the accelerometer sensitivity to its default setting of 4g.
     return 0.001;

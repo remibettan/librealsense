@@ -34,7 +34,7 @@ namespace librealsense
 {
     namespace
     {
-        const firmware_version hkr_physical_imu_min_fw( "7.58.40672.12546" );
+        constexpr double RAW_TO_DPS_SCALE = 10000.0;
     }
 
     const std::map<fourcc::value_type, rs2_format> d500_motion_fourcc_to_rs2_format = {
@@ -51,21 +51,22 @@ namespace librealsense
         return _ds_motion_common->get_motion_intrinsics(stream);
     }
 
-    bool d500_motion::supports_hkr_physical_imu() const
+    bool d500_motion::supports_physical_units() const
     {
+        static const firmware_version min_fw_supporting_physical_units( "7.58.40672.12546" );
         return get_pid() != ds::D585S_PID && ! _is_mipi_device
-            && _fw_version >= hkr_physical_imu_min_fw;
+            && _fw_version >= min_fw_supporting_physical_units;
     }
 
     bool d500_motion::is_imu_high_accuracy() const
     {
-        return supports_hkr_physical_imu();
+        return supports_physical_units();
     }
 
     double d500_motion::get_gyro_default_scale() const
     {
-        if( supports_hkr_physical_imu() )
-            return 0.0001;  // Fixed physical-unit report: 0.0001 degree/second per LSB.
+        if( supports_physical_units() )
+            return 1. / RAW_TO_DPS_SCALE;
 
         // Legacy D500 reports signed 16-bit raw samples at a fixed 125 dps assumption.
         return 125. / 32768.;
@@ -118,12 +119,8 @@ namespace librealsense
                 _motion_module_device_idx = static_cast<uint8_t>(add_sensor(sensor_ep));
                 sensor_ep->get_raw_sensor()->register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_hid_header_parser(&hid_header::timestamp));
                 register_gyro_sensitivity();
-                // Select the 38-byte report in direct HID backends. Do not apply this
-                // to legacy FW: its 16-bit ABI uses the backend defaults of a 32-byte
-                // report and a scale factor of 10. Linux IIO derives the report size
-                // from the HID descriptor and ignores this setting.
-                if( supports_hkr_physical_imu() )
-                    get_raw_motion_sensor()->set_gyro_scale_factor( 10000.0 );
+                if( supports_physical_units() )
+                    get_raw_motion_sensor()->set_gyro_scale_factor( RAW_TO_DPS_SCALE );
             }
 #endif
         }
@@ -219,7 +216,7 @@ namespace librealsense
 
     void d500_motion::register_gyro_sensitivity()
     {
-        if( supports_hkr_physical_imu() && ! _has_motion_module_failed )
+        if( supports_physical_units() && ! _has_motion_module_failed )
         {
             auto raw_motion_sensor = get_raw_motion_sensor();
             raw_motion_sensor->enable_gyro_sensitivity_range_index();
