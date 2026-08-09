@@ -1925,13 +1925,9 @@ namespace librealsense
             }
 
             if( size > len )
-            {
-                LOG_ERROR( "get_xu_range: UVC_GET_LEN returned size " << size
-                           << " > requested len " << len << " on control " << static_cast< int >( control ) );
                 throw linux_backend_exception( rsutils::string::from()
-                    << "get_xu_range: unexpected size " << size << " > " << len
+                    << "get_xu_range: UVC_GET_LEN size " << size << " > requested " << len
                     << " on control " << static_cast< int >( control ) );
-            }
 
             std::vector<uint8_t> buf;
             auto buf_size = std::max((size_t)len,sizeof(__u32));
