@@ -478,6 +478,7 @@ def _hdr_start_stop_recover_manual_exposure_and_gain(dev, ctx):
     cfg.enable_stream(rs.stream.depth)
     pipe = rs.pipeline(ctx)
     pipe.start(cfg)
+    queried_values_checked = False
     try:
         iteration_for_disable = 50
         iteration_to_check_after_disable = iteration_for_disable + 5  # Was 2, aligned to validation KPI's [DSO-18682]
@@ -505,8 +506,25 @@ def _hdr_start_stop_recover_manual_exposure_and_gain(dev, ctx):
                     log.info(f"iteration: {iteration}")
                     log.info(f"iteration_to_check_after_disable: {iteration_to_check_after_disable}")
                     check.is_true(frame_exposure == exposure_before_hdr)
+
+                    if not queried_values_checked:
+                        # The frames already carry the restored exposure/gain at this point, but the
+                        # queried (UVC control-DB) value is restored by a separate FW path. Query it
+                        # too, or the test stays green on FW that leaves the query stuck at the last
+                        # HDR sub-preset value.
+                        # Run on the first iteration at-or-past the threshold that actually reaches
+                        # here - pinning it to one exact iteration would silently skip the check if
+                        # that single frame carried no metadata.
+                        check.equal(depth_sensor.get_option(rs.option.exposure), exposure_before_hdr)
+                        check.equal(depth_sensor.get_option(rs.option.gain), gain_before_hdr)
+                        queried_values_checked = True
     finally:
         pipe.stop()
+
+    # the queried check is the only one that measures the FW restore path - a run in which it never
+    # executed proves nothing, so fail loudly instead of reporting a green test
+    assert queried_values_checked, "queried exposure/gain check never ran - no depth frame after " \
+                                   "HDR disable carried sequence_id metadata"
 
 
 def test_hdr_start_stop_recover_manual_exposure_and_gain(function_scoped_device, test_context):
