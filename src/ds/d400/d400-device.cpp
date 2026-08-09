@@ -709,9 +709,10 @@ namespace librealsense
         firmware_version hdr_firmware_version("5.12.8.100");
 
         // Minimal firmware version that restores the pre-HDR manual exposure/gain by itself when
-        // the HDR sub-preset is disabled. FW from 5.14 up to this version lost that restore, so for
-        // those the SDK compensates host-side - see hdr_config::_use_workaround.
-        firmware_version hdr_exposure_restore_firmware_version("5.17.4.11");
+        // the HDR sub-preset is disabled. Below it the SDK compensates host-side - see
+        // hdr_config::_use_workaround. The restore was lost in 5.14; earlier FW never had the bug
+        // but is covered by the same host-side path, which is a no-op for it.
+        firmware_version hdr_exposure_restore_firmware_version("5.17.4.13");
 
         std::string optic_serial, asic_serial, pid_hex_str, usb_type_str;
         bool advanced_mode, usb_modality;
