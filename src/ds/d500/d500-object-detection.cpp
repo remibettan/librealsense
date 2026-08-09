@@ -81,7 +81,7 @@ namespace librealsense
 
         od_ep->register_option( RS2_OPTION_GLOBAL_TIME_ENABLED, enable_global_time_option );
 
-        if( _fw_version >= firmware_version( "7.58.40024.11293" ) )
+        if( _fw_version >= firmware_version( "7.58.40802.12738" ) )
         {
             auto detection_distance = std::make_shared< uvc_xu_option< uint8_t > >(raw_od_ep,
                                                                                    ds::inference_xu,
