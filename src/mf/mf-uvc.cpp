@@ -1133,8 +1133,14 @@ namespace librealsense
                                 if (_has_started.wait(timeout_ms))
                                 {
                                     LOG_HR_STR("_reader->ReadSample(...)", _readsample_result);
-                                    if (_readsample_result == MF_E_HW_MFT_FAILED_START_STREAMING)
-                                        throw windows_backend_exception("Device or resource busy");
+                                    if (FAILED(_readsample_result))
+                                    {
+                                        if (_readsample_result == MF_E_HW_MFT_FAILED_START_STREAMING)
+                                            throw windows_backend_exception("Device or resource busy");
+                                        throw windows_backend_exception(rsutils::string::from()
+                                            << "Sensor failed to start streaming (HRESULT 0x"
+                                            << std::hex << static_cast<uint32_t>(_readsample_result) << ")");
+                                    }
                                 }
                                 else
                                 {
