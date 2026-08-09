@@ -567,7 +567,8 @@ namespace librealsense
                 depth_sensor.register_option(RS2_OPTION_PROJECTOR_TEMPERATURE, proj_temperature);
             }
 
-            if (d5x5_family_pids.count(_pid))
+            if( d5x5_family_pids.count( _pid )
+                && _fw_version >= firmware_version( "7.58.40897.13078" ) )
             {
                 depth_sensor.register_option( RS2_OPTION_SENSORS_CONFIG_MODE,
                     std::make_shared< uvc_xu_option< uint8_t > >(
