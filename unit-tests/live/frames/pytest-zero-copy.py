@@ -21,13 +21,20 @@ Degrades gracefully (Definition of Done):
     still checked.
 """
 
+import platform
 import pytest
 import numpy as np
 import pyrealsense2 as rs
 import logging
 log = logging.getLogger(__name__)
 
-pytestmark = pytest.mark.device("D400*")
+pytestmark = [
+    pytest.mark.device("D400*"),
+    # zero-copy needs CUDA, and only Jetson (aarch64) builds CUDA on CI. Skip at collection
+    # on every other platform so we don't stream then skip, and don't need a device there.
+    pytest.mark.skipif(platform.machine() != "aarch64",
+                       reason="zero-copy needs CUDA; only Jetson (aarch64) builds CUDA on CI"),
+]
 
 WIDTH, HEIGHT, FPS = 640, 480, 30
 WARMUP = 30  # exclude first frames (AWB / one-time CUDA init) before probing GPU data
