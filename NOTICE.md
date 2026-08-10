@@ -5,6 +5,10 @@
 
 ### This file specifies all 3rd party SW components used for RealSense™ SDK and the inbound license for each of these 3rd party components.
 
+## Contributed Code
+
+The AMD HIP/ROCm GPU acceleration support and the related build and unit-test integration was contributed by Advanced Micro Devices, Inc. under the Copyright (c) 2026 Advanced Micro Devices, Inc.
+
 #### MIT License 
 
 | Component | Home Page | License| Copyright |

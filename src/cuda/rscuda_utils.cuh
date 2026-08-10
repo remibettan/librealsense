@@ -1,25 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2026 Intel Corporation. All Rights Reserved.
-
-// Modifications Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
+// Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #pragma once
 #ifdef RS2_USE_CUDA
@@ -43,6 +23,14 @@
 #define cudaGetLastError hipGetLastError
 #define cudaStreamSynchronize hipStreamSynchronize
 #define cudaMemset hipMemset
+// Zero-copy pointer-attribute probing (see try_device_ptr() below). Only referenced when
+// RS2_USE_CUDA_ZEROCOPY is also defined (BUILD_WITH_HIP_ZEROCOPY); harmless otherwise since
+// the whole try_device_ptr() body they appear in is itself compiled out.
+#define cudaPointerAttributes hipPointerAttribute_t
+#define cudaPointerGetAttributes hipPointerGetAttributes
+#define cudaMemoryTypeManaged hipMemoryTypeManaged
+#define cudaMemoryTypeHost hipMemoryTypeHost
+#define cudaHostGetDevicePointer hipHostGetDevicePointer
 #else
 #include <cuda_runtime.h>
 #ifdef _MSC_VER
@@ -50,8 +38,9 @@
 // when building for HIP the linker must not pull in cudart_static.lib.
 #pragma comment(lib, "cudart_static")
 #endif
-#include "cuda-compat.h"   // RS_CUDA_MEMTYPE — single definition shared across CUDA TUs
 #endif
+
+#include "cuda-compat.h"   // RS_CUDA_MEMTYPE — single definition shared across CUDA and HIP TUs
 
 // Throws std::runtime_error with a descriptive message if a CUDA / HIP call returns non-success.
 // Uses `auto` for the return value so the same macro compiles for both cudaError_t and hipError_t.

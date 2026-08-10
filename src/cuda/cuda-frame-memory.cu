@@ -6,13 +6,37 @@
 #include <cstdlib>
 
 #ifdef RS2_USE_CUDA
+#ifdef RS2_USE_HIP
+#include <hip/hip_runtime.h>
+#define cudaMalloc hipMalloc
+#define cudaFree hipFree
+#define cudaFreeHost hipHostFree
+#define cudaMemcpy hipMemcpy
+#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaSuccess hipSuccess
+#define cudaGetLastError hipGetLastError
+#define cudaHostAlloc hipHostMalloc
+#define cudaHostAllocMapped hipHostMallocMapped
+#define cudaHostAllocPortable hipHostMallocPortable
+#define cudaHostRegister hipHostRegister
+#define cudaHostRegisterMapped hipHostRegisterMapped
+#define cudaHostUnregister hipHostUnregister
+#define cudaPointerAttributes hipPointerAttribute_t
+#define cudaPointerGetAttributes hipPointerGetAttributes
+#define cudaMemoryTypeManaged hipMemoryTypeManaged
+#define cudaMemoryTypeHost hipMemoryTypeHost
+#define cudaHostGetDevicePointer hipHostGetDevicePointer
+#else
 #include <cuda_runtime.h>
+#endif
 #include <rsutils/accelerators/gpu.h>
-#include "cuda-compat.h"   // RS_CUDA_MEMTYPE — single definition shared across CUDA TUs
+#include "cuda-compat.h"   // RS_CUDA_MEMTYPE — single definition shared across CUDA and HIP TUs
 #endif
 
 #ifdef _MSC_VER
+#ifndef RS2_USE_HIP
 #pragma comment(lib, "cudart_static")
+#endif
 #endif
 
 namespace librealsense {
@@ -29,11 +53,20 @@ static constexpr std::size_t RS_ZC_TAIL_PAD = 256;
 bool rs_frame_zc_enabled()
 {
 #ifdef RS2_USE_CUDA_ZEROCOPY
+#ifdef RS2_USE_HIP
+    // Mirrors the CUDA branch below, using the HIP-specific integrated-GPU probe
+    // (rsutils::rs2_is_hip_integrated(), third-party/rsutils/src/rsutilgpu.cpp). Only
+    // unified-memory AMD APUs (Ryzen AI / MI300A) report true here; discrete RDNA3/CDNA3
+    // GPUs correctly report false and keep the persistent-buffer copy path.
+    static bool const enabled = rsutils::rs2_is_hip_integrated();
+    return enabled;
+#else
     // Decide once: zero-copy only pays off on an integrated GPU (shared DRAM). On a
     // discrete GPU, mapped host memory is read per-element over PCIe and would be a
     // large regression, so we fall back to plain malloc + the existing copy path.
     static bool const enabled = rsutils::rs2_is_cuda_integrated();
     return enabled;
+#endif
 #else
     return false;
 #endif

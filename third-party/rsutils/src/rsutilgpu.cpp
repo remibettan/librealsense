@@ -261,6 +261,90 @@ namespace rsutils {
         return cached;
     }
 
+    // Probe whether the first HIP device is an integrated GPU (unified memory AMD APU,
+    // e.g. Ryzen AI / MI300A -- NOT applicable to discrete RDNA3/CDNA3 GPUs). Mirrors
+    // probe_cuda_integrated() exactly, using the HIP Runtime API attribute
+    // hipDeviceAttributeIntegrated instead of the CUDA Driver API equivalent.
+    static bool probe_hip_integrated()
+    {
+        // Cheap short-circuit: no usable device -> definitely not integrated.
+        if( ! rs2_is_hip_available() )
+            return false;
+
+        // hipDeviceAttributeIntegrated from hip_runtime_api.h's hipDeviceAttribute_t enum.
+        // Verified = 16 against ROCm 7.2.0 headers. Hard-coded (like
+        // CU_DEVICE_ATTRIBUTE_INTEGRATED above) to avoid a compile-time dependency on
+        // hip_runtime_api.h, matching the dlopen approach of probe_hip_driver(). Unlike
+        // CUDA's Driver API, HIP's runtime-API enum is not a formally ABI-frozen surface
+        // across ROCm major versions, so this value should be re-verified if a future ROCm
+        // release is found to disagree (e.g. via a one-line program that prints
+        // (int)hipDeviceAttributeIntegrated compiled against that release's headers).
+        constexpr int HIP_DEVICE_ATTRIBUTE_INTEGRATED = 16;
+
+#ifdef _WIN32
+        using hip_init_t        = int ( * )( unsigned int );
+        using hip_device_count_t = int ( * )( int * );
+        using hip_device_attr_t = int ( * )( int *, int, int );
+        HMODULE handle = LoadLibraryA( "amdhip64.dll" );
+        if( ! handle )
+            return false;
+        auto hip_init  = reinterpret_cast< hip_init_t         >( GetProcAddress( handle, "hipInit" ) );
+        auto hip_count = reinterpret_cast< hip_device_count_t >( GetProcAddress( handle, "hipGetDeviceCount" ) );
+        auto hip_attr  = reinterpret_cast< hip_device_attr_t  >( GetProcAddress( handle, "hipDeviceGetAttribute" ) );
+#else
+        using hip_init_t        = int ( * )( unsigned int );
+        using hip_device_count_t = int ( * )( int * );
+        using hip_device_attr_t = int ( * )( int *, int, int );
+        void * handle = dlopen( "libamdhip64.so.7", RTLD_LAZY );
+        if( ! handle )
+            handle = dlopen( "libamdhip64.so", RTLD_LAZY );
+        if( ! handle )
+            return false;
+        auto hip_init  = reinterpret_cast< hip_init_t         >( dlsym( handle, "hipInit" ) );
+        auto hip_count = reinterpret_cast< hip_device_count_t >( dlsym( handle, "hipGetDeviceCount" ) );
+        auto hip_attr  = reinterpret_cast< hip_device_attr_t  >( dlsym( handle, "hipDeviceGetAttribute" ) );
+#endif
+
+        bool integrated = false;
+        bool probed = false;  // did we actually read the INTEGRATED attribute?
+        int count = 0;
+        if( hip_init && hip_count && hip_attr && hip_init( 0 ) == 0 && hip_count( &count ) == 0 && count > 0 )
+        {
+            // Unlike the CUDA Driver API (cuDeviceGet then cuDeviceGetAttribute), the HIP
+            // Runtime API takes a plain device index directly in hipDeviceGetAttribute, so
+            // there is no separate "get device handle" step -- device 0 is used directly.
+            int value = 0;
+            if( hip_attr( &value, HIP_DEVICE_ATTRIBUTE_INTEGRATED, 0 ) == 0 )
+            {
+                probed = true;
+                integrated = ( value != 0 );
+            }
+        }
+
+#ifdef _WIN32
+        FreeLibrary( handle );
+#else
+        dlclose( handle );
+#endif
+
+        // Distinguish a genuine discrete GPU from a probe that could not run (missing driver
+        // symbols, hipInit/hipGetDeviceCount failure) - both leave `integrated` false, but
+        // only the former is really "discrete". Otherwise diagnostics are misleading.
+        if( ! probed )
+            LOG_INFO( "Could not probe HIP device integrated attribute (driver/symbol/device unavailable) - zero-copy GPU path disabled." );
+        else if( integrated )
+            LOG_INFO( "HIP device is integrated (unified memory) - zero-copy GPU path eligible." );
+        else
+            LOG_INFO( "HIP device is discrete - zero-copy GPU path disabled (would be a loss over PCIe)." );
+        return integrated;
+    }
+
+    bool rs2_is_hip_integrated()
+    {
+        static bool const cached = probe_hip_integrated();
+        return cached;
+    }
+
     bool rs2_is_cuda_available()
     {
         static bool const cached = probe_cuda_driver();

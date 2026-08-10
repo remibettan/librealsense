@@ -24,4 +24,10 @@ namespace rsutils {
     // DllMain caveats as rs2_is_cuda_available().
     bool rs2_is_cuda_integrated();
 
+    // Returns true if the (first) HIP device is an integrated GPU sharing physical memory
+    // with the CPU (unified-memory AMD APUs, e.g. Ryzen AI / MI300A -- NOT discrete
+    // RDNA3/CDNA3 GPUs). Mirrors rs2_is_cuda_integrated() exactly; probed via the HIP
+    // Runtime API attribute hipDeviceAttributeIntegrated, cached for the process lifetime.
+    bool rs2_is_hip_integrated();
+
 }  // namespace rsutils

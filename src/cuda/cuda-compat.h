@@ -2,10 +2,18 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 #pragma once
 
-// Small CUDA-version compatibility shims shared across the CUDA translation units, kept
-// dependency-free (only <cuda_runtime.h>) so any .cu/.cuh can include it without pulling in
-// librealsense types.
+// Small CUDA/HIP-version compatibility shims shared across the GPU translation units, kept
+// dependency-free (only <cuda_runtime.h> / <hip/hip_runtime.h>) so any .cu/.cuh/.hip can
+// include it without pulling in librealsense types.
 #ifdef RS2_USE_CUDA
+#ifdef RS2_USE_HIP
+#include <hip/hip_runtime.h>
+
+// hipPointerAttribute_t has always used `.type` (ROCm never had a `.memoryType`-named
+// pre-11-style field to support), so no version switch is needed on this branch.
+#define RS_CUDA_MEMTYPE( a ) ( (a).type )
+
+#else
 #include <cuda_runtime.h>
 
 // cudaPointerAttributes::type was named ::memoryType before CUDA 11.0. The CUDA arch list in
@@ -16,4 +24,5 @@
     #define RS_CUDA_MEMTYPE( a ) ( (a).memoryType )
 #endif
 
+#endif  // RS2_USE_HIP
 #endif  // RS2_USE_CUDA

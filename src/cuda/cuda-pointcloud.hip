@@ -1,25 +1,5 @@
 // License: Apache 2.0. See LICENSE file in root directory.
-// Copyright(c) 2026 Intel Corporation. All Rights Reserved.
-
-// Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
+// Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #ifdef RS2_USE_CUDA
 
@@ -83,59 +63,100 @@ void deproject_pixel_to_point_cuda(float points[3], const struct rs2_intrinsics 
 
 
 __global__
-//void kernel_deproject_depth_cuda(float * points, const rs2_intrinsics & intrin, const uint16_t * depth, std::function<uint16_t(float)> map_depth)
-
-void kernel_deproject_depth_cuda(float * points, const rs2_intrinsics* intrin, const uint16_t * depth, float depth_scale)
+void kernel_deproject_depth_cuda(float * points, const rs2_intrinsics * intrin, const uint16_t * depth, float depth_scale)
 {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
+    const int width  = intrin->width;
+    const int height = intrin->height;
 
-    if (i >= (*intrin).height * (*intrin).width) {
+    // One thread = one pixel; the grid is sized to the image so no stride loop is needed.
+    // Matches the 2D warp-aligned launch added on the CUDA side (cuda-pointcloud.cu) to
+    // avoid a per-pixel integer division (b = j / width; a = j - b * width) that the old
+    // 1D stride-loop kernel paid on every thread, every launch.
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x >= width || y >= height)
         return;
-    }
-    int stride = blockDim.x * gridDim.x;
-    int a, b;
 
-    for (int j = i; j < (*intrin).height * (*intrin).width; j += stride) {
-        b = j / (*intrin).width;
-        a = j - b * (*intrin).width;
-        const float pixel[] = { (float)a, (float)b };
-        deproject_pixel_to_point_cuda(points + j * 3, intrin, pixel, depth_scale * depth[j]);
-   }
+    const int j = y * width + x;
+    const float pixel[] = { (float)x, (float)y };
+    deproject_pixel_to_point_cuda(points + j * 3, intrin, pixel, depth_scale * depth[j]);
 }
 
 
-// Class-based helper: matches the CUDA-side refactor in cuda-pointcloud.cu where
-// deproject_depth_cuda became a member of rscuda::pointcloud_cuda_helper. The HIP
-// port keeps the simpler per-call allocation path (no buffer reuse, no zero-copy)
-// so class members _d_points/_d_depth/_d_intrin declared in cuda-pointcloud.cuh
-// stay unused here; porting those optimisations to HIP is left as follow-up.
+// Class-based helper: full port of the CUDA-side refactor in cuda-pointcloud.cu, including
+// the persistent-buffer reuse and zero-copy fast path (see that file for the detailed design
+// rationale). This is a mechanical per-API port: hipMemcpy/hipMalloc/hipGetLastError/
+// hipStreamSynchronize in place of the cuda* names; try_device_ptr() and RS_CUDA_MEMTYPE
+// resolve to their HIP equivalents via the macros in rscuda_utils.cuh / cuda-compat.h.
+// Zero-copy only activates when BUILD_WITH_HIP_ZEROCOPY is enabled (-> RS2_USE_CUDA_ZEROCOPY);
+// it is a no-op (try_device_ptr() always returns nullptr) on a plain HIP build, so the
+// persistent-buffer path below is exercised unconditionally and zero-copy is strictly
+// additive.
 void rscuda::pointcloud_cuda_helper::deproject_depth_cuda(float * points, const rs2_intrinsics & intrin, const uint16_t * depth, float depth_scale)
 {
-    int count = intrin.height * intrin.width;
-    constexpr int threads_per_block = pointcloud_cuda_helper::THREADS_PER_BLOCK;
-    // Ceiling division: avoid numBlocks == 0 when count < threads_per_block.
-    int numBlocks = (count + threads_per_block - 1) / threads_per_block;
+    const int count = intrin.width * intrin.height;
 
-    // Use the RAII allocator from rscuda_utils.cuh so device memory is
-    // automatically released on any exception thrown by RS_CUDA_CHECK
-    // (the previous raw hipMalloc + manual hipFree code leaked on error
-    // paths and required a `if (result);` warning-suppression hack).
-    auto d_points = alloc_dev<float>(count * 3);
-    auto d_depth  = alloc_dev<uint16_t>(count);
-    auto d_intrin = alloc_dev<rs2_intrinsics>(1);
+    // Zero-copy fast path: when the frame buffers are HIP pinned+mapped (unified-memory AMD
+    // APUs), the kernel reads depth and writes points directly in the frame memory -- no
+    // H2D/D2H. try_device_ptr() returns nullptr otherwise (discrete GPU / plain build), and
+    // we fall back to the persistent staging buffers below.
+#ifdef RS2_USE_CUDA_ZEROCOPY
+    uint16_t * depth_dev  = rscuda::try_device_ptr<uint16_t>(depth);
+    float *    points_dev = rscuda::try_device_ptr<float>(points);
+#else
+    uint16_t * depth_dev  = nullptr;
+    float *    points_dev = nullptr;
+#endif
+    const bool depth_mapped  = (depth_dev  != nullptr);
+    const bool points_mapped = (points_dev != nullptr);
 
-    RS_CUDA_CHECK(hipMemcpy(d_depth.get(), depth, count * sizeof(uint16_t), hipMemcpyHostToDevice));
-    RS_CUDA_CHECK(hipMemcpy(d_intrin.get(), &intrin, sizeof(rs2_intrinsics), hipMemcpyHostToDevice));
+    // (Re)allocate persistent staging buffers only when the frame size changes (and only for
+    // the side(s) that are not mapped). On a steady stream this branch runs once.
+    if (count != _count)
+    {
+        _d_points.reset();
+        _d_depth.reset();
+        _d_intrin.reset();
+        _count = count;
+    }
+    if (!points_mapped)
+    {
+        if (!_d_points) _d_points = alloc_dev<float>(count * 3);
+        points_dev = _d_points.get();
+    }
+    if (!depth_mapped)
+    {
+        if (!_d_depth) _d_depth = alloc_dev<uint16_t>(count);
+        depth_dev = _d_depth.get();
+    }
 
-    kernel_deproject_depth_cuda<<<numBlocks, threads_per_block>>>(d_points.get(), d_intrin.get(), d_depth.get(), depth_scale);
+    // Upload intrinsics once; refresh only if they actually change (e.g. recalibration).
+    if (!_d_intrin || std::memcmp(&_intrin_cached, &intrin, sizeof(rs2_intrinsics)) != 0)
+    {
+        _d_intrin = make_device_copy(intrin);
+        _intrin_cached = intrin;
+    }
 
-    // Kernel launches are asynchronous on HIP: synchronise before reading
-    // the output back to the host, otherwise hipMemcpy may race with an
-    // unfinished kernel and return stale data.
-    RS_CUDA_CHECK(hipStreamSynchronize(0));
+    if (!depth_mapped)
+        RS_CUDA_CHECK(hipMemcpy(depth_dev, depth, count * sizeof(uint16_t), hipMemcpyHostToDevice));
+
+    // 2D launch: wavefront-sized x dimension keeps a wavefront's lanes aligned with
+    // consecutive pixels, so depth reads stay coalesced. THREADS_IN_WARP == 32 is also
+    // RDNA's default wave32 front-end size on the gfx1100/gfx1101 targets this PR builds
+    // for (CDNA's 64-wide wavefronts are still handled correctly, just not maximally
+    // coalesced -- a tuning follow-up, not a correctness gap).
+    const dim3 block(rscuda::THREADS_IN_WARP, pointcloud_cuda_helper::THREADS_PER_BLOCK / rscuda::THREADS_IN_WARP);
+    const dim3 grid((intrin.width  + block.x - 1) / block.x,
+                     (intrin.height + block.y - 1) / block.y);
+    kernel_deproject_depth_cuda<<<grid, block>>>(points_dev, _d_intrin.get(), depth_dev, depth_scale);
     RS_CUDA_CHECK(hipGetLastError());
 
-    RS_CUDA_CHECK(hipMemcpy(points, d_points.get(), count * sizeof(float) * 3, hipMemcpyDeviceToHost));
+    if (points_mapped)
+        // Mapped output: no D2H copy, but the CPU consumer downstream must see the kernel's
+        // writes, so block until the kernel completes.
+        RS_CUDA_CHECK(hipStreamSynchronize(0));
+    else
+        RS_CUDA_CHECK(hipMemcpy(points, _d_points.get(), count * sizeof(float) * 3, hipMemcpyDeviceToHost));
 }
 
 #endif

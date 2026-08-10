@@ -1,25 +1,5 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2026 Intel Corporation. All Rights Reserved.
-
-# Modifications Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 # Save the command line compile commands in the build output
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
@@ -94,6 +74,17 @@ macro(global_set_flags)
         add_definitions(-DRS2_USE_HIP)
     endif()
 
+    if (BUILD_WITH_HIP_ZEROCOPY)
+        if (NOT BUILD_WITH_HIP)
+            message(FATAL_ERROR "BUILD_WITH_HIP_ZEROCOPY requires BUILD_WITH_HIP=ON")
+        endif()
+        # Shares RS2_USE_CUDA_ZEROCOPY with the CUDA path: the guarded code in
+        # rscuda_utils.cuh / cuda-pointcloud.cu is already vendor-neutral (it falls back
+        # to the persistent-buffer path whenever try_device_ptr() returns nullptr), so a
+        # single macro is enough for both backends.
+        add_definitions(-DRS2_USE_CUDA_ZEROCOPY)
+    endif()
+
     if (BUILD_WITH_NEON)
         add_definitions(-DBUILD_WITH_NEON)
     endif()
@@ -136,10 +127,20 @@ macro(global_target_config)
 
     if (BUILD_WITH_HIP)
         target_include_directories(${LRS_TARGET} PRIVATE ${HIP_INCLUDE_DIRS})
-        target_link_libraries(${LRS_TARGET} PRIVATE amdhip64)
-        if(WIN32)
-            target_link_directories(${LRS_TARGET} PRIVATE "${ROCM_PATH}/lib")
+        # Resolve the full path to the HIP runtime instead of linking the bare "amdhip64"
+        # name: a bare name needs "-L${ROCM_PATH}/lib" on the final link line, and
+        # ROCm's lib dir is not always on the default linker search path (only picked up
+        # automatically if ldconfig / HIP_PATH already knows about it). More importantly,
+        # when BUILD_SHARED_LIBS=OFF, ${LRS_TARGET} is a static archive: CMake forwards its
+        # PRIVATE link libraries to whatever finally links that archive (e.g. the "static!"
+        # unit tests), but only this target's own target_link_directories -- which is
+        # PRIVATE and does NOT forward. A resolved full path needs no "-L" at all, so it
+        # works correctly however far downstream the archive is linked.
+        find_library(RS_AMDHIP64_LIBRARY amdhip64 PATHS "${ROCM_PATH}/lib" NO_DEFAULT_PATH)
+        if(NOT RS_AMDHIP64_LIBRARY)
+            message(FATAL_ERROR "Could not find the HIP runtime library (amdhip64) under ${ROCM_PATH}/lib")
         endif()
+        target_link_libraries(${LRS_TARGET} PRIVATE ${RS_AMDHIP64_LIBRARY})
     endif()
 
     set_target_properties (${LRS_TARGET} PROPERTIES FOLDER Library)
