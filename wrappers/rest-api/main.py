@@ -10,6 +10,7 @@ def _prefer_local_pyrealsense2() -> None:
     # wheel — newer devices (e.g. D585 Prototype, PID 0x0C08) may not be
     # recognized by the published wheel and only show up when loading the
     # module built from this branch.
+    import logging
     import os
     repo_root = Path(__file__).resolve().parent.parent.parent
     build_dir = repo_root / "build"
@@ -21,7 +22,10 @@ def _prefer_local_pyrealsense2() -> None:
     candidates.extend(build_dir.rglob("pyrealsense2/__init__.py"))
     # Never pick up Debug builds: an unoptimized SDK makes colorize/metadata
     # calls 10-20x slower, silently starving the streaming pipeline.
-    candidates = [p for p in candidates if "debug" not in str(p).lower()]
+    candidates = [
+        p for p in candidates
+        if all(part.lower() != "debug" for part in p.relative_to(build_dir).parts)
+    ]
     if not candidates:
         return
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -34,7 +38,7 @@ def _prefer_local_pyrealsense2() -> None:
         seen.add(key)
         target_dirs.append(key)
     sys.path[0:0] = target_dirs
-    print(f"[pyrealsense2] preferring local build: {target_dirs[0]}")
+    logging.info("[pyrealsense2] preferring local build: %s", target_dirs[0])
     if hasattr(os, "add_dll_directory"):
         for key in target_dirs:
             try:

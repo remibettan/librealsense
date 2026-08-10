@@ -1634,7 +1634,7 @@ class RealSenseManager:
 
     def get_latest_frame(
         self, device_id: str, stream_type: str
-    ) -> Tuple[np.ndarray, dict]:
+    ) -> np.ndarray:
         """Get the latest frame from a specific stream (supports both pipeline and sensor modes)"""
         with self.lock:
             mode = self.streaming_mode.get(device_id, "idle")

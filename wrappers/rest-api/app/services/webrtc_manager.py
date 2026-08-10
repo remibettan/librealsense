@@ -48,13 +48,9 @@ class RealSenseVideoTrack(VideoStreamTrack):
 
     async def recv(self):
         try:
-            # Block off-loop until a frame newer than the one we already sent
-            # arrives. get_latest_frame() takes the manager-wide lock, so
-            # calling it directly from the coroutine would stall the event loop
-            # that also paces RTP, serves HTTP and emits Socket.IO metadata.
-            # If the encoder can't keep up, wait_for_frame_after returns the
-            # newest frame for whatever seq it wakes on, so a slow consumer
-            # lags in fps, never in latency.
+            # Block off-thread until a new frame arrives — waiting on-loop would
+            # stall RTP pacing, HTTP and Socket.IO. A slow consumer wakes to the
+            # newest frame, so backlog costs fps, never latency.
             frame_data, self._seq = await asyncio.to_thread(
                 self.realsense_manager.wait_for_frame_after,
                 self.device_id,
