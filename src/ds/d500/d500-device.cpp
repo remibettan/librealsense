@@ -517,7 +517,7 @@ namespace librealsense
 
             if ((_device_capabilities & ds_caps::CAP_INTERCAM_HW_SYNC) == ds_caps::CAP_INTERCAM_HW_SYNC)
             {
-                if( _fw_version >= firmware_version( "7.58.40932.13310" ) )
+                if( _fw_version >= firmware_version( "7.58.40929.13516" ) )
                 {
                     std::map< float, std::string > description_per_value = { { 2.f, "Internal" },
                                                                              { 3.f, "External" } };
