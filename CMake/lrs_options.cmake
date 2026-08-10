@@ -6,9 +6,6 @@
 
 option(ENABLE_CCACHE "Build with ccache." ON)
 option(BUILD_WITH_CUDA "Enable CUDA" OFF)
-# Zero-copy GPU memory path. Requires BUILD_WITH_CUDA, so the default follows it: ON whenever CUDA
-# is enabled, OFF otherwise. It only engages at runtime on an integrated GPU (Jetson); on x86 /
-# discrete it stays inert. Plain option(): an explicit -DBUILD_WITH_CUDA_ZEROCOPY overrides.
 option(BUILD_WITH_CUDA_ZEROCOPY "Enable zero-copy GPU memory path (Jetson/integrated GPU only, requires BUILD_WITH_CUDA)" ${BUILD_WITH_CUDA})
 option(BUILD_GLSL_EXTENSIONS "Build GLSL extensions API" ON)
 option(BUILD_WITH_OPENMP "Use OpenMP" OFF)
