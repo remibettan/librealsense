@@ -25,7 +25,6 @@ ExternalProject_Add(
 
 add_library(usb INTERFACE)
 target_include_directories(usb INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/third-party/libusb/libusb/libusb>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/libusb_install/include/libusb-1.0>
 )
 if(WIN32)
