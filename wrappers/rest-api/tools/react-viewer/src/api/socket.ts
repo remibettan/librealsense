@@ -20,7 +20,10 @@ class SocketService {
 
     this.socket = io(serverUrl, {
       path: '/socket',
-      transports: ['polling', 'websocket'], // Start with polling, upgrade to websocket
+      // Websocket first: metadata is broadcast at 30 Hz, and HTTP long-polling
+      // at that rate competes with the WebRTC event loop. Polling stays as a
+      // fallback for environments that block websockets.
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,

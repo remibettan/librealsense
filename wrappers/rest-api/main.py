@@ -19,6 +19,9 @@ def _prefer_local_pyrealsense2() -> None:
     for pattern in ("pyrealsense2*.pyd", "pyrealsense2*.so"):
         candidates.extend(build_dir.rglob(pattern))
     candidates.extend(build_dir.rglob("pyrealsense2/__init__.py"))
+    # Never pick up Debug builds: an unoptimized SDK makes colorize/metadata
+    # calls 10-20x slower, silently starving the streaming pipeline.
+    candidates = [p for p in candidates if "debug" not in str(p).lower()]
     if not candidates:
         return
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -31,6 +34,7 @@ def _prefer_local_pyrealsense2() -> None:
         seen.add(key)
         target_dirs.append(key)
     sys.path[0:0] = target_dirs
+    print(f"[pyrealsense2] preferring local build: {target_dirs[0]}")
     if hasattr(os, "add_dll_directory"):
         for key in target_dirs:
             try:

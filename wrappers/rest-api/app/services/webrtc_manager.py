@@ -11,11 +11,12 @@ from typing import Dict, List, Optional, Any, Tuple
 import numpy as np
 import cv2
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate, RTCConfiguration, RTCIceServer
-from aiortc.mediastreams import VideoStreamTrack
+from aiortc.mediastreams import VideoStreamTrack, VIDEO_CLOCK_RATE, VIDEO_TIME_BASE
 from av import VideoFrame
 from app.core.errors import RealSenseError
 from app.core.config import get_settings
 from app.models.webrtc import WebRTCSession, WebRTCStatus
+
 
 class RealSenseVideoTrack(VideoStreamTrack):
     """Video track that captures frames from RealSense camera."""
@@ -25,12 +26,48 @@ class RealSenseVideoTrack(VideoStreamTrack):
         self.realsense_manager = realsense_manager
         self.device_id = device_id
         self.stream_type = stream_type
-        self._start = time.time()
+        self._start = time.monotonic()
+        self._seq = 0
+        self._last_pts = -1
+        self._last_img = None
+
+    def _next_pts(self) -> int:
+        """Timestamp from the frame's real arrival time, so the receiver's
+        jitter buffer stays small and any camera frame rate is supported."""
+        pts = int((time.monotonic() - self._start) * VIDEO_CLOCK_RATE)
+        if pts <= self._last_pts:
+            pts = self._last_pts + 1
+        self._last_pts = pts
+        return pts
+
+    def _to_video_frame(self, img) -> VideoFrame:
+        video_frame = VideoFrame.from_ndarray(img, format="rgb24")
+        video_frame.pts = self._next_pts()
+        video_frame.time_base = VIDEO_TIME_BASE
+        return video_frame
 
     async def recv(self):
         try:
-            # Get frame from RealSense
-            frame_data = self.realsense_manager.get_latest_frame(self.device_id, self.stream_type)
+            # Block off-loop until a frame newer than the one we already sent
+            # arrives. get_latest_frame() takes the manager-wide lock, so
+            # calling it directly from the coroutine would stall the event loop
+            # that also paces RTP, serves HTTP and emits Socket.IO metadata.
+            # If the encoder can't keep up, wait_for_frame_after returns the
+            # newest frame for whatever seq it wakes on, so a slow consumer
+            # lags in fps, never in latency.
+            frame_data, self._seq = await asyncio.to_thread(
+                self.realsense_manager.wait_for_frame_after,
+                self.device_id,
+                self.stream_type,
+                self._seq,
+            )
+
+            if frame_data is None:
+                # No new frame within the timeout: repeat the last one so the
+                # sender keeps producing RTP and the receiver does not stall.
+                if self._last_img is None:
+                    raise RealSenseError(status_code=503, detail="No frames available")
+                return self._to_video_frame(self._last_img)
 
             # Handle different data types and normalize to uint8
             if frame_data.dtype == np.uint16:
@@ -56,24 +93,16 @@ class RealSenseVideoTrack(VideoStreamTrack):
             else:
                 # Unknown format, try to use as-is
                 img = frame_data
-                
-            # Create VideoFrame
-            video_frame = VideoFrame.from_ndarray(img, format="rgb24")
 
-            # Set frame timestamp
-            pts, time_base = await self.next_timestamp()
-            video_frame.pts = pts
-            video_frame.time_base = time_base
-
-            return video_frame
+            self._last_img = img
+            return self._to_video_frame(img)
         except Exception as e:
-            # On error, return a black frame
+            # On error, return a black frame. Pace it: without a new frame to
+            # wait on, an un-delayed error path would spin the event loop.
+            await asyncio.sleep(1 / 30)
             width, height = 640, 480  # Default size
             img = np.zeros((height, width, 3), dtype=np.uint8)
-            video_frame = VideoFrame.from_ndarray(img, format="rgb24")
-            pts, time_base = await self.next_timestamp()
-            video_frame.pts = pts
-            video_frame.time_base = time_base
+            video_frame = self._to_video_frame(img)
 
             # Only log non-503 errors (503 = frames not yet available, which is normal briefly)
             error_detail = getattr(e, 'detail', str(e))

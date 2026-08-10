@@ -66,6 +66,14 @@ class RealSenseManager:
         )  # device_id -> stream_type -> list of metadata dicts
         self.lock = threading.Lock()
         self.max_queue_size = 5
+
+        # Frame-arrival signalling for consumers that must not poll (WebRTC).
+        # ``_frame_seq`` counts frames pushed per "<device_id>:<stream_type>";
+        # collection threads bump it and notify so a consumer can block until
+        # a new frame exists. Never acquire ``self.lock`` while holding
+        # ``_frame_cond``.
+        self._frame_cond = threading.Condition()
+        self._frame_seq: Dict[str, int] = {}
         self.is_pointcloud_enabled: Dict[str, bool] = {}
         # One rs.pointcloud() per device: pc.map_to(color) mutates internal
         # state, and depth/color threads from different devices would race on
@@ -1595,6 +1603,35 @@ class RealSenseManager:
             stopping=stopping,
         )
 
+    def _publish_frames(self, device_id: str, stream_types) -> None:
+        """Bump the arrival counter for each stream and wake blocked consumers."""
+        with self._frame_cond:
+            for stream_type in stream_types:
+                key = f"{device_id}:{stream_type.lower()}"
+                self._frame_seq[key] = self._frame_seq.get(key, 0) + 1
+            self._frame_cond.notify_all()
+
+    def wait_for_frame_after(
+        self, device_id: str, stream_type: str, last_seq: int, timeout: float = 1.0
+    ) -> Tuple[Optional[np.ndarray], int]:
+        """Block until a frame newer than ``last_seq`` arrives, then return it.
+
+        Returns ``(frame, seq)``; ``frame`` is None on timeout. Callers pass the
+        returned seq back in to stay aligned with the producer, so each frame
+        is delivered once.
+        """
+        key = f"{device_id}:{stream_type.lower()}"
+        deadline = time.monotonic() + timeout
+        with self._frame_cond:
+            while self._frame_seq.get(key, 0) <= last_seq:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return None, last_seq
+                self._frame_cond.wait(remaining)
+            seq = self._frame_seq.get(key, 0)
+        # self.lock is taken only after _frame_cond is released (lock ordering).
+        return self.get_latest_frame(device_id, stream_type), seq
+
     def get_latest_frame(
         self, device_id: str, stream_type: str
     ) -> Tuple[np.ndarray, dict]:
@@ -2042,6 +2079,8 @@ class RealSenseManager:
                             while len(metadata_queue) > self.max_queue_size:
                                 metadata_queue.pop(0)
 
+                    self._publish_frames(device_id, processed_frames.keys())
+
                 except RuntimeError as e:
                     # Handle timeout or other error
                     print(f"Error collecting frames: {str(e)}")
@@ -2454,7 +2493,9 @@ class RealSenseManager:
                             mqueue.append(metadata)
                             while len(mqueue) > self.max_queue_size:
                                 mqueue.pop(0)
-                    
+
+                    self._publish_frames(device_id, (target_stream_type,))
+
                 except Exception as e:
                     if "timeout" not in str(e).lower():
                         logging.debug(f"[SENSOR] Frame collection error: {e}")

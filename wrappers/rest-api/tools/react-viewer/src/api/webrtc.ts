@@ -9,6 +9,7 @@ export class WebRTCHandler {
   private onTrack: (event: RTCTrackEvent) => void
   private onConnectionStateChange: (state: RTCPeerConnectionState) => void
   private iceCandidateQueue: RTCIceCandidate[] = []
+  private closed = false
 
   constructor(
     deviceId: string,
@@ -76,6 +77,15 @@ export class WebRTCHandler {
 
       this.sessionId = serverOffer.session_id
 
+      // disconnect() may have run while the offer was in flight (React
+      // StrictMode remounts every effect in dev). Without this the session id
+      // is only learned after the handler is already dead, so the server keeps
+      // an orphan peer connection encoding frames until its 1-hour sweep.
+      if (this.closed) {
+        this.releaseSession()
+        return
+      }
+
       // Set remote description (server's offer)
       await this.peerConnection.setRemoteDescription({
         type: serverOffer.type as RTCSdpType,
@@ -138,11 +148,17 @@ export class WebRTCHandler {
   }
 
   disconnect(): void {
+    this.closed = true
+
     if (this.peerConnection) {
       this.peerConnection.close()
       this.peerConnection = null
     }
 
+    this.releaseSession()
+  }
+
+  private releaseSession(): void {
     if (this.sessionId) {
       apiClient.closeWebRTCSession(this.sessionId).catch(console.error)
       this.sessionId = null
