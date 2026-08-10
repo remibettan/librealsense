@@ -619,7 +619,7 @@ namespace librealsense
 
         bool rs_uvc_device::uvc_get_ctrl(uint8_t unit, uint8_t ctrl, void *data, int len, uvc_req_code req_code) const
         {
-            usb_status sts;
+            usb_status sts = RS2_USB_STATUS_OTHER;
             _action_dispatcher.invoke_and_wait([&, this](dispatcher::cancellable_timer c)
             {
                 if (_messenger)
@@ -642,7 +642,7 @@ namespace librealsense
 
         bool rs_uvc_device::uvc_set_ctrl(uint8_t unit, uint8_t ctrl, void *data, int len)
         {
-            usb_status sts;
+            usb_status sts = RS2_USB_STATUS_OTHER;
             _action_dispatcher.invoke_and_wait([&, this](dispatcher::cancellable_timer c)
             {
                 if (_messenger)
@@ -854,7 +854,7 @@ namespace librealsense
                 }
             }
 
-            usb_status sts;
+            usb_status sts = RS2_USB_STATUS_OTHER;
             _action_dispatcher.invoke_and_wait([&, this](dispatcher::cancellable_timer c)
             {
                 if (_messenger)
