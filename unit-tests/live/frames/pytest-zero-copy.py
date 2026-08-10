@@ -44,45 +44,52 @@ def test_zero_copy_gpu_frame_path(test_device):
     cfg.enable_stream(rs.stream.depth, WIDTH, HEIGHT, rs.format.z16, FPS)
     pipe.start(cfg)
     try:
-        f = None
-        for _ in range(WARMUP + 10):
-            f = pipe.wait_for_frames().get_depth_frame()
-        assert f, "no depth frame received"
+        # Warm up (AWB / one-time CUDA init), then grab one valid depth frame; retry on a
+        # dropped/null frame and fail fast if none arrives (instead of asserting only the last).
+        for _ in range(WARMUP):
+            pipe.wait_for_frames()
+        frame = None
+        for _ in range(30):
+            depth = pipe.wait_for_frames().get_depth_frame()
+            if depth:
+                frame = depth
+                break
+        assert frame, "no valid depth frame received"
 
         # --- allocator correctness: size + full CPU-side readability ---
         # frame::data uses frame_data_allocator, which under zero-copy is CUDA host-mapped
         # memory. It must still report the same logical size and be readable end to end on the
         # CPU (touching the last element exercises the buffer right up to its tail).
-        expected = f.get_stride_in_bytes() * f.get_height()
-        assert f.get_data_size() == expected, \
-            "get_data_size() {} != stride*height {} (allocator/size regression)".format(f.get_data_size(), expected)
-        arr = np.asanyarray(f.get_data())
-        assert arr.size > 0
-        assert int(arr.flat[0]) >= 0 and int(arr.flat[-1]) >= 0  # read head + tail, no fault
+        expected_size = frame.get_stride_in_bytes() * frame.get_height()
+        assert frame.get_data_size() == expected_size, \
+            "get_data_size() {} != stride*height {} (allocator/size regression)".format(frame.get_data_size(), expected_size)
+        data = np.asanyarray(frame.get_data())
+        assert data.size > 0
+        assert int(data.flat[0]) >= 0 and int(data.flat[-1]) >= 0  # read head + tail, no fault
 
         # --- get_gpu_data_or_upload(): always usable on a CUDA build ---
-        r = f.get_gpu_data_or_upload()
-        if r is None:
+        gpu_data = frame.get_gpu_data_or_upload()
+        if gpu_data is None:
             pytest.skip("no CUDA / RS2_USE_CUDA_ZEROCOPY build: GPU device pointer unavailable")
-        addr, copied = r
-        assert isinstance(addr, int) and addr != 0, "expected a non-null CUDA device address"
+        dev_addr, copied = gpu_data
+        assert isinstance(dev_addr, int) and dev_addr != 0, "expected a non-null CUDA device address"
         assert isinstance(copied, bool)
 
         # --- gpu_frame extension + strict get_gpu_data(): only when GPU-resident ---
-        gf = rs.gpu_frame(f)
-        strict = gf.get_gpu_data() if gf else None
+        gpu_ext = rs.gpu_frame(frame)
+        strict_addr = gpu_ext.get_gpu_data() if gpu_ext else None
         # The extension, the strict pointer, and the copied flag must all agree.
-        assert bool(gf) == (strict is not None), "gpu_frame validity must match get_gpu_data() null-ness"
-        assert bool(gf) == (not copied), "gpu_frame is reported iff the frame is GPU-resident (not uploaded)"
+        assert bool(gpu_ext) == (strict_addr is not None), "gpu_frame validity must match get_gpu_data() null-ness"
+        assert bool(gpu_ext) == (not copied), "gpu_frame is reported iff the frame is GPU-resident (not uploaded)"
 
         if not copied:
             # true zero-copy (integrated GPU, GPU-mapped frame)
-            assert strict == addr, "zero-copy: strict get_gpu_data() must equal the _or_upload address"
-            log.info("zero-copy ACTIVE: device ptr 0x%x (no host->device copy)", addr)
+            assert strict_addr == dev_addr, "zero-copy: strict get_gpu_data() must equal the _or_upload address"
+            log.info("zero-copy ACTIVE: device ptr 0x%x (no host->device copy)", dev_addr)
         else:
             # CUDA build but the frame is not GPU-mapped (discrete GPU, or a non-mapped backend
             # buffer): the strict API is null and the _or_upload path uploaded a copy.
-            assert strict is None, "strict get_gpu_data() must be null when the frame is not GPU-resident"
-            log.info("zero-copy fell back to upload (frame not GPU-resident); _or_upload address 0x%x", addr)
+            assert strict_addr is None, "strict get_gpu_data() must be null when the frame is not GPU-resident"
+            log.info("zero-copy fell back to upload (frame not GPU-resident); _or_upload address 0x%x", dev_addr)
     finally:
         pipe.stop()
