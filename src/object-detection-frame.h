@@ -7,6 +7,7 @@
 #include "core/extension.h"
 #include <librealsense2/h/rs_types.h>
 #include <rsutils/string/from.h>
+#include <cstddef>
 
 namespace librealsense {
 
@@ -16,6 +17,7 @@ public:
     // Frames received over the object detection stream are binary blobs with object_detection_payload layout.
 
     static constexpr uint32_t MAGIC_NUMBER = 0x5445444F;  // ASCII "ODET" as a little-endian uint32
+    static constexpr uint32_t MAX_DETECTIONS = 64;
 
     enum class source : uint8_t
     {
@@ -58,6 +60,19 @@ public:
         object_detection_entry detections[1]; // `number_of_detections` entries of type `object_detection_entry`
     };
 #pragma pack( pop )
+
+    static constexpr size_t FRAME_HEADER_SIZE = sizeof( object_detection_frame_header );
+    static constexpr size_t PAYLOAD_HEADER_SIZE
+        = offsetof( object_detection_payload, detections ) - FRAME_HEADER_SIZE;
+    static constexpr size_t ENTRY_SIZE = sizeof( object_detection_entry );
+    static constexpr size_t MIN_FRAME_SIZE = FRAME_HEADER_SIZE + PAYLOAD_HEADER_SIZE;
+    static constexpr size_t MAX_FRAME_SIZE = MIN_FRAME_SIZE + MAX_DETECTIONS * ENTRY_SIZE;
+
+    static_assert( FRAME_HEADER_SIZE == 20, "Object Detection frame header ABI must be 20 bytes" );
+    static_assert( PAYLOAD_HEADER_SIZE == 23, "Object Detection payload header ABI must be 23 bytes" );
+    static_assert( ENTRY_SIZE == 16, "Object Detection entry ABI must be 16 bytes" );
+    static_assert( MIN_FRAME_SIZE == 43, "Object Detection minimum frame ABI must be 43 bytes" );
+    static_assert( MAX_FRAME_SIZE == 1067, "Object Detection maximum frame ABI must be 1067 bytes" );
 
     size_t get_detection_count() const;
     object_detection_entry get_detection( size_t index ) const;
