@@ -21,7 +21,41 @@ def _get_sdk_version() -> str:
         return "unknown"
 
 
+def _check_debug_sdk_build() -> str:
+    """Warn when the loaded pyrealsense2 is a Debug build.
+
+    Detects it by the loaded module's path, so it also catches builds injected
+    via PYTHONPATH, not only the build/ auto-pick in main.py.
+    """
+    from pathlib import Path
+    import pyrealsense2 as rs
+    module_file = getattr(getattr(rs, "pyrealsense2", rs), "__file__", "") or ""
+    if any(part.lower() == "debug" for part in Path(module_file).parts):
+        return (
+            "The server is running a Debug build of the RealSense SDK - "
+            "streaming performance is degraded. Build Release for full speed."
+        )
+    return ""
+
+
+_WARNING_CHECKS = (_check_debug_sdk_build,)
+
+
+def _get_sdk_warnings() -> list:
+    """Collect environment warnings worth surfacing in the client UI."""
+    warnings = []
+    for check in _WARNING_CHECKS:
+        try:
+            message = check()
+        except Exception:
+            continue
+        if message:
+            warnings.append(message)
+    return warnings
+
+
 _SDK_VERSION = _get_sdk_version()
+_SDK_WARNINGS = _get_sdk_warnings()
 
 api_router = APIRouter()
 
@@ -31,9 +65,15 @@ async def health_check():
     """Health check endpoint for monitoring the backend service.
 
     Returns the installed RealSense SDK version so the frontend can show a
-    welcome banner the first time the user opens it on a new SDK version.
+    welcome banner the first time the user opens it on a new SDK version, and
+    environment warnings (e.g. Debug SDK build) for the client to display.
     """
-    return {"status": "ok", "service": "realsense-api", "sdk_version": _SDK_VERSION}
+    return {
+        "status": "ok",
+        "service": "realsense-api",
+        "sdk_version": _SDK_VERSION,
+        "warnings": _SDK_WARNINGS,
+    }
 
 # Register firmware route before devices to avoid conflicts with /{device_id} catch-all
 api_router.include_router(firmware.router, prefix="/devices", tags=["firmware"])

@@ -8,6 +8,7 @@ import { LoadingSplash } from './components/LoadingSplash'
 import { WhatsNew } from './components/WhatsNew'
 import { ChatButton, ChatPanel } from './components/ChatBot'
 import { ApiDiagnostics } from './components/ApiDiagnostics'
+import { ServerWarnings } from './components/ServerWarnings'
 import { useAppStore } from './store'
 import { socketService } from './api/socket'
 
@@ -44,7 +45,10 @@ function App() {
       )}
       
       <Header />
-      
+
+      {/* Server environment warnings (e.g. Debug SDK build) */}
+      <ServerWarnings />
+
       <div className="flex-1 flex min-h-0">
         {/* Left Sidebar - Device Panel with Controls */}
         <aside className="w-80 flex-shrink-0 bg-rs-dark border-r border-gray-700 overflow-y-auto">
