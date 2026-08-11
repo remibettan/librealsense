@@ -261,10 +261,95 @@ namespace rsutils {
         return cached;
     }
 
+    // Function-pointer bundle resolved from the HIP runtime library by
+    // open_hip_library_and_get_symbols(), consumed by query_hip_integrated_attribute().
+    // Not used outside probe_hip_integrated()'s helpers.
+    struct hip_integrated_symbols
+    {
+        using init_t         = int ( * )( unsigned int );
+        using device_count_t = int ( * )( int * );
+        using device_attr_t  = int ( * )( int *, int, int );
+
+#ifdef _WIN32
+        HMODULE handle = nullptr;
+#else
+        void * handle = nullptr;
+#endif
+        init_t         init  = nullptr;
+        device_count_t count = nullptr;
+        device_attr_t  attr  = nullptr;
+
+        bool resolved() const { return handle && init && count && attr; }
+    };
+
+    // Open the HIP runtime and resolve hipInit / hipGetDeviceCount / hipDeviceGetAttribute.
+    // Mirrors the dlopen/LoadLibrary fallback chain in probe_hip_driver(); returns a
+    // symbols struct with handle == nullptr if the library could not be opened.
+    static hip_integrated_symbols open_hip_library_and_get_symbols()
+    {
+        hip_integrated_symbols s;
+#ifdef _WIN32
+        s.handle = LoadLibraryA( "amdhip64.dll" );
+        if( ! s.handle )
+            return s;
+        s.init  = reinterpret_cast< hip_integrated_symbols::init_t         >( GetProcAddress( s.handle, "hipInit" ) );
+        s.count = reinterpret_cast< hip_integrated_symbols::device_count_t >( GetProcAddress( s.handle, "hipGetDeviceCount" ) );
+        s.attr  = reinterpret_cast< hip_integrated_symbols::device_attr_t  >( GetProcAddress( s.handle, "hipDeviceGetAttribute" ) );
+#else
+        s.handle = dlopen( "libamdhip64.so.7", RTLD_LAZY );
+        if( ! s.handle )
+            s.handle = dlopen( "libamdhip64.so", RTLD_LAZY );
+        if( ! s.handle )
+            return s;
+        s.init  = reinterpret_cast< hip_integrated_symbols::init_t         >( dlsym( s.handle, "hipInit" ) );
+        s.count = reinterpret_cast< hip_integrated_symbols::device_count_t >( dlsym( s.handle, "hipGetDeviceCount" ) );
+        s.attr  = reinterpret_cast< hip_integrated_symbols::device_attr_t  >( dlsym( s.handle, "hipDeviceGetAttribute" ) );
+#endif
+        return s;
+    }
+
+    // Counterpart to open_hip_library_and_get_symbols(); no-op if the library was never
+    // opened (handle == nullptr).
+    static void close_hip_library( const hip_integrated_symbols & s )
+    {
+        if( ! s.handle )
+            return;
+#ifdef _WIN32
+        FreeLibrary( s.handle );
+#else
+        dlclose( s.handle );
+#endif
+    }
+
+    // Runs hipInit -> hipGetDeviceCount -> hipDeviceGetAttribute(attribute_id, device 0)
+    // using already-resolved symbols. Sets *probed = true only if the attribute was
+    // actually read, so the caller can tell "could not probe" (missing driver/symbol,
+    // zero devices) apart from a genuine positive/negative result.
+    static bool query_hip_integrated_attribute( const hip_integrated_symbols & s, int attribute_id, bool * probed )
+    {
+        *probed = false;
+        int count = 0;
+        if( ! ( s.resolved() && s.init( 0 ) == 0 && s.count( &count ) == 0 && count > 0 ) )
+            return false;
+
+        // Unlike the CUDA Driver API (cuDeviceGet then cuDeviceGetAttribute), the HIP
+        // Runtime API takes a plain device index directly in hipDeviceGetAttribute, so
+        // there is no separate "get device handle" step -- device 0 is used directly.
+        int value = 0;
+        if( s.attr( &value, attribute_id, 0 ) != 0 )
+            return false;
+
+        *probed = true;
+        return value != 0;
+    }
+
     // Probe whether the first HIP device is an integrated GPU (unified memory AMD APU,
     // e.g. Ryzen AI / MI300A -- NOT applicable to discrete RDNA3/CDNA3 GPUs). Mirrors
     // probe_cuda_integrated() exactly, using the HIP Runtime API attribute
-    // hipDeviceAttributeIntegrated instead of the CUDA Driver API equivalent.
+    // hipDeviceAttributeIntegrated instead of the CUDA Driver API equivalent. Broken into
+    // open_hip_library_and_get_symbols() / query_hip_integrated_attribute() /
+    // close_hip_library() so no single function mixes library loading, symbol resolution,
+    // device probing, and logging.
     static bool probe_hip_integrated()
     {
         // Cheap short-circuit: no usable device -> definitely not integrated.
@@ -281,51 +366,10 @@ namespace rsutils {
         // (int)hipDeviceAttributeIntegrated compiled against that release's headers).
         constexpr int HIP_DEVICE_ATTRIBUTE_INTEGRATED = 16;
 
-#ifdef _WIN32
-        using hip_init_t        = int ( * )( unsigned int );
-        using hip_device_count_t = int ( * )( int * );
-        using hip_device_attr_t = int ( * )( int *, int, int );
-        HMODULE handle = LoadLibraryA( "amdhip64.dll" );
-        if( ! handle )
-            return false;
-        auto hip_init  = reinterpret_cast< hip_init_t         >( GetProcAddress( handle, "hipInit" ) );
-        auto hip_count = reinterpret_cast< hip_device_count_t >( GetProcAddress( handle, "hipGetDeviceCount" ) );
-        auto hip_attr  = reinterpret_cast< hip_device_attr_t  >( GetProcAddress( handle, "hipDeviceGetAttribute" ) );
-#else
-        using hip_init_t        = int ( * )( unsigned int );
-        using hip_device_count_t = int ( * )( int * );
-        using hip_device_attr_t = int ( * )( int *, int, int );
-        void * handle = dlopen( "libamdhip64.so.7", RTLD_LAZY );
-        if( ! handle )
-            handle = dlopen( "libamdhip64.so", RTLD_LAZY );
-        if( ! handle )
-            return false;
-        auto hip_init  = reinterpret_cast< hip_init_t         >( dlsym( handle, "hipInit" ) );
-        auto hip_count = reinterpret_cast< hip_device_count_t >( dlsym( handle, "hipGetDeviceCount" ) );
-        auto hip_attr  = reinterpret_cast< hip_device_attr_t  >( dlsym( handle, "hipDeviceGetAttribute" ) );
-#endif
-
-        bool integrated = false;
-        bool probed = false;  // did we actually read the INTEGRATED attribute?
-        int count = 0;
-        if( hip_init && hip_count && hip_attr && hip_init( 0 ) == 0 && hip_count( &count ) == 0 && count > 0 )
-        {
-            // Unlike the CUDA Driver API (cuDeviceGet then cuDeviceGetAttribute), the HIP
-            // Runtime API takes a plain device index directly in hipDeviceGetAttribute, so
-            // there is no separate "get device handle" step -- device 0 is used directly.
-            int value = 0;
-            if( hip_attr( &value, HIP_DEVICE_ATTRIBUTE_INTEGRATED, 0 ) == 0 )
-            {
-                probed = true;
-                integrated = ( value != 0 );
-            }
-        }
-
-#ifdef _WIN32
-        FreeLibrary( handle );
-#else
-        dlclose( handle );
-#endif
+        hip_integrated_symbols symbols = open_hip_library_and_get_symbols();
+        bool probed = false;
+        bool integrated = query_hip_integrated_attribute( symbols, HIP_DEVICE_ATTRIBUTE_INTEGRATED, &probed );
+        close_hip_library( symbols );
 
         // Distinguish a genuine discrete GPU from a probe that could not run (missing driver
         // symbols, hipInit/hipGetDeviceCount failure) - both leave `integrated` false, but
