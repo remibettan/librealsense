@@ -111,17 +111,20 @@ struct rs2_option_value_wrapper : rs2_option_value
     // Add a reference count to control lifetime
     mutable std::atomic< int > ref_count;
 
+    int has_range;
+    rs2_option_range range;
+
     rs2_option_value_wrapper( rs2_option option_id,
                               rs2_option_type option_type,
                               std::shared_ptr< const json > const & p_json_value )
         : ref_count( 1 )
         , p_json( p_json_value )
+        , has_range( 0 )
+        , range{}
     {
         id = option_id;
         type = option_type;
         is_valid = false;
-        has_range = 0;
-        range = {};
         if( p_json && ! p_json->is_null() )
         {
             switch( type )
@@ -1015,10 +1018,7 @@ rs2_options_list* rs2_get_options_list(const rs2_options* options, rs2_error** e
         if( option.is_enabled() )
             value = std::make_shared< const json >( option.get_value() );
         auto wrapper = new rs2_option_value_wrapper( option_id, option.get_value_type(), value );
-        // The range is read here, under the bulk operation, and not by a separate query per option: for a UVC sensor
-        // each standalone range query powers the device up and back down again.
-        // An option can be enumerated and have a value and still have no queryable range (e.g. a MIPI color control
-        // with no V4L2 CID mapping), so a failure marks that one range unavailable instead of failing the whole list.
+        // In addition to the option, read its range here (if exists) while the UVC sensor is powered
         try
         {
             auto const range = option.get_range();
@@ -1068,6 +1068,18 @@ rs2_option_value const * rs2_get_option_value_from_list( const rs2_options_list 
     return p_option_value;
 }
 HANDLE_EXCEPTIONS_AND_RETURN( nullptr, options, i )
+
+int rs2_get_option_range_from_list( const rs2_options_list * options, int i, rs2_option_range * out_range, rs2_error ** error ) BEGIN_API_CALL
+{
+    VALIDATE_NOT_NULL( options );
+    VALIDATE_NOT_NULL( out_range );
+    auto const p_option_value = options->list.at( i );
+    if( ! p_option_value->has_range )
+        return 0;
+    *out_range = p_option_value->range;
+    return 1;
+}
+HANDLE_EXCEPTIONS_AND_RETURN( 0, options, i )
 
 void rs2_delete_options_list(rs2_options_list* list) BEGIN_API_CALL
 {

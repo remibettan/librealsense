@@ -196,7 +196,13 @@ namespace rs2
     class roi_sensor;
     class frame;
 
-    typedef rs2_option_range option_range;
+    struct option_range
+    {
+        float min;
+        float max;
+        float def;
+        float step;
+    };
 
     struct region_of_interest
     {

@@ -188,8 +188,7 @@ extern "C" {
     } rs2_option_rect;
 
     /**
-    * The range of values an option accepts, used with rs2_option_value::range.
-    * Same semantics as the outputs of rs2_get_option_range.
+    * The range of values an option accepts.
     */
     typedef struct rs2_option_range
     {
@@ -215,8 +214,6 @@ extern "C" {
             rs2_option_rect as_rect;
         };
 #pragma pack(pop)
-        int has_range;                    /**< 0 if no range available; 1 otherwise */
-        rs2_option_range range;           /**< valid only if has_range */
     } rs2_option_value;
 
     /** \brief For SR300 devices: provides optimized settings (presets) for specific types of usage. */
@@ -434,6 +431,15 @@ extern "C" {
     * \return temporary (goes away with the options-list) pointer to the option-value struct
     */
     rs2_option_value const * rs2_get_option_value_from_list( const rs2_options_list * options, int i, rs2_error ** error );
+
+    /**
+    * get the range of the specific option from options list
+    * \param[in] i          the index of the option
+    * \param[out] out_range filled with the range; left untouched if the option has no range
+    * \param[out] error     if non-null, receives any error that occurs during this call, otherwise, errors are ignored
+    * \return 0 if this option has no queryable range; 1 otherwise
+    */
+    int rs2_get_option_range_from_list( const rs2_options_list * options, int i, rs2_option_range * out_range, rs2_error ** error );
 
     /**
     * Clean up a value and all it points to
