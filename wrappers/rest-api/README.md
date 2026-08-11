@@ -52,7 +52,7 @@ It simplifies remote control and data streaming from RealSense devices by handli
 
 ### API Server Setup
 
-Requires Python 3.10 - 3.14.
+Requires Python 3.10+ (tested through 3.14).
 
 1. **Create a virtual environment:**
 
