@@ -20,12 +20,6 @@ def _prefer_local_pyrealsense2() -> None:
     for pattern in ("pyrealsense2*.pyd", "pyrealsense2*.so"):
         candidates.extend(build_dir.rglob(pattern))
     candidates.extend(build_dir.rglob("pyrealsense2/__init__.py"))
-    # Never pick up Debug builds: an unoptimized SDK makes colorize/metadata
-    # calls 10-20x slower, silently starving the streaming pipeline.
-    candidates = [
-        p for p in candidates
-        if all(part.lower() != "debug" for part in p.relative_to(build_dir).parts)
-    ]
     if not candidates:
         return
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -38,7 +32,17 @@ def _prefer_local_pyrealsense2() -> None:
         seen.add(key)
         target_dirs.append(key)
     sys.path[0:0] = target_dirs
-    logging.info("[pyrealsense2] preferring local build: %s", target_dirs[0])
+    chosen = candidates[0]
+    if any(part.lower() == "debug" for part in chosen.relative_to(build_dir).parts):
+        # Debug SDK is 10-20x slower per call (measured: colorize 46.7ms vs
+        # 5.5ms at 720p) — streaming will be slow. Warn loudly, never silently.
+        logging.warning(
+            "[pyrealsense2] loading a DEBUG local build: %s — expect low "
+            "streaming FPS; build Release or remove build/Debug to use an "
+            "optimized SDK", target_dirs[0],
+        )
+    else:
+        logging.info("[pyrealsense2] preferring local build: %s", target_dirs[0])
     if hasattr(os, "add_dll_directory"):
         for key in target_dirs:
             try:
