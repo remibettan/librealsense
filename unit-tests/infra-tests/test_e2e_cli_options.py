@@ -165,6 +165,20 @@ class TestCliOptionsRegistered:
         rc, out, *_ = run_e2e("pytest-live.py", "--not-live")
         assert_outcomes(out, passed=1, skipped=1)
 
+    def test_custom_fw_options(self):
+        """--custom-fw-d400/-d555/-d585 are accepted and their values reach the tests
+        via request.config.getoption (consumed by pytest-fw-update)."""
+        rc, out, *_ = run_e2e("pytest-custom-fw.py", "-k", "test_values",
+                               "--custom-fw-d400", "d400.bin",
+                               "--custom-fw-d555", "d555.bin",
+                               "--custom-fw-d585", "d585.bin")
+        assert_outcomes(out, passed=1)
+
+    def test_custom_fw_defaults(self):
+        """Without --custom-fw-* flags the options default to None (pytest-fw-update skips)."""
+        rc, out, *_ = run_e2e("pytest-custom-fw.py", "-k", "test_defaults")
+        assert_outcomes(out, passed=1)
+
     def test_tag_filters_by_marker(self):
         """--tag <name> should run only tests with pytest.mark.<name> (alias for -m)."""
         rc, out, *_ = run_e2e("pytest-priority.py", "--tag", "priority")
