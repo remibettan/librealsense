@@ -12,14 +12,20 @@ export function ServerWarnings() {
 
   useEffect(() => {
     let cancelled = false
-    apiClient
-      .getHealth()
-      .then((h) => {
-        if (!cancelled && h.warnings?.length) setWarnings(h.warnings)
-      })
-      .catch(() => {
-        // Backend not reachable yet; ApiDiagnostics covers that case.
-      })
+    let attempts = 0
+    const fetchWarnings = () => {
+      apiClient
+        .getHealth()
+        .then((h) => {
+          if (!cancelled && h.warnings?.length) setWarnings(h.warnings)
+        })
+        .catch(() => {
+          // Backend may still be starting (e.g. desktop build spawns it);
+          // retry a few times, then give up — ApiDiagnostics covers hard-down.
+          if (!cancelled && ++attempts < 5) setTimeout(fetchWarnings, 3000)
+        })
+    }
+    fetchWarnings()
     return () => {
       cancelled = true
     }
