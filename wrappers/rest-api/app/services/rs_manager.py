@@ -62,13 +62,12 @@ class RealSenseManager:
         self.lock = threading.Lock()
         self.max_queue_size = 5
 
-        # Frame-arrival signalling for consumers that must not poll (WebRTC).
-        # ``_frame_seq`` counts frames pushed per "<device_id>:<stream_type>";
-        # collection threads bump it and notify so a consumer can block until
-        # a new frame exists. Never acquire ``self.lock`` while holding
-        # ``_frame_cond``.
-        self._frame_cond = threading.Condition()
+        # Frame-arrival signalling for async consumers (WebRTC). ``_frame_seq``
+        # counts frames pushed per "<device_id>:<stream_type>"; collection
+        # threads bump it and set the matching asyncio.Event on the main loop,
+        # so waiters block without occupying an executor thread.
         self._frame_seq: Dict[str, int] = {}
+        self._frame_events: Dict[str, asyncio.Event] = {}
         self.is_pointcloud_enabled: Dict[str, bool] = {}
         # One rs.pointcloud() per device: pc.map_to(color) mutates internal
         # state, and depth/color threads from different devices would race on
@@ -1599,33 +1598,44 @@ class RealSenseManager:
         )
 
     def _publish_frames(self, device_id: str, stream_types) -> None:
-        """Bump the arrival counter for each stream and wake blocked consumers."""
-        with self._frame_cond:
-            for stream_type in stream_types:
-                key = f"{device_id}:{stream_type.lower()}"
-                self._frame_seq[key] = self._frame_seq.get(key, 0) + 1
-            self._frame_cond.notify_all()
+        """Bump the arrival counter for each stream and wake async waiters.
 
-    def wait_for_frame_after(
+        Runs on collection threads; the events are set via the main loop so
+        waiters need no executor thread.
+        """
+        loop = RealSenseManager._main_loop
+        for stream_type in stream_types:
+            key = f"{device_id}:{stream_type.lower()}"
+            self._frame_seq[key] = self._frame_seq.get(key, 0) + 1
+            event = self._frame_events.get(key)
+            if event is not None and loop is not None and not loop.is_closed():
+                loop.call_soon_threadsafe(event.set)
+
+    async def wait_for_frame_after(
         self, device_id: str, stream_type: str, last_seq: int, timeout: float = 1.0
     ) -> Tuple[Optional[np.ndarray], int]:
-        """Block until a frame newer than ``last_seq`` arrives, then return it.
+        """Wait until a frame newer than ``last_seq`` arrives, then return it.
 
-        Returns ``(frame, seq)``; ``frame`` is None on timeout. Callers pass the
-        returned seq back in to stay aligned with the producer, so each frame
-        is delivered once.
+        Returns ``(frame, seq)``; ``frame`` is None on timeout. The seq is read
+        after the frame is fetched, so a frame landing in between skips ahead
+        rather than being re-delivered.
         """
         key = f"{device_id}:{stream_type.lower()}"
+        event = self._frame_events.setdefault(key, asyncio.Event())
         deadline = time.monotonic() + timeout
-        with self._frame_cond:
-            while self._frame_seq.get(key, 0) <= last_seq:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    return None, last_seq
-                self._frame_cond.wait(remaining)
-            seq = self._frame_seq.get(key, 0)
-        # self.lock is taken only after _frame_cond is released (lock ordering).
-        return self.get_latest_frame(device_id, stream_type), seq
+        while self._frame_seq.get(key, 0) <= last_seq:
+            event.clear()
+            if self._frame_seq.get(key, 0) > last_seq:
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None, last_seq
+            try:
+                await asyncio.wait_for(event.wait(), remaining)
+            except asyncio.TimeoutError:
+                return None, last_seq
+        frame = self.get_latest_frame(device_id, stream_type)
+        return frame, self._frame_seq.get(key, 0)
 
     def get_latest_frame(
         self, device_id: str, stream_type: str

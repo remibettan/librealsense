@@ -24,24 +24,26 @@ export class WebRTCHandler {
   }
 
   async connect(): Promise<void> {
-    // Create peer connection
-    this.peerConnection = new RTCPeerConnection({
+    // Create peer connection. Kept in a local so the negotiation sequence
+    // below survives disconnect() nulling this.peerConnection mid-await.
+    const pc = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
       ],
     })
+    this.peerConnection = pc
 
     // Set up event handlers
-    this.peerConnection.ontrack = this.onTrack
+    pc.ontrack = this.onTrack
 
-    this.peerConnection.onconnectionstatechange = () => {
+    pc.onconnectionstatechange = () => {
       if (this.peerConnection) {
         this.onConnectionStateChange(this.peerConnection.connectionState)
       }
     }
 
-    this.peerConnection.onicecandidate = async (event) => {
+    pc.onicecandidate = async (event) => {
       if (event.candidate && this.sessionId) {
         try {
           await apiClient.addICECandidate(this.sessionId, {
@@ -55,13 +57,13 @@ export class WebRTCHandler {
       }
     }
 
-    this.peerConnection.oniceconnectionstatechange = () => {
-      if (import.meta.env.DEV) console.log('ICE connection state:', this.peerConnection?.iceConnectionState)
+    pc.oniceconnectionstatechange = () => {
+      if (import.meta.env.DEV) console.log('ICE connection state:', pc.iceConnectionState)
     }
 
     // Add transceivers for receiving streams
     this.streamTypes.forEach((streamType) => {
-      this.peerConnection?.addTransceiver('video', {
+      pc.addTransceiver('video', {
         direction: 'recvonly',
         streams: [new MediaStream()],
       })
@@ -87,20 +89,20 @@ export class WebRTCHandler {
       }
 
       // Set remote description (server's offer)
-      await this.peerConnection.setRemoteDescription({
+      await pc.setRemoteDescription({
         type: serverOffer.type as RTCSdpType,
         sdp: serverOffer.sdp,
       })
 
       // Create and send answer
-      const answer = await this.peerConnection.createAnswer()
-      await this.peerConnection.setLocalDescription(answer)
+      const answer = await pc.createAnswer()
+      await pc.setLocalDescription(answer)
 
       await apiClient.sendWebRTCAnswer(this.sessionId, answer)
 
       // Process any queued ICE candidates
       for (const candidate of this.iceCandidateQueue) {
-        await this.peerConnection.addIceCandidate(candidate)
+        await pc.addIceCandidate(candidate)
       }
       this.iceCandidateQueue = []
 

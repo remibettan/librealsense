@@ -11,11 +11,16 @@ from typing import Dict, List, Optional, Any, Tuple
 import numpy as np
 import cv2
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate, RTCConfiguration, RTCIceServer
-from aiortc.mediastreams import VideoStreamTrack, VIDEO_CLOCK_RATE, VIDEO_TIME_BASE
+from aiortc.mediastreams import MediaStreamError, VideoStreamTrack, VIDEO_CLOCK_RATE, VIDEO_TIME_BASE
 from av import VideoFrame
 from app.core.errors import RealSenseError
 from app.core.config import get_settings
 from app.models.webrtc import WebRTCSession, WebRTCStatus
+
+# A frame gap can be a transient hiccup; repeat the last frame for a few wait
+# timeouts to keep RTP flowing, then end the track instead of freezing the
+# tile on a stale image forever.
+MAX_CONSECUTIVE_TIMEOUTS = 3
 
 
 class RealSenseVideoTrack(VideoStreamTrack):
@@ -26,15 +31,17 @@ class RealSenseVideoTrack(VideoStreamTrack):
         self.realsense_manager = realsense_manager
         self.device_id = device_id
         self.stream_type = stream_type
-        self._start = time.monotonic()
+        # Not named _start: the VideoStreamTrack base class owns that attribute.
+        self._t0 = time.monotonic()
         self._seq = 0
         self._last_pts = -1
         self._last_img = None
+        self._timeouts = 0
 
     def _next_pts(self) -> int:
         """Timestamp from the frame's real arrival time, so the receiver's
         jitter buffer stays small and any camera frame rate is supported."""
-        pts = int((time.monotonic() - self._start) * VIDEO_CLOCK_RATE)
+        pts = int((time.monotonic() - self._t0) * VIDEO_CLOCK_RATE)
         if pts <= self._last_pts:
             pts = self._last_pts + 1
         self._last_pts = pts
@@ -47,23 +54,24 @@ class RealSenseVideoTrack(VideoStreamTrack):
         return video_frame
 
     async def recv(self):
+        if self.readyState != "live":
+            raise MediaStreamError
         try:
-            # Block off-thread until a new frame arrives — waiting on-loop would
-            # stall RTP pacing, HTTP and Socket.IO. A slow consumer wakes to the
-            # newest frame, so backlog costs fps, never latency.
-            frame_data, self._seq = await asyncio.to_thread(
-                self.realsense_manager.wait_for_frame_after,
+            # Await frame arrival on the loop (event-based, no executor thread).
+            # A slow consumer wakes to the newest frame, so backlog costs fps,
+            # never latency.
+            frame_data, self._seq = await self.realsense_manager.wait_for_frame_after(
                 self.device_id,
                 self.stream_type,
                 self._seq,
             )
 
             if frame_data is None:
-                # No new frame within the timeout: repeat the last one so the
-                # sender keeps producing RTP and the receiver does not stall.
-                if self._last_img is None:
-                    raise RealSenseError(status_code=503, detail="No frames available")
+                self._timeouts += 1
+                if self._timeouts >= MAX_CONSECUTIVE_TIMEOUTS or self._last_img is None:
+                    raise MediaStreamError
                 return self._to_video_frame(self._last_img)
+            self._timeouts = 0
 
             # Handle different data types and normalize to uint8
             if frame_data.dtype == np.uint16:
@@ -92,7 +100,15 @@ class RealSenseVideoTrack(VideoStreamTrack):
 
             self._last_img = img
             return self._to_video_frame(img)
+        except MediaStreamError:
+            # End-of-track: aiortc's sender loop stops on this exception.
+            raise
         except Exception as e:
+            status_code = getattr(e, 'status_code', None)
+            if status_code == 400:
+                # Stream stopped (get_latest_frame: "not streaming") — end the
+                # track instead of freezing on a stale image.
+                raise MediaStreamError from e
             # On error, return a black frame. Pace it: without a new frame to
             # wait on, an un-delayed error path would spin the event loop.
             await asyncio.sleep(1 / 30)
@@ -102,7 +118,6 @@ class RealSenseVideoTrack(VideoStreamTrack):
 
             # Only log non-503 errors (503 = frames not yet available, which is normal briefly)
             error_detail = getattr(e, 'detail', str(e))
-            status_code = getattr(e, 'status_code', None)
             if status_code != 503:
                 logging.exception("Error getting frame for %s: %s", self.stream_type, error_detail)
             return video_frame

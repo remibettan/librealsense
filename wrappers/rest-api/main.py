@@ -42,7 +42,9 @@ def _prefer_local_pyrealsense2() -> None:
             "optimized SDK", target_dirs[0],
         )
     else:
-        logging.info("[pyrealsense2] preferring local build: %s", target_dirs[0])
+        # print(), not logging.info(): this runs before logging is configured,
+        # and an unconfigured root logger drops INFO records.
+        print(f"[pyrealsense2] preferring local build: {target_dirs[0]}")
     if hasattr(os, "add_dll_directory"):
         for key in target_dirs:
             try:

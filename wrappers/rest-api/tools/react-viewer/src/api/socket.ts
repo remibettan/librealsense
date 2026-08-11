@@ -21,9 +21,11 @@ class SocketService {
     this.socket = io(serverUrl, {
       path: '/socket',
       // Websocket first: metadata is broadcast at 30 Hz, and HTTP long-polling
-      // at that rate competes with the WebRTC event loop. Polling stays as a
-      // fallback for environments that block websockets.
+      // at that rate competes with the WebRTC event loop. tryAllTransports
+      // makes polling a real fallback — engine.io only advances to the next
+      // transport on connect failure when it is set.
       transports: ['websocket', 'polling'],
+      tryAllTransports: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,

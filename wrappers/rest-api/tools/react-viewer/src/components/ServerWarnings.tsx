@@ -13,6 +13,7 @@ export function ServerWarnings() {
   useEffect(() => {
     let cancelled = false
     let attempts = 0
+    let timer: ReturnType<typeof setTimeout> | undefined
     const fetchWarnings = () => {
       apiClient
         .getHealth()
@@ -22,12 +23,13 @@ export function ServerWarnings() {
         .catch(() => {
           // Backend may still be starting (e.g. desktop build spawns it);
           // retry a few times, then give up — ApiDiagnostics covers hard-down.
-          if (!cancelled && ++attempts < 5) setTimeout(fetchWarnings, 3000)
+          if (!cancelled && ++attempts < 5) timer = setTimeout(fetchWarnings, 3000)
         })
     }
     fetchWarnings()
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
   }, [])
 
@@ -40,8 +42,8 @@ export function ServerWarnings() {
     >
       <span aria-hidden className="mt-0.5">⚠</span>
       <div className="flex-1">
-        {warnings.map((w) => (
-          <div key={w}>{w}</div>
+        {warnings.map((w, i) => (
+          <div key={i}>{w}</div>
         ))}
       </div>
       <button
