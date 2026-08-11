@@ -30,6 +30,14 @@ function(get_fastcdr_only)
     # Override the minimum policy version so the old cmake_minimum_required is accepted.
     set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
+    # Suppress fastcdr's install() rules from being registered globally: EXCLUDE_FROM_ALL
+    # only skips build-by-default, not install(), and Fast-CDR's own CMakeLists calls
+    # install(TARGETS fastcdr ...). Without this, cpack -G WIX picks up fastcdr as a
+    # separate sub-project to package and errors out ("Error when generating package:
+    # fastcdr"). fastcdr is linked statically into realsense2 here (BUILD_SHARED_LIBS
+    # OFF above) -- it doesn't need to ship as its own installable component.
+    set(CMAKE_SKIP_INSTALL_RULES ON)
+
     add_subdirectory(${FASTCDR_SOURCE_DIR} ${CMAKE_BINARY_DIR}/third-party/fastcdr-build EXCLUDE_FROM_ALL)
 
     # Place fastcdr with other 3rd-party projects
