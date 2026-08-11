@@ -17,12 +17,7 @@ from app.models.device import Device, DeviceInfo
 from app.models.sensor import Sensor, SensorInfo, SupportedStreamProfile
 from app.models.option import Option, OptionInfo
 from app.models.stream import PointCloudStatus, StreamConfig, StreamStatus, Resolution
-from app.models.sensor_streaming import (
-    SensorStreamConfig,
-    SensorStartItem,
-    SensorStreamStatus,
-    BatchSensorStatus,
-)
+from app.models.sensor_streaming import SensorStreamConfig, SensorStreamStatus
 import socketio
 from datetime import datetime
 
@@ -2801,121 +2796,6 @@ class RealSenseManager:
                 error=info.get("error"),
                 started_at=info.get("started_at"),
             )
-
-    def batch_start_sensors(
-        self,
-        device_id: str,
-        sensors: List[SensorStartItem]
-    ) -> BatchSensorStatus:
-        """
-        Start multiple sensors atomically.
-        
-        If any sensor fails to start, all previously started sensors are stopped.
-        
-        Args:
-            device_id: The device ID
-            sensors: List of sensor configurations to start
-            
-        Returns:
-            BatchSensorStatus with status of all sensors
-        """
-        # Check mode compatibility
-        self._check_streaming_mode(device_id, "sensor")
-        
-        started = []
-        errors = []
-        
-        for item in sensors:
-            try:
-                status = self.start_sensor(device_id, item.sensor_id, item.config)
-                if status.error:
-                    raise Exception(status.error)
-                started.append(item.sensor_id)
-            except Exception as e:
-                errors.append(f"Failed to start {item.sensor_id}: {str(e)}")
-                # Rollback: stop all successfully started sensors
-                for started_sensor_id in started:
-                    try:
-                        self.stop_sensor(device_id, started_sensor_id)
-                    except:
-                        pass
-                break
-        
-        return self.get_batch_status(device_id)
-
-    def batch_stop_sensors(
-        self,
-        device_id: str,
-        sensor_ids: Optional[List[str]] = None
-    ) -> BatchSensorStatus:
-        """
-        Stop multiple sensors.
-        
-        Args:
-            device_id: The device ID
-            sensor_ids: List of sensor IDs to stop, or None to stop all
-            
-        Returns:
-            BatchSensorStatus with status of all sensors
-        """
-        with self.lock:
-            if device_id not in self.sensor_streams:
-                return BatchSensorStatus(
-                    device_id=device_id,
-                    mode=self.streaming_mode.get(device_id, "idle"),
-                    sensors=[],
-                    errors=[],
-                )
-            
-            # Get sensor IDs to stop
-            if sensor_ids is None:
-                sensor_ids = list(self.sensor_streams[device_id].keys())
-        
-        errors = []
-        for sensor_id in sensor_ids:
-            try:
-                self.stop_sensor(device_id, sensor_id)
-            except Exception as e:
-                errors.append(f"Failed to stop {sensor_id}: {str(e)}")
-        
-        status = self.get_batch_status(device_id)
-        status.errors = errors
-        return status
-
-    def get_batch_status(
-        self,
-        device_id: str
-    ) -> BatchSensorStatus:
-        """
-        Get streaming status for all sensors on a device.
-        
-        Args:
-            device_id: The device ID
-            
-        Returns:
-            BatchSensorStatus with status of all sensors
-        """
-        if device_id not in self.devices:
-            self.refresh_devices()
-            if device_id not in self.devices:
-                raise RealSenseError(
-                    status_code=404, detail=f"Device {device_id} not found"
-                )
-        
-        # Get all sensors for the device
-        sensors_info = self.get_sensors(device_id)
-        
-        sensor_statuses = []
-        for sensor_info in sensors_info:
-            status = self.get_sensor_status(device_id, sensor_info.sensor_id)
-            sensor_statuses.append(status)
-        
-        return BatchSensorStatus(
-            device_id=device_id,
-            mode=self.streaming_mode.get(device_id, "idle"),
-            sensors=sensor_statuses,
-            errors=[],
-        )
 
     def get_sensor_frame(
         self,

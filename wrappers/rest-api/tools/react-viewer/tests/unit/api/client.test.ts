@@ -214,7 +214,7 @@ describe('API Client', () => {
   describe('Firmware', () => {
     it('fetches firmware status', async () => {
       server.use(
-        http.get('/api/v1/devices/:deviceId/status', () => {
+        http.get('/api/v1/devices/:deviceId/firmware/', () => {
           return HttpResponse.json({
             device_id: mockDevice.device_id,
             current: '5.16.0.1',
