@@ -1,0 +1,19 @@
+name: Configure Linux
+
+inputs:
+  cmake-options:
+    description: Additional CMake options
+    default: ""
+
+runs:
+  using: composite
+
+  steps:
+    - name: Configure CMake
+      shell: bash
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} \
+          ${{ inputs.cmake-options }}

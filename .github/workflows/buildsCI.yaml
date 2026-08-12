@@ -319,14 +319,20 @@ jobs:
     - uses: ./.github/actions/pre-build-checks
 
     - uses: ./.github/actions/install-linux-deps
-    
-    - name: Configure CMake
-      shell: bash
+
+    - uses: ./.github/actions/configure-linux
       # Adding -DENABLE_SECURITY_FLAGS=true here to also check examples and tools. See RSDSO-RSDSO-20629.
-      run: |
-        mkdir build && cd build
-        export LRS_LOG_LEVEL="DEBUG";
-        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DENABLE_SECURITY_FLAGS=true
+      env:
+        LRS_LOG_LEVEL: DEBUG
+      with:
+        cmake-options: >-
+          -DBUILD_EXAMPLES=true
+          -DBUILD_PYTHON_BINDINGS=true
+          -DBUILD_SHARED_LIBS=false
+          -DBUILD_TOOLS=true
+          -DCHECK_FOR_UPDATES=true
+          -DENABLE_SECURITY_FLAGS=true
+          -DPYTHON_EXECUTABLE=$(which python3)
 
     - uses: ./.github/actions/build-linux
 
@@ -345,12 +351,18 @@ jobs:
       with:
         pr-check: true
 
-    - name: Configure CMake
-      shell: bash
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DUNIT_TESTS_ARGS="--not-live --context=linux" -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3)
+    - uses: ./.github/actions/configure-linux
+      with:
+        cmake-options: >-
+          -DBUILD_SHARED_LIBS=true
+          -DBUILD_EXAMPLES=false
+          -DBUILD_TOOLS=true
+          -DBUILD_UNIT_TESTS=true
+          -DBUILD_PYTHON_BINDINGS=true
+          -DBUILD_WITH_DDS=false
+          -DCHECK_FOR_UPDATES=false
+          -DPYTHON_EXECUTABLE=$(which python3)
+          -DUNIT_TESTS_ARGS="--not-live --context=linux"
 
     - uses: ./.github/actions/build-linux
 
@@ -388,12 +400,19 @@ jobs:
       with:
         pr-check: true
 
-    - name: Configure CMake
-      shell: bash
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DUNIT_TESTS_ARGS="--not-live --context=linux" -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DUSE_EXTERNAL_NLOHMANN_JSON=ON
+    - uses: ./.github/actions/configure-linux
+      with:
+        cmake-options: >-
+          -DBUILD_EXAMPLES=false
+          -DBUILD_PYTHON_BINDINGS=true
+          -DBUILD_SHARED_LIBS=true
+          -DBUILD_TOOLS=true
+          -DBUILD_UNIT_TESTS=true
+          -DBUILD_WITH_DDS=false
+          -DCHECK_FOR_UPDATES=false
+          -DPYTHON_EXECUTABLE=$(which python3)
+          -DUNIT_TESTS_ARGS="--not-live --context=linux"
+          -DUSE_EXTERNAL_NLOHMANN_JSON=ON
 
     - uses: ./.github/actions/build-linux
 
@@ -424,15 +443,22 @@ jobs:
       with:
         pr-check: true
 
-    - name: Configure CMake
+    - uses: ./.github/actions/configure-linux
       # Note: we force RSUSB because, on Linux, the context creation will fail on GHA:
       #     (backend-v4l2.cpp:555) Cannot access /sys/class/video4linux)
       # And, well, we don't need any specific platform for DDS!
-      shell: bash
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DFORCE_RSUSB_BACKEND=true -DENABLE_SECURITY_FLAGS=true
+      with:
+        cmake-options: >-
+          -DBUILD_EXAMPLES=false
+          -DBUILD_PYTHON_BINDINGS=true
+          -DBUILD_SHARED_LIBS=false
+          -DBUILD_TOOLS=false
+          -DBUILD_UNIT_TESTS=false
+          -DBUILD_WITH_DDS=true
+          -DCHECK_FOR_UPDATES=false
+          -DENABLE_SECURITY_FLAGS=true
+          -DFORCE_RSUSB_BACKEND=true
+          -DPYTHON_EXECUTABLE=$(which python3)
 
     - uses: ./.github/actions/build-linux
 
@@ -477,13 +503,19 @@ jobs:
       with:
         pr-check: true
 
-    - name: Configure CMake
-      shell: bash
+    - uses: ./.github/actions/configure-linux
       # Adding -DENABLE_SECURITY_FLAGS=true here to also check DDS. See RSDSO-RSDSO-20629.
-      run: | 
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DBUILD_UNIT_TESTS=true -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DENABLE_SECURITY_FLAGS=true
+      with:
+        cmake-options: >-
+          -DBUILD_EXAMPLES=false
+          -DBUILD_PYTHON_BINDINGS=true
+          -DBUILD_SHARED_LIBS=true
+          -DBUILD_TOOLS=false
+          -DBUILD_UNIT_TESTS=true
+          -DBUILD_WITH_DDS=true
+          -DCHECK_FOR_UPDATES=false
+          -DENABLE_SECURITY_FLAGS=true
+          -DPYTHON_EXECUTABLE=$(which python3)
 
     - uses: ./.github/actions/build-linux
 
@@ -509,12 +541,17 @@ jobs:
 
     - uses: ./.github/actions/install-linux-deps
 
-    - name: Configure CMake
-      shell: bash
-      run: |
-        mkdir build && cd build
-        export LRS_LOG_LEVEL="DEBUG";
-        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3)
+    - uses: ./.github/actions/configure-linux
+      env:
+        LRS_LOG_LEVEL: DEBUG
+      with:
+        cmake-options: >-
+          -DBUILD_EXAMPLES=true
+          -DBUILD_PYTHON_BINDINGS=true
+          -DBUILD_SHARED_LIBS=false
+          -DBUILD_TOOLS=true
+          -DCHECK_FOR_UPDATES=true
+          -DPYTHON_EXECUTABLE=$(which python3)
 
     - uses: ./.github/actions/build-linux
 
@@ -586,12 +623,16 @@ jobs:
 
     - uses: ./.github/actions/install-linux-deps
 
-    - name: Configure CMake
-      shell: bash
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DBUILD_ROSBAG2=OFF
+    - uses: ./.github/actions/configure-linux
+      with:
+        cmake-options: >-
+          -DBUILD_EXAMPLES=false
+          -DBUILD_ROSBAG2=OFF
+          -DBUILD_SHARED_LIBS=true
+          -DBUILD_TOOLS=true
+          -DBUILD_UNIT_TESTS=false
+          -DBUILD_WITH_DDS=false
+          -DCHECK_FOR_UPDATES=false
 
     - uses: ./.github/actions/build-linux
 
