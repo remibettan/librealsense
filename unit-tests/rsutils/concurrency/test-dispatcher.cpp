@@ -6,6 +6,7 @@
 #include <rsutils/concurrency/concurrency.h>
 
 #include <algorithm>
+#include <future>
 #include <vector>
 #include <iostream>
 
@@ -57,6 +58,53 @@ TEST_CASE( "invoke and wait" )
     stopwatch sw;
     d.invoke_and_wait(func, []() {return false; }, true);
     REQUIRE( sw.get_elapsed() > std::chrono::seconds( 3 ) ); // verify we get here only after the function call ended
+    d.stop();
+}
+
+TEST_CASE( "invoke and wait is non-blocking by default" )
+{
+    std::atomic_bool worker_started{ false };
+    std::atomic_bool release_worker{ false };
+    std::atomic_bool queued_action_dropped{ false };
+    dispatcher d( 1, [&]( dispatcher::action const & ) { queued_action_dropped = true; } );
+    d.start();
+
+    d.invoke( [&]( dispatcher::cancellable_timer ) {
+        worker_started = true;
+        while( ! release_worker )
+            std::this_thread::yield();
+    } );
+    while( ! worker_started )
+        std::this_thread::yield();
+
+    d.invoke( []( dispatcher::cancellable_timer ) {} );
+    auto invocation = std::async( std::launch::async, [&]() {
+        d.invoke_and_wait(
+            []( dispatcher::cancellable_timer ) {},
+            []() { return false; } );
+    } );
+
+    for( int i = 0; i < 100 && ! queued_action_dropped; ++i )
+        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+    CHECK( queued_action_dropped );
+
+    release_worker = true;
+    CHECK( invocation.wait_for( std::chrono::seconds( 1 ) ) == std::future_status::ready );
+    d.stop();
+}
+
+TEST_CASE( "invoke and wait propagates action errors" )
+{
+    dispatcher d( 1 );
+    d.start();
+
+    CHECK_THROWS_WITH(
+        d.invoke_and_wait(
+            []( dispatcher::cancellable_timer ) { throw std::runtime_error( "dispatch failed" ); },
+            []() { return false; },
+            true ),
+        "dispatch failed" );
+
     d.stop();
 }
 
