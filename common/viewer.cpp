@@ -2425,11 +2425,15 @@ namespace rs2
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        clear_gl_errors();
+
         glLoadIdentity();
 
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
-        gluPerspective(45, non_negative(viewer_rect.w / win.framebuf_height()), 0.001f, 100.0f);
+        const auto aspect = non_negative( viewer_rect.w )
+            / std::max( 1.f, non_negative( win.framebuf_height() ) );
+        gluPerspective( 45, aspect > 0.f ? aspect : 1.f, 0.001f, 100.0f );
         matrix4 perspective_mat;
         glGetFloatv(GL_PROJECTION_MATRIX, perspective_mat);
         glPopMatrix();
@@ -3775,6 +3779,7 @@ namespace rs2
     {
         // Starting post processing filter rendering thread
         ppf.start();
+        std::lock_guard< std::mutex > lock( streams_mutex );
         streams[p.unique_id()].begin_stream(d, p, *this);
         ppf.frames_queue.emplace(p.unique_id(), rs2::frame_queue(5));
     }

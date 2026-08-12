@@ -128,6 +128,8 @@ namespace rs2
         // so for now Macs should not use the GLSL stuff
         config_file::instance().set_default(configurations::performance::glsl_for_processing, false);
         config_file::instance().set_default(configurations::performance::glsl_for_rendering, false);
+        config_file::instance().set(configurations::performance::glsl_for_processing, false);
+        config_file::instance().set(configurations::performance::glsl_for_rendering, false);
 #else
         auto vendor = (const char*)glGetString(GL_VENDOR);
         auto renderer = (const char*)glGetString(GL_RENDERER);
@@ -282,6 +284,14 @@ namespace rs2
 
             prepare_config_file();
 
+#ifdef __APPLE__
+            if( ! GLAD_GL_VERSION_3_0 )
+            {
+                config_file::instance().set( configurations::performance::glsl_for_processing, false );
+                config_file::instance().set( configurations::performance::glsl_for_rendering, false );
+            }
+#endif
+
             glfwDestroyWindow(ctx);
         }
 
@@ -414,7 +424,11 @@ namespace rs2
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
         io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;   // added in order to prevents cursor chang when interacting with other element (when nedded remove the flag accordingly)
         ImGui_ImplGlfw_InitForOpenGL(_win, true);
+#ifdef __APPLE__
+        ImGui_ImplOpenGL3_Init( "#version 120" );
+#else
         ImGui_ImplOpenGL3_Init();
+#endif
 
         if (_use_glsl_render)
             _2d_vis = std::make_shared<visualizer_2d>(std::make_shared<splash_screen_shader>());
