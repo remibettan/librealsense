@@ -219,10 +219,10 @@ imu_mode detect_imu_mode( rs2::device_list const & devices )
                     found_combined = true;
             }
         }
-        if( found_gyro && found_accel )
-            return imu_mode::split_accel_gyro;
         if( found_combined )
             return imu_mode::combined_motion;
+        if( found_gyro && found_accel )
+            return imu_mode::split_accel_gyro;
     }
     return imu_mode::none;
 }
