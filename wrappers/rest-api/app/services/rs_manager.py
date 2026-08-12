@@ -61,6 +61,13 @@ class RealSenseManager:
         )  # device_id -> stream_type -> list of metadata dicts
         self.lock = threading.Lock()
         self.max_queue_size = 5
+
+        # Frame-arrival signalling for async consumers (WebRTC). ``_frame_seq``
+        # counts frames pushed per "<device_id>:<stream_type>"; collection
+        # threads bump it and set the matching asyncio.Event on the main loop,
+        # so waiters block without occupying an executor thread.
+        self._frame_seq: Dict[str, int] = {}
+        self._frame_events: Dict[str, asyncio.Event] = {}
         self.is_pointcloud_enabled: Dict[str, bool] = {}
         # One rs.pointcloud() per device: pc.map_to(color) mutates internal
         # state, and depth/color threads from different devices would race on
@@ -1590,9 +1597,49 @@ class RealSenseManager:
             stopping=stopping,
         )
 
+    def _publish_frames(self, device_id: str, stream_types) -> None:
+        """Bump the arrival counter for each stream and wake async waiters.
+
+        Runs on collection threads; the events are set via the main loop so
+        waiters need no executor thread.
+        """
+        loop = RealSenseManager._main_loop
+        for stream_type in stream_types:
+            key = f"{device_id}:{stream_type.lower()}"
+            self._frame_seq[key] = self._frame_seq.get(key, 0) + 1
+            event = self._frame_events.get(key)
+            if event is not None and loop is not None and not loop.is_closed():
+                loop.call_soon_threadsafe(event.set)
+
+    async def wait_for_frame_after(
+        self, device_id: str, stream_type: str, last_seq: int, timeout: float = 1.0
+    ) -> Tuple[Optional[np.ndarray], int]:
+        """Wait until a frame newer than ``last_seq`` arrives, then return it.
+
+        Returns ``(frame, seq)``; ``frame`` is None on timeout. The seq is read
+        after the frame is fetched, so a frame landing in between skips ahead
+        rather than being re-delivered.
+        """
+        key = f"{device_id}:{stream_type.lower()}"
+        event = self._frame_events.setdefault(key, asyncio.Event())
+        deadline = time.monotonic() + timeout
+        while self._frame_seq.get(key, 0) <= last_seq:
+            event.clear()
+            if self._frame_seq.get(key, 0) > last_seq:
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None, last_seq
+            try:
+                await asyncio.wait_for(event.wait(), remaining)
+            except asyncio.TimeoutError:
+                return None, last_seq
+        frame = self.get_latest_frame(device_id, stream_type)
+        return frame, self._frame_seq.get(key, 0)
+
     def get_latest_frame(
         self, device_id: str, stream_type: str
-    ) -> Tuple[np.ndarray, dict]:
+    ) -> np.ndarray:
         """Get the latest frame from a specific stream (supports both pipeline and sensor modes)"""
         with self.lock:
             mode = self.streaming_mode.get(device_id, "idle")
@@ -2037,6 +2084,8 @@ class RealSenseManager:
                             while len(metadata_queue) > self.max_queue_size:
                                 metadata_queue.pop(0)
 
+                    self._publish_frames(device_id, processed_frames.keys())
+
                 except RuntimeError as e:
                     # Handle timeout or other error
                     print(f"Error collecting frames: {str(e)}")
@@ -2449,7 +2498,9 @@ class RealSenseManager:
                             mqueue.append(metadata)
                             while len(mqueue) > self.max_queue_size:
                                 mqueue.pop(0)
-                    
+
+                    self._publish_frames(device_id, (target_stream_type,))
+
                 except Exception as e:
                     if "timeout" not in str(e).lower():
                         logging.debug(f"[SENSOR] Frame collection error: {e}")
