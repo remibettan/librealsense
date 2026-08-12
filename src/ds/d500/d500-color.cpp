@@ -76,11 +76,21 @@ namespace librealsense
         environment::get_instance().get_extrinsics_graph().register_extrinsics(*_color_stream, *_depth_stream, _color_extrinsic);
         register_stream_to_extrinsic_group(*_color_stream, 0);
 
-        std::vector<platform::uvc_device_info> color_devs_info = filter_by_mi(group.uvc_devices, 3);
+        std::vector<platform::uvc_device_info> color_devs_info;
+        if( _is_mipi_device )
+        {
+            // On MIPI the color is a dedicated video node enumerated at mi=0 (depth/color/ir all share
+            // mi=0, ordered depth, color, ir), not a separate mi=3 node as on USB.
+            auto mi0_infos = filter_by_mi( group.uvc_devices, 0 );
+            if( mi0_infos.size() >= 2 )
+                color_devs_info = { mi0_infos[1] };
+        }
+        else
+            color_devs_info = filter_by_mi( group.uvc_devices, 3 );
 
         if ( color_devs_info.empty() )
         {
-            throw backend_exception("cannot access color sensor", RS2_EXCEPTION_TYPE_BACKEND);
+            throw backend_exception("cannot access color sensor");
         }
 
         std::unique_ptr< frame_timestamp_reader > ds_timestamp_reader_backup( new ds_timestamp_reader() );
@@ -97,9 +107,9 @@ namespace librealsense
             this );
 
         auto color_ep = std::make_shared<d500_color_sensor>(this,
-            raw_color_ep,
-            d500_color_fourcc_to_rs2_format,
-            d500_color_fourcc_to_rs2_stream);
+                                                            raw_color_ep,
+                                                            d500_color_fourcc_to_rs2_format,
+                                                            d500_color_fourcc_to_rs2_stream);
 
         color_ep->register_option(RS2_OPTION_GLOBAL_TIME_ENABLED, enable_global_time_option);
 
@@ -152,8 +162,16 @@ namespace librealsense
                 RS2_FORMAT_M420,
                 map_supported_color_formats( RS2_FORMAT_M420 ),
                 RS2_STREAM_COLOR ) );
-            color_ep.register_processing_block(
-                processing_block_factory::create_id_pbf( RS2_FORMAT_YUYV, RS2_STREAM_COLOR ) );
+            // MIPI FW currently delivers YUYV rather than NV12, so convert it to RGB until NV12 is supported.
+            // On USB, YUY2 remains exposed passthrough-only.
+            if( _is_mipi_device )
+                color_ep.register_processing_block( processing_block_factory::create_pbf_vector< yuy2_converter >(
+                    RS2_FORMAT_YUYV,
+                    map_supported_color_formats( RS2_FORMAT_YUYV ),
+                    RS2_STREAM_COLOR ) );
+            else
+                color_ep.register_processing_block(
+                    processing_block_factory::create_id_pbf( RS2_FORMAT_YUYV, RS2_STREAM_COLOR ) );
             break;
         default:
             throw invalid_value_exception( "invalid native color format "
@@ -170,7 +188,7 @@ namespace librealsense
 
         _ds_color_common->register_color_options();
 
-        std::map< float, std::string > description_per_value = std::map<float, std::string>{ 
+        std::map< float, std::string > description_per_value = std::map<float, std::string>{
             { 0.f, "Disabled"},
             { 1.f, "50Hz" },
             { 2.f, "60Hz" } };

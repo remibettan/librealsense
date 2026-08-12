@@ -4,6 +4,7 @@
 #pragma once
 
 #include "backend.h"
+#include "camera-identifier-v4l.h"
 #include <src/platform/uvc-device.h>
 #include <src/metadata.h>
 #include "types.h"
@@ -113,7 +114,9 @@ namespace librealsense
             int _fildes;
             std::atomic< int > _lock_counter;
         };
-        static int xioctl(int fh, unsigned long request, void *arg);
+
+        // Low-level V4L2 ioctl wrapper (retries on EINTR). Used by low level types (buffer, kernel_buf_guard)
+        int xioctl( int fh, unsigned long request, void * arg );
 
         class buffer
         {
@@ -148,6 +151,7 @@ namespace librealsense
             v4l2_buffer _buf;
             std::mutex _mutex;
             bool _must_enqueue = false;
+            bool _zc_registered = false;  // this mmap buffer is registered with CUDA for zero-copy GPU access
         };
 
         enum supported_kernel_buf_types : uint8_t
@@ -275,15 +279,22 @@ namespace librealsense
             inline void start() {_is_ready = true;}
             void stop();
 
+            // true if a buffer discarded via QBUF revealed the device was physically removed (ENODEV).
+            // Consumed (and reset) once by the owning device's poll(), so a real disconnect is reported exactly once.
+            inline bool consume_device_disconnected() { return _qbuf_device_disconnected.exchange(false); }
+
         private:
-            void enqueue_buffer_before_throwing_it(const sync_buffer& sb) const;
+            void enqueue_buffer_before_throwing_it(const sync_buffer& sb);
             void enqueue_front_buffer_before_throwing_it(std::queue<sync_buffer>& sync_queue);
             void flush_queues();
+            // Call immediately after a failed QBUF, before anything else touches errno.
+            void report_qbuf_failure(int fd);
 
             std::mutex _syncer_mutex;
             std::queue<sync_buffer> _video_queue;
             std::queue<sync_buffer> _md_queue;
             bool _is_ready;
+            std::atomic<bool> _qbuf_device_disconnected{ false };
         };
 
         // The aim of the frame_drop_monitor is to check the frames drops kpi - which requires
@@ -306,31 +317,18 @@ namespace librealsense
             double _kpi_frames_drops_pct;
         };
 
-        typedef std::pair<uvc_device_info,std::string> node_info;
+        // A V4L2 enumeration node: the resolved device info plus its /dev/video* path.
+        typedef std::pair< uvc_device_info, std::string > node_info;
 
         class v4l_uvc_device : public uvc_device, public v4l_uvc_interface
         {
         public:
-            static void foreach_uvc_device(
-                    std::function<void(const uvc_device_info&,
-                                       const std::string&)> action);
+            static void foreach_uvc_device( std::function<void(const uvc_device_info&, const std::string&)> action);
 
             static std::vector<std::string> get_mipi_dfu_paths();
 
-            static bool is_usb_path_valid(const std::string& usb_video_path, const std::string &dev_name,
-                                          std::string &busnum, std::string &devnum, std::string &devpath);
-
-            static bool is_usb_device_path(const std::string& video_path);
-
-            static uvc_device_info get_info_from_usb_device_path(const std::string& video_path, const std::string& dev_name, const std::string& name, const std::vector<std::pair <std::string, std::string>>& sys_to_dev_video_paths);
-
-            static uvc_device_info get_info_from_mipi_device_path(const std::string& video_path, const std::string& name);
-
-            static bool is_format_supported_on_node(const std::string& dev_name, std::string v4l_4cc_fmt);
-            static bool is_device_depth_node(const std::string& dev_name);
-            static uint16_t get_mipi_device_pid(const std::string& dev_name);
-            static void get_mipi_device_info(const std::string& dev_name,
-                                             std::string& bus_info, std::string& card);
+            // Retrieve device video capabilities to discriminate video capturing and metadata nodes.
+            static v4l2_capability get_dev_capabilities( const std::string dev_name );
 
             v4l_uvc_device(const uvc_device_info& info, bool use_memory_map = false);
 
@@ -401,6 +399,9 @@ namespace librealsense
             bool pend_for_ctrl_status_event();
             void upload_video_and_metadata_from_syncer(buffers_mgr& buf_mgr);
             void populate_imu_data(metadata_hid_raw& meta_data, uint8_t* frame_start, uint8_t& md_size, void** md_start) const;
+            // Call immediately after a failed DQBUF, before anything else touches errno. Returns true (and
+            // marks the device disconnected) if the failure was ENODEV; the caller should bail out on true.
+            bool handle_enodev_on_dqbuf(const char* fd_label, int fd);
             // checking if metadata is streamed
             virtual inline bool is_metadata_streamed() const { return false;}
             virtual inline std::shared_ptr<buffer> get_video_buffer(__u32 index) const {return _buffers[index];}
@@ -428,12 +429,15 @@ namespace librealsense
 
             static std::vector<std::pair <std::string, std::string>> generate_v4l_to_dev_video_paths(const std::vector<path_and_identifier>& v4l_videos,
                                                                                                      const std::vector<path_and_identifier>& dev_videos);
-            static std::vector<node_info> get_mipi_rs_enum_nodes();
-            static std::vector<node_info> collect_uvc_nodes(const std::vector<path_and_identifier>& v4l_videos, const std::vector<node_info>& mipi_rs_enum_nodes,
+            static std::vector<node_info> collect_uvc_nodes(const std::vector<path_and_identifier>& v4l_videos,
                                                             const std::vector<std::pair <std::string, std::string>>& v4l_to_dev_video_paths);
             static std::vector<node_info> match_video_with_metadata_nodes(const std::vector<node_info>& uvc_nodes);
             static bool get_info_from_v4l_video_path(const std::string& v4l_video_path, const std::string& dev_name, uvc_device_info& info, bool is_mipi_rs_enum_nodes_empty,
-                                                 const std::vector<std::pair <std::string, std::string>>& v4l_to_dev_video_paths);
+                                                 camera_identifier_v4l_mipi& mipi_id);
+            static std::vector<node_info> get_mipi_rs_enum_nodes();
+            static uvc_device_info get_info_from_mipi_device_path(const std::string& video_path, const std::string& name,
+                                                                  camera_identifier_v4l_mipi& mipi_id);
+            static uvc_device_info get_info_from_usb_device_path(const std::string& video_path, const std::string& dev_name, const std::string& name);
             static std::vector<path_and_identifier> collect_dev_video_path_and_identifier();
 
             power_state _state = D3;
@@ -464,6 +468,9 @@ namespace librealsense
             frame_drop_monitor _frame_drop_monitor;           // used to check the frames drops kpi
             v4l2_video_md_syncer _video_md_syncer;
             bool _are_device_capabilities_assigned;
+            // true if a video or metadata buffer DQBUF revealed the device was physically removed (ENODEV).
+            // Consumed (and reset) once at the top of the next poll(), see poll() for details.
+            std::atomic<bool> _device_disconnected{ false };
 
         private:
             int _stop_pipe_fd[2]; // write to _stop_pipe_fd[1] and read from _stop_pipe_fd[0]
@@ -506,18 +513,6 @@ namespace librealsense
         };
 
 
-        const uint16_t D457_PID      = 0xABCD;
-        const uint16_t D430_GMSL_PID = 0xABCE;
-        const uint16_t D415_GMSL_PID = 0xABCF;
-        const uint16_t D401_GMSL_PID = 0xABCC;
-
-        static const std::set<std::uint16_t> mipi_devices_pid = {
-            D457_PID,
-            D430_GMSL_PID,
-            D415_GMSL_PID,
-            D401_GMSL_PID
-        };
-
         // D457 Development. To be merged into underlying class
         class v4l_mipi_device : public v4l_uvc_meta_device
         {
@@ -547,9 +542,6 @@ namespace librealsense
             control_range get_pu_range(rs2_option option) const override;
             void set_metadata_attributes(buffers_mgr& buf_mgr, __u32 bytesused, uint8_t* md_start) override;
             bool is_platform_jetson() const override;
-        protected:
-            virtual uint32_t get_cid(rs2_option option) const;
-            uint32_t xu_to_cid(const extension_unit& xu, uint8_t control) const; // Find the mapping of XU to the underlying control
         };
 
         class v4l_backend : public backend
