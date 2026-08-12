@@ -1,25 +1,15 @@
-import Fuse from 'fuse.js'
-import { OptionInfo } from '../api/types'
-import { getAliases } from './optionAliases'
-
-interface SearchRecord {
-  index: number
-  name: string
-  aliases: string[]
-  option_id: string
-}
+import type { OptionInfo } from '../api/types'
 
 /**
- * Fuzzy-filter camera options by a free-text query.
+ * Case-insensitive substring filter over camera options.
  *
- * Two independent match paths, unioned:
- * 1. Fuzzy match (fuse.js) over the control name, curated aliases and raw
- *    option id — tolerates typos. Aliases are kept as separate array entries so
- *    each is scored on its own (a joined string wrecks bitap scoring and makes
- *    exact aliases score poorly). A tight threshold keeps loose partial hits
- *    (e.g. "laser" fuzzily grazing "Filter") out.
- * 2. Category substring — typing a section name ("post") reveals every control
- *    in that category.
+ * Mirrors the C++ viewer's control search (`common/device-model.cpp`): the query
+ * is matched against the control name, plus the labels a control is grouped
+ * under - its category ("post" reveals Post-Processing) and its post-processing
+ * filter name ("spatial" reveals the Spatial Filter parameters).
+ *
+ * No fuzzy matching: a query only matches text the user can actually see, so
+ * there are no results without the typed term in them.
  *
  * Description is intentionally NOT searched: descriptions mention many unrelated
  * terms (the sync-mode description literally contains "laser"), which produced
@@ -29,35 +19,16 @@ interface SearchRecord {
  * the original array order so downstream category grouping/order is preserved.
  */
 export function filterOptions(options: OptionInfo[], query: string): OptionInfo[] {
-  const q = query.trim()
+  const q = query.trim().toLowerCase()
   if (!q) return options
 
-  const records: SearchRecord[] = options.map((option, index) => ({
-    index,
-    name: option.name,
-    aliases: getAliases(option),
-    option_id: option.option_id,
-  }))
+  // Group labels only kick in from two characters: a single letter would drag in
+  // every control of a section whose name happens to contain it.
+  const matchGroups = q.length >= 2
 
-  const fuse = new Fuse(records, {
-    keys: [
-      { name: 'name', weight: 0.6 },
-      { name: 'aliases', weight: 0.35 },
-      { name: 'option_id', weight: 0.05 },
-    ],
-    threshold: 0.35,
-    ignoreLocation: true,
-    minMatchCharLength: 2,
-  })
-
-  const matched = new Set<number>()
-  const ql = q.toLowerCase()
-  if (ql.length >= 2) {
-    options.forEach((o, i) => {
-      if (o.category.toLowerCase().includes(ql)) matched.add(i)
-    })
-  }
-  for (const r of fuse.search(q)) matched.add(r.item.index)
-
-  return [...matched].sort((a, b) => a - b).map(i => options[i])
+  return options.filter(option =>
+    option.name.toLowerCase().includes(q)
+    || (matchGroups && (option.category || '').toLowerCase().includes(q))
+    || (matchGroups && (option.filter_name || '').toLowerCase().includes(q))
+  )
 }

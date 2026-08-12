@@ -30,15 +30,10 @@ describe('filterOptions', () => {
     expect(filterOptions(all, '   ')).toEqual(all)
   })
 
-  it('matches by exact substring of the name', () => {
-    const r = filterOptions(all, 'gain')
+  it('matches by substring of the name, case-insensitively', () => {
+    const r = filterOptions(all, 'GAI')
     expect(r).toContain(gain)
     expect(r).not.toContain(exposure)
-  })
-
-  it('matches by alias (ir projector -> Laser Power)', () => {
-    const r = filterOptions(all, 'ir projector')
-    expect(r).toContain(laser)
   })
 
   it('does not match a control merely because its description mentions the term', () => {
@@ -47,36 +42,32 @@ describe('filterOptions', () => {
     expect(r).not.toContain(syncMode)
   })
 
-  it('does not loosely match unrelated controls (laser must not surface Filter Magnitude)', () => {
-    const filterMag = createMockOption({
-      option_id: 'PP_Decimation_Filter_filter_magnitude',
-      name: 'Filter Magnitude',
-      category: 'Post-Processing',
-      filter_name: 'Decimation Filter',
-    })
-    const r = filterOptions([laser, filterMag], 'laser')
-    expect(r).toContain(laser)
-    expect(r).not.toContain(filterMag)
+  it('never returns a control without the typed term in its labels', () => {
+    // "option" appears in option ids but in no name/category/filter name, so it
+    // must return nothing rather than loose fuzzy hits.
+    expect(filterOptions(all, 'option')).toHaveLength(0)
+    expect(filterOptions(all, 'zzzqqq')).toHaveLength(0)
   })
 
-  it('tolerates a typo (expsure -> Exposure)', () => {
-    const r = filterOptions(all, 'expsure')
-    expect(r).toContain(exposure)
+  it('does not tolerate typos (only what the user can see matches)', () => {
+    expect(filterOptions(all, 'expsure')).toHaveLength(0)
   })
 
   it('surfaces a whole section via category name (post -> Post-Processing)', () => {
     const r = filterOptions(all, 'post')
     expect(r).toContain(ppSpatial)
+    expect(r).not.toContain(exposure)
+  })
+
+  it('surfaces post-processing params via their filter name (spatial)', () => {
+    const r = filterOptions(all, 'spatial')
+    expect(r).toContain(ppSpatial)
+    expect(r).not.toContain(gain)
   })
 
   it('preserves original array order among matches', () => {
-    const r = filterOptions([exposure, gain, laser], 'a') // matches gain (gain) + laser (laser) + exposure? loosely
-    // whatever matches, order must follow source order
+    const r = filterOptions(all, 'a') // Gain, Laser Power, Filter Magnitude
     const idx = r.map(o => all.indexOf(o))
     expect(idx).toEqual([...idx].sort((a, b) => a - b))
-  })
-
-  it('returns empty for a nonsense query', () => {
-    expect(filterOptions(all, 'zzzqqq')).toHaveLength(0)
   })
 })

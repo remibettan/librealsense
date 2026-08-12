@@ -579,25 +579,7 @@ function DeviceCard({
           {/* Camera Controls */}
           <div className="border-t border-gray-700 p-3">
             <h4 className="text-sm font-medium text-gray-300 mb-2">Controls</h4>
-            <div className="relative mb-2">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
-              <input
-                type="text"
-                value={controlSearch}
-                onChange={(e) => setControlSearch(e.target.value)}
-                placeholder="Search controls…"
-                className="w-full pl-7 pr-7 py-1.5 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-rs-blue text-xs"
-              />
-              {controlSearch && (
-                <button
-                  onClick={() => setControlSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                  title="Clear search"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+            <ControlsSearchBox value={controlSearch} onChange={setControlSearch} />
             {(() => {
               const searching = controlSearch.trim().length > 0
               const sensorMatches = sensors.map((sensor) => ({
@@ -618,9 +600,12 @@ function DeviceCard({
                       isExpanded={
                         searching ? matchCount > 0 : expandedSensor === sensor.sensor_id
                       }
-                      onToggle={() =>
+                      onToggle={() => {
+                        // While searching the header is force-expanded, so a click would
+                        // only rewrite the state restored after the query is cleared.
+                        if (searching) return
                         setExpandedSensor(expandedSensor === sensor.sensor_id ? null : sensor.sensor_id)
-                      }
+                      }}
                       onSetOption={onSetOption}
                     />
                   ))}
@@ -897,6 +882,46 @@ function StreamConfigItem({ config, sensors, onUpdate, disabled, isMotionSensor 
   )
 }
 
+function groupOptionsByCategory(options: OptionInfo[]): Record<string, OptionInfo[]> {
+  return options.reduce((acc, option) => {
+    const category = option.category || 'Basic Controls'
+    if (!acc[category]) {
+      acc[category] = []
+    }
+    acc[category].push(option)
+    return acc
+  }, {} as Record<string, OptionInfo[]>)
+}
+
+interface ControlsSearchBoxProps {
+  value: string
+  onChange: (value: string) => void
+}
+
+function ControlsSearchBox({ value, onChange }: ControlsSearchBoxProps) {
+  return (
+    <div className="relative mb-2">
+      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search controls…"
+        className="w-full pl-7 pr-7 py-1.5 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-rs-blue text-xs"
+      />
+      {value && (
+        <button
+          onClick={() => onChange('')}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+          title="Clear search"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
 interface SensorOptionsPanelProps {
   sensor: SensorInfo
   options: OptionInfo[]
@@ -910,17 +935,14 @@ function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
   const searching = searchQuery.trim().length > 0
-  const visibleOptions = filterOptions(options, searchQuery)
 
-  // Group options by category (filtered when a search is active)
-  const optionsByCategory = visibleOptions.reduce((acc, option) => {
-    const category = option.category || 'Basic Controls'
-    if (!acc[category]) {
-      acc[category] = []
-    }
-    acc[category].push(option)
-    return acc
-  }, {} as Record<string, OptionInfo[]>)
+  // Two groupings: the filtered one drives what is rendered, the full one drives
+  // restore-defaults and the "modified" indicators, which must also cover options
+  // the search is currently hiding.
+  const allOptionsByCategory = groupOptionsByCategory(options)
+  const optionsByCategory = searching
+    ? groupOptionsByCategory(filterOptions(options, searchQuery))
+    : allOptionsByCategory
 
   // Ensure consistent category order: Basic Controls first, then Post-Processing
   const categoryOrder = ['Basic Controls', 'Post-Processing']
@@ -934,6 +956,9 @@ function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle
   })
 
   const toggleCategory = (category: string) => {
+    // Categories are force-expanded while searching - ignore clicks so the
+    // pre-search expansion state survives the query.
+    if (searching) return
     setExpandedCategories(prev => {
       const newSet = new Set(prev)
       if (newSet.has(category)) {
@@ -946,7 +971,7 @@ function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle
   }
 
   const handleRestoreCategoryDefaults = async (category: string) => {
-    const categoryOptions = optionsByCategory[category] || []
+    const categoryOptions = allOptionsByCategory[category] || []
     for (const option of categoryOptions) {
       if (!option.read_only && option.current_value !== option.default_value) {
         await onSetOption(sensor.sensor_id, option.option_id, option.default_value)
@@ -1013,6 +1038,7 @@ function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle
                   key={category}
                   category={category}
                   options={optionsByCategory[category]}
+                  allOptions={allOptionsByCategory[category] || []}
                   searching={searching}
                   isExpanded={searching ? true : expandedCategories.has(category)}
                   onToggle={() => toggleCategory(category)}
@@ -1032,6 +1058,8 @@ function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle
 interface CategorySectionProps {
   category: string
   options: OptionInfo[]
+  /** Every option of the category, including ones the search is hiding. */
+  allOptions: OptionInfo[]
   searching: boolean
   isExpanded: boolean
   onToggle: () => void
@@ -1040,8 +1068,10 @@ interface CategorySectionProps {
   onSetOption: (sensorId: string, optionId: string, value: number | boolean | string) => Promise<void>
 }
 
-function CategorySection({ category, options, searching, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption }: CategorySectionProps) {
-  const hasModifiedOptions = options.some(opt => !opt.read_only && opt.current_value !== opt.default_value)
+function CategorySection({ category, options, allOptions, searching, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption }: CategorySectionProps) {
+  // Restore defaults acts on the whole category, so the indicator tracks the full
+  // list rather than the currently visible subset.
+  const hasModifiedOptions = allOptions.some(opt => !opt.read_only && opt.current_value !== opt.default_value)
 
   // For Post-Processing category, render specialized filter sections
   if (category === 'Post-Processing') {
@@ -1134,6 +1164,9 @@ function PostProcessingSection({ options, searching, isExpanded, onToggle, onRes
   }, {} as Record<string, { enableOption: OptionInfo | null; paramOptions: OptionInfo[] }>)
 
   const toggleFilter = (filterName: string) => {
+    // Filters are force-expanded while searching - ignore clicks so the
+    // pre-search expansion state survives the query.
+    if (searching) return
     setExpandedFilters(prev => {
       const newSet = new Set(prev)
       if (newSet.has(filterName)) {
