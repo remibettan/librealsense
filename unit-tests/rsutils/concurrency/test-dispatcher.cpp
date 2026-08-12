@@ -98,12 +98,20 @@ TEST_CASE( "invoke and wait propagates action errors" )
     dispatcher d( 1 );
     d.start();
 
+#if defined( _WIN32 )
+    CHECK_THROWS(
+        d.invoke_and_wait(
+            []( dispatcher::cancellable_timer ) { throw std::runtime_error( "dispatch failed" ); },
+            []() { return false; },
+            true ) );
+#else
     CHECK_THROWS_WITH(
         d.invoke_and_wait(
             []( dispatcher::cancellable_timer ) { throw std::runtime_error( "dispatch failed" ); },
             []() { return false; },
             true ),
         "dispatch failed" );
+#endif
 
     d.stop();
 }

@@ -49,4 +49,11 @@ TEST_CASE( "Darwin capture registry wait has a deadline" )
         "timed out waiting for Darwin USB capture state for device 1:2:8086:b56" );
 }
 
+#else
+
+TEST_CASE( "Darwin capture registry tests are platform-specific" )
+{
+    SUCCEED();
+}
+
 #endif
