@@ -149,8 +149,11 @@ export function DevicePanel() {
     fetchDevices(true)
   }, [fetchDevices])
 
+  // Counter, not just Date.now(): several cameras can raise a firmware proposal in the
+  // same tick, and duplicate keys would make React drop all but one toast.
+  const toastSeqRef = useRef(0)
   const addToast = (type: ToastType, message: string, action?: ToastAction) => {
-    const id = Date.now().toString()
+    const id = `${Date.now()}-${toastSeqRef.current++}`
     setToasts((prev) => [...prev, { id, type, message, action }])
   }
 

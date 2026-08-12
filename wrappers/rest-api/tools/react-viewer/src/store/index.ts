@@ -393,7 +393,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
   updateFirmwareFromRecommended: (deviceId: string) =>
     performFirmwareUpdate(set, get, deviceId, () => apiClient.updateFirmwareFromRecommended(deviceId)),
 
-
   enableMetadata: async () => {
     const result = await apiClient.enableMetadata()
     if (result.status === 'ok') await get().fetchDevices(true)
