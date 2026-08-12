@@ -3777,11 +3777,14 @@ namespace rs2
 
     void viewer_model::begin_stream(std::shared_ptr<subdevice_model> d, rs2::stream_profile p)
     {
+        {
+            std::lock_guard< std::mutex > lock( streams_mutex );
+            streams[p.unique_id()].begin_stream(d, p, *this);
+            ppf.frames_queue.emplace(p.unique_id(), rs2::frame_queue(5));
+        }
+
         // Starting post processing filter rendering thread
         ppf.start();
-        std::lock_guard< std::mutex > lock( streams_mutex );
-        streams[p.unique_id()].begin_stream(d, p, *this);
-        ppf.frames_queue.emplace(p.unique_id(), rs2::frame_queue(5));
     }
 
     bool viewer_model::is_3d_texture_source(frame f) const
