@@ -16,7 +16,7 @@ router = APIRouter()
 MAX_FW_UPLOAD_BYTES = 64 * 1024 * 1024
 
 
-@router.get("/{device_id}/status", response_model=dict)
+@router.get("/", response_model=dict)
 async def get_firmware_status(
     device_id: str,
     rs_manager: RealSenseManager = Depends(get_realsense_manager),
@@ -34,7 +34,7 @@ async def get_firmware_status(
 _FW_UPLOAD_CHUNK = 1024 * 1024  # 1 MiB
 
 
-@router.post("/{device_id}/firmware/update_from_file", response_model=dict)
+@router.post("/update_from_file", response_model=dict)
 async def update_firmware_from_file(
     device_id: str,
     file: UploadFile = File(...),

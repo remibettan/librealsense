@@ -11,7 +11,6 @@ import type {
   DeviceState,
   FirmwareState,
   SensorStreamConfig,
-  SensorStreamStatus,
   SensorConfig,
 } from '../api/types'
 
@@ -166,7 +165,6 @@ interface AppState {
   // Per-sensor streaming (sensor API)
   startSensorStreaming: (deviceId: string, sensorId: string) => Promise<void>
   stopSensorStreaming: (deviceId: string, sensorId: string) => Promise<void>
-  refreshSensorStatus: (deviceId: string) => Promise<void>
 
   // Metadata from Socket.IO
   updateMetadata: (metadata: MetadataUpdate) => void
@@ -1014,40 +1012,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
     pendingStopPromises.set(pendingKey, stopPromise)
     await stopPromise
-  },
-
-  refreshSensorStatus: async (deviceId) => {
-    try {
-      const batchStatus = await apiClient.getBatchSensorStatus(deviceId)
-      
-      set((s) => {
-        const deviceState = s.deviceStates[deviceId]
-        if (!deviceState) return s
-
-        const sensorStatus: Record<string, SensorStreamStatus> = {}
-        for (const ss of batchStatus.sensors) {
-          sensorStatus[ss.sensor_id] = ss
-        }
-
-        const anyStreaming = batchStatus.sensors.some(ss => ss.is_streaming)
-        const mode = batchStatus.mode === 'sensor' ? 'sensor' : 
-                     batchStatus.mode === 'pipeline' ? 'pipeline' : 'idle'
-
-        return {
-          deviceStates: {
-            ...s.deviceStates,
-            [deviceId]: {
-              ...deviceState,
-              streamingMode: mode,
-              isStreaming: anyStreaming || deviceState.isStreaming,
-              sensorStreamingStatus: sensorStatus,
-            },
-          },
-        }
-      })
-    } catch (error) {
-      console.error('Failed to refresh sensor status:', error)
-    }
   },
 
   // Metadata

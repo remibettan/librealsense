@@ -18,12 +18,7 @@ from app.models.device import Device, DeviceInfo
 from app.models.sensor import Sensor, SensorInfo, SupportedStreamProfile
 from app.models.option import Option, OptionInfo
 from app.models.stream import PointCloudStatus, StreamConfig, StreamStatus, Resolution
-from app.models.sensor_streaming import (
-    SensorStreamConfig,
-    SensorStartItem,
-    SensorStreamStatus,
-    BatchSensorStatus,
-)
+from app.models.sensor_streaming import SensorStreamConfig, SensorStreamStatus
 import socketio
 from datetime import datetime
 
@@ -66,6 +61,13 @@ class RealSenseManager:
         )  # device_id -> stream_type -> list of metadata dicts
         self.lock = threading.Lock()
         self.max_queue_size = 5
+
+        # Frame-arrival signalling for async consumers (WebRTC). ``_frame_seq``
+        # counts frames pushed per "<device_id>:<stream_type>"; collection
+        # threads bump it and set the matching asyncio.Event on the main loop,
+        # so waiters block without occupying an executor thread.
+        self._frame_seq: Dict[str, int] = {}
+        self._frame_events: Dict[str, asyncio.Event] = {}
         self.is_pointcloud_enabled: Dict[str, bool] = {}
         # One rs.pointcloud() per device: pc.map_to(color) mutates internal
         # state, and depth/color threads from different devices would race on
@@ -1626,9 +1628,49 @@ class RealSenseManager:
             stopping=stopping,
         )
 
+    def _publish_frames(self, device_id: str, stream_types) -> None:
+        """Bump the arrival counter for each stream and wake async waiters.
+
+        Runs on collection threads; the events are set via the main loop so
+        waiters need no executor thread.
+        """
+        loop = RealSenseManager._main_loop
+        for stream_type in stream_types:
+            key = f"{device_id}:{stream_type.lower()}"
+            self._frame_seq[key] = self._frame_seq.get(key, 0) + 1
+            event = self._frame_events.get(key)
+            if event is not None and loop is not None and not loop.is_closed():
+                loop.call_soon_threadsafe(event.set)
+
+    async def wait_for_frame_after(
+        self, device_id: str, stream_type: str, last_seq: int, timeout: float = 1.0
+    ) -> Tuple[Optional[np.ndarray], int]:
+        """Wait until a frame newer than ``last_seq`` arrives, then return it.
+
+        Returns ``(frame, seq)``; ``frame`` is None on timeout. The seq is read
+        after the frame is fetched, so a frame landing in between skips ahead
+        rather than being re-delivered.
+        """
+        key = f"{device_id}:{stream_type.lower()}"
+        event = self._frame_events.setdefault(key, asyncio.Event())
+        deadline = time.monotonic() + timeout
+        while self._frame_seq.get(key, 0) <= last_seq:
+            event.clear()
+            if self._frame_seq.get(key, 0) > last_seq:
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None, last_seq
+            try:
+                await asyncio.wait_for(event.wait(), remaining)
+            except asyncio.TimeoutError:
+                return None, last_seq
+        frame = self.get_latest_frame(device_id, stream_type)
+        return frame, self._frame_seq.get(key, 0)
+
     def get_latest_frame(
         self, device_id: str, stream_type: str
-    ) -> Tuple[np.ndarray, dict]:
+    ) -> np.ndarray:
         """Get the latest frame from a specific stream (supports both pipeline and sensor modes)"""
         with self.lock:
             mode = self.streaming_mode.get(device_id, "idle")
@@ -2073,6 +2115,8 @@ class RealSenseManager:
                             while len(metadata_queue) > self.max_queue_size:
                                 metadata_queue.pop(0)
 
+                    self._publish_frames(device_id, processed_frames.keys())
+
                 except RuntimeError as e:
                     # Handle timeout or other error
                     print(f"Error collecting frames: {str(e)}")
@@ -2485,7 +2529,9 @@ class RealSenseManager:
                             mqueue.append(metadata)
                             while len(mqueue) > self.max_queue_size:
                                 mqueue.pop(0)
-                    
+
+                    self._publish_frames(device_id, (target_stream_type,))
+
                 except Exception as e:
                     if "timeout" not in str(e).lower():
                         logging.debug(f"[SENSOR] Frame collection error: {e}")
@@ -2832,121 +2878,6 @@ class RealSenseManager:
                 error=info.get("error"),
                 started_at=info.get("started_at"),
             )
-
-    def batch_start_sensors(
-        self,
-        device_id: str,
-        sensors: List[SensorStartItem]
-    ) -> BatchSensorStatus:
-        """
-        Start multiple sensors atomically.
-        
-        If any sensor fails to start, all previously started sensors are stopped.
-        
-        Args:
-            device_id: The device ID
-            sensors: List of sensor configurations to start
-            
-        Returns:
-            BatchSensorStatus with status of all sensors
-        """
-        # Check mode compatibility
-        self._check_streaming_mode(device_id, "sensor")
-        
-        started = []
-        errors = []
-        
-        for item in sensors:
-            try:
-                status = self.start_sensor(device_id, item.sensor_id, item.config)
-                if status.error:
-                    raise Exception(status.error)
-                started.append(item.sensor_id)
-            except Exception as e:
-                errors.append(f"Failed to start {item.sensor_id}: {str(e)}")
-                # Rollback: stop all successfully started sensors
-                for started_sensor_id in started:
-                    try:
-                        self.stop_sensor(device_id, started_sensor_id)
-                    except:
-                        pass
-                break
-        
-        return self.get_batch_status(device_id)
-
-    def batch_stop_sensors(
-        self,
-        device_id: str,
-        sensor_ids: Optional[List[str]] = None
-    ) -> BatchSensorStatus:
-        """
-        Stop multiple sensors.
-        
-        Args:
-            device_id: The device ID
-            sensor_ids: List of sensor IDs to stop, or None to stop all
-            
-        Returns:
-            BatchSensorStatus with status of all sensors
-        """
-        with self.lock:
-            if device_id not in self.sensor_streams:
-                return BatchSensorStatus(
-                    device_id=device_id,
-                    mode=self.streaming_mode.get(device_id, "idle"),
-                    sensors=[],
-                    errors=[],
-                )
-            
-            # Get sensor IDs to stop
-            if sensor_ids is None:
-                sensor_ids = list(self.sensor_streams[device_id].keys())
-        
-        errors = []
-        for sensor_id in sensor_ids:
-            try:
-                self.stop_sensor(device_id, sensor_id)
-            except Exception as e:
-                errors.append(f"Failed to stop {sensor_id}: {str(e)}")
-        
-        status = self.get_batch_status(device_id)
-        status.errors = errors
-        return status
-
-    def get_batch_status(
-        self,
-        device_id: str
-    ) -> BatchSensorStatus:
-        """
-        Get streaming status for all sensors on a device.
-        
-        Args:
-            device_id: The device ID
-            
-        Returns:
-            BatchSensorStatus with status of all sensors
-        """
-        if device_id not in self.devices:
-            self.refresh_devices()
-            if device_id not in self.devices:
-                raise RealSenseError(
-                    status_code=404, detail=f"Device {device_id} not found"
-                )
-        
-        # Get all sensors for the device
-        sensors_info = self.get_sensors(device_id)
-        
-        sensor_statuses = []
-        for sensor_info in sensors_info:
-            status = self.get_sensor_status(device_id, sensor_info.sensor_id)
-            sensor_statuses.append(status)
-        
-        return BatchSensorStatus(
-            device_id=device_id,
-            mode=self.streaming_mode.get(device_id, "idle"),
-            sensors=sensor_statuses,
-            errors=[],
-        )
 
     def get_sensor_frame(
         self,
