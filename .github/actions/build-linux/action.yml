@@ -1,0 +1,11 @@
+name: Build on Linux
+
+runs:
+  using: composite
+
+  steps:
+    - name: Build
+      shell: bash
+      run: |
+        cd build
+        cmake --build . -- -j4
