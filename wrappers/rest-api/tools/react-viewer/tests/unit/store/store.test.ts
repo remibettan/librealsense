@@ -9,25 +9,57 @@ describe('AppStore', () => {
     resetStore()
   })
 
-  describe('Firmware dismissal', () => {
-    afterEach(() => {
-      localStorage.clear()
-      sessionStorage.clear()
+  describe('Firmware status across enumeration', () => {
+    // The device-list endpoint never consults the online versions DB, so it reports
+    // recommended=null / status="unknown" for every device.
+    function enumerateWith(firmwareVersion: string) {
+      const device = createMockDevice({
+        device_id: 'fw-1',
+        serial_number: 'fw-1',
+        firmware_version: firmwareVersion,
+        recommended_firmware_version: null,
+        firmware_status: 'unknown',
+      })
+      server.use(http.get('/api/v1/devices/', () => HttpResponse.json([device])))
+      return device
+    }
+
+    it('keeps a learned recommendation when the device list re-enumerates', async () => {
+      const device = enumerateWith('5.17.0.10')
+      useAppStore.setState({
+        devices: [device],
+        deviceStates: {
+          'fw-1': createMockDeviceState(device, {
+            firmware: { current: '5.17.0.10', recommended: '5.17.3.10', status: 'outdated' },
+          }),
+        },
+        hasUserInteracted: true,
+      })
+
+      await useAppStore.getState().fetchDevices(true)
+
+      const fw = useAppStore.getState().deviceStates['fw-1'].firmware
+      expect(fw?.status).toBe('outdated')
+      expect(fw?.recommended).toBe('5.17.3.10')
     })
 
-    it('explicit checkFirmwareUpdates clears both dismissals for the device', async () => {
-      localStorage.setItem('rs-fw-dismissed:dev1:5.17.3.10', '1')
-      sessionStorage.setItem('rs-fw-dismissed:dev1:5.17.3.10', '1')
-      // Clearing happens before the network call, so a missing status handler is irrelevant.
-      await useAppStore.getState().checkFirmwareUpdates('dev1', true).catch(() => {})
-      expect(localStorage.getItem('rs-fw-dismissed:dev1:5.17.3.10')).toBeNull()
-      expect(sessionStorage.getItem('rs-fw-dismissed:dev1:5.17.3.10')).toBeNull()
-    })
+    it('drops the verdict once the installed firmware changed (post-flash)', async () => {
+      const device = enumerateWith('5.17.3.10')
+      useAppStore.setState({
+        devices: [device],
+        deviceStates: {
+          'fw-1': createMockDeviceState(device, {
+            firmware: { current: '5.17.0.10', recommended: '5.17.3.10', status: 'outdated' },
+          }),
+        },
+        hasUserInteracted: true,
+      })
 
-    it('non-explicit check leaves dismissals intact', async () => {
-      localStorage.setItem('rs-fw-dismissed:dev1:5.17.3.10', '1')
-      await useAppStore.getState().checkFirmwareUpdates('dev1').catch(() => {})
-      expect(localStorage.getItem('rs-fw-dismissed:dev1:5.17.3.10')).toBe('1')
+      await useAppStore.getState().fetchDevices(true)
+
+      const fw = useAppStore.getState().deviceStates['fw-1'].firmware
+      expect(fw?.current).toBe('5.17.3.10')
+      expect(fw?.status).toBe('unknown')
     })
   })
 
@@ -269,11 +301,47 @@ describe('AppStore', () => {
       )
 
       const first = useAppStore.getState().fetchDevices(true)
-      // Second call starts while the first is still in flight → must short-circuit.
+      // Second call starts while the first is still in flight → must join it, not re-request.
       const second = useAppStore.getState().fetchDevices(true)
       await Promise.all([first, second])
 
       expect(calls).toBe(1)
+    })
+
+    it('a joined force-refresh only resolves once enumeration completed', async () => {
+      let resolved = false
+      server.use(
+        http.get('/api/v1/devices/', async () => {
+          await new Promise((resolve) => setTimeout(resolve, 20))
+          resolved = true
+          return HttpResponse.json([presentDevice])
+        })
+      )
+
+      const first = useAppStore.getState().fetchDevices(true)
+      // The post-flash caller must not be dropped — awaiting it has to mean the list is fresh.
+      await useAppStore.getState().fetchDevices(true)
+      expect(resolved).toBe(true)
+      expect(useAppStore.getState().devices.map((d) => d.device_id)).toEqual(['present-1'])
+      await first
+    })
+
+    it('a cached fetch in flight does not satisfy a force-refresh', async () => {
+      const seen: (string | null)[] = []
+      server.use(
+        http.get('/api/v1/devices/', async ({ request }) => {
+          seen.push(new URL(request.url).searchParams.get('force_refresh'))
+          await new Promise((resolve) => setTimeout(resolve, 20))
+          return HttpResponse.json([presentDevice])
+        })
+      )
+
+      const cached = useAppStore.getState().fetchDevices(false)
+      await useAppStore.getState().fetchDevices(true)
+      await cached
+
+      expect(seen).toHaveLength(2)
+      expect(seen[1]).toBe('true')
     })
   })
 

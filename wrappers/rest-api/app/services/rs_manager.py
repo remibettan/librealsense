@@ -2,7 +2,6 @@
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 import asyncio
-import os
 import platform
 import struct
 import threading

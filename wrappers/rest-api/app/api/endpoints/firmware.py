@@ -86,7 +86,7 @@ async def update_firmware_from_file(
         raise HTTPException(status_code=500, detail="Unexpected error while updating firmware")
 
 
-@router.post("/{device_id}/firmware/update_from_recommended", response_model=dict)
+@router.post("/update_from_recommended", response_model=dict)
 async def update_firmware_from_recommended(
     device_id: str,
     rs_manager: RealSenseManager = Depends(get_realsense_manager),

@@ -243,14 +243,9 @@ async function performFirmwareUpdate(
 
   try {
     await apiCall()
-    // The device re-enumerates after a flash (DFU → normal). Force a fresh
-    // enumeration and retry until it reappears, so the UI recovers without a
-    // manual Refresh even if the reconnect lags or a devices_changed event raced.
-    for (let attempt = 0; attempt < 6; attempt++) {
-      await get().fetchDevices(true)
-      if (get().devices.some((d) => d.device_id === deviceId)) break
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-    }
+    // The backend only responds once the flashed device has re-enumerated
+    // (_refresh_until_device_returns), so one forced fetch is enough to pick it up.
+    await get().fetchDevices(true)
     set((state) => {
       const ds = state.deviceStates[deviceId]
       if (!ds) return state
@@ -288,6 +283,80 @@ async function performFirmwareUpdate(
   }
 }
 
+// In-flight device enumeration, so concurrent callers join it instead of being dropped.
+let _inFlightFetch: { force: boolean; promise: Promise<void> } | null = null
+
+async function _doFetchDevices(
+  set: StoreApi<AppState>['setState'],
+  get: StoreApi<AppState>['getState'],
+  forceRefresh: boolean,
+): Promise<void> {
+  set({ isLoadingDevices: true, error: null })
+  try {
+    const devices = await apiClient.getDevices(forceRefresh)
+    // Update devices list, preserve existing device states for known devices
+    set((state) => {
+      const newDeviceStates = { ...state.deviceStates }
+      // Remove states for devices that no longer exist
+      for (const deviceId of Object.keys(newDeviceStates)) {
+        if (!devices.find(d => d.device_id === deviceId)) {
+          delete newDeviceStates[deviceId]
+        }
+      }
+
+      // Refresh device info + firmware metadata for existing device states
+      for (const device of devices) {
+        const existing = newDeviceStates[device.device_id]
+        if (existing) {
+          const baseFirmware: FirmwareState = existing.firmware || {
+            current: device.firmware_version,
+            recommended: device.recommended_firmware_version,
+            status: device.firmware_status || 'unknown',
+            file_available: device.firmware_file_available,
+            is_updating: false,
+            progress: undefined,
+            last_error: null,
+          }
+
+          // Enumeration doesn't consult the online versions DB, so the device list always
+          // carries recommended=null / status="unknown". Keep whatever checkFirmwareUpdates
+          // learned rather than clobbering it — except when the installed version changed
+          // (post-flash), where the old verdict no longer describes this firmware.
+          const staleVerdict = baseFirmware.current !== device.firmware_version
+          const listStatus = device.firmware_status !== 'unknown' ? device.firmware_status : undefined
+          const updatedFirmware: FirmwareState = {
+            ...baseFirmware,
+            current: device.firmware_version,
+            recommended: device.recommended_firmware_version || baseFirmware.recommended,
+            status: listStatus || (staleVerdict ? 'unknown' : baseFirmware.status) || 'unknown',
+            file_available: device.firmware_file_available,
+          }
+
+          newDeviceStates[device.device_id] = {
+            ...existing,
+            device,
+            firmware: updatedFirmware,
+          }
+        }
+      }
+
+      return { devices, deviceStates: newDeviceStates, isLoadingDevices: false }
+    })
+
+    // Auto-activate if exactly 1 device and user hasn't manually interacted
+    const currentState = get()
+    const activeDevices = Object.values(currentState.deviceStates).filter(ds => ds.isActive)
+    if (devices.length === 1 && activeDevices.length === 0 && !currentState.hasUserInteracted) {
+      await get().toggleDeviceActive(devices[0])
+    }
+  } catch (error) {
+    set({
+      error: `Failed to fetch devices: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      isLoadingDevices: false,
+    })
+  }
+}
+
 export const useAppStore = create<AppState>()((set, get) => ({
   // Connection state
   isConnected: false,
@@ -300,66 +369,21 @@ export const useAppStore = create<AppState>()((set, get) => ({
   hasUserInteracted: false,
   
   fetchDevices: async (forceRefresh = false) => {
-    // Guard against concurrent fetches: a slow force-refresh must not be clobbered
-    // by a cache-hit poll that resolves after it.
-    if (get().isLoadingDevices) return
-    set({ isLoadingDevices: true, error: null })
+    // Coalesce concurrent fetches rather than dropping them: a slow force-refresh must not
+    // be clobbered by a cache-hit poll, but a caller that awaits the result (post-flash)
+    // must still observe a completed enumeration. Joining an in-flight force-refresh is
+    // enough; joining a cached one is not, so that case re-fetches afterwards.
+    const inFlight = _inFlightFetch
+    if (inFlight) {
+      await inFlight.promise
+      if (!forceRefresh || inFlight.force) return
+    }
+    const promise = _doFetchDevices(set, get, forceRefresh)
+    _inFlightFetch = { force: forceRefresh, promise }
     try {
-      const devices = await apiClient.getDevices(forceRefresh)
-      // Update devices list, preserve existing device states for known devices
-      set((state) => {
-        const newDeviceStates = { ...state.deviceStates }
-        // Remove states for devices that no longer exist
-        for (const deviceId of Object.keys(newDeviceStates)) {
-          if (!devices.find(d => d.device_id === deviceId)) {
-            delete newDeviceStates[deviceId]
-          }
-        }
-
-        // Refresh device info + firmware metadata for existing device states
-        for (const device of devices) {
-          const existing = newDeviceStates[device.device_id]
-          if (existing) {
-            const baseFirmware: FirmwareState = existing.firmware || {
-              current: device.firmware_version,
-              recommended: device.recommended_firmware_version,
-              status: device.firmware_status || 'unknown',
-              file_available: device.firmware_file_available,
-              is_updating: false,
-              progress: undefined,
-              last_error: null,
-            }
-
-            const updatedFirmware: FirmwareState = {
-              ...baseFirmware,
-              current: device.firmware_version,
-              recommended: device.recommended_firmware_version,
-              status: device.firmware_status || baseFirmware.status || 'unknown',
-              file_available: device.firmware_file_available,
-            }
-
-            newDeviceStates[device.device_id] = {
-              ...existing,
-              device,
-              firmware: updatedFirmware,
-            }
-          }
-        }
-
-        return { devices, deviceStates: newDeviceStates, isLoadingDevices: false }
-      })
-      
-      // Auto-activate if exactly 1 device and user hasn't manually interacted
-      const currentState = get()
-      const activeDevices = Object.values(currentState.deviceStates).filter(ds => ds.isActive)
-      if (devices.length === 1 && activeDevices.length === 0 && !currentState.hasUserInteracted) {
-        await get().toggleDeviceActive(devices[0])
-      }
-    } catch (error) {
-      set({
-        error: `Failed to fetch devices: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        isLoadingDevices: false,
-      })
+      await promise
+    } finally {
+      if (_inFlightFetch?.promise === promise) _inFlightFetch = null
     }
   },
 
@@ -369,6 +393,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   updateFirmwareFromRecommended: (deviceId: string) =>
     performFirmwareUpdate(set, get, deviceId, () => apiClient.updateFirmwareFromRecommended(deviceId)),
 
+
   enableMetadata: async () => {
     const result = await apiClient.enableMetadata()
     if (result.status === 'ok') await get().fetchDevices(true)
@@ -376,20 +401,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   checkFirmwareUpdates: async (deviceId: string, explicit = false) => {
-    // An explicit user-triggered check revives a previously dismissed proposal:
-    // clear both permanent (localStorage) and session (sessionStorage) dismissals
-    // for this device so the banner shows the (re-fetched) recommendation again.
-    if (explicit) {
-      try {
-        const prefix = `rs-fw-dismissed:${deviceId}:`
-        for (const s of [localStorage, sessionStorage]) {
-          for (let i = s.length - 1; i >= 0; i--) {
-            const k = s.key(i)
-            if (k && k.startsWith(prefix)) s.removeItem(k)
-          }
-        }
-      } catch { /* ignore storage errors */ }
-    }
     try {
       const firmwareStatus = await apiClient.getFirmwareStatus(deviceId)
       set((state) => {

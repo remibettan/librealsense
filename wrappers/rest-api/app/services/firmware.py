@@ -13,6 +13,7 @@ download_to_bytes_vector) — no temp files.
 import json
 import logging
 import platform
+import sys
 import threading
 import urllib.parse
 import urllib.request
@@ -26,9 +27,13 @@ FW_STATUS_UP_TO_DATE = "up_to_date"
 
 SERVER_VERSIONS_DB_URL = "https://librealsense.realsenseai.com/Releases/rs_versions_db.json"
 _MAX_FW_DOWNLOAD_BYTES = 64 * 1024 * 1024
+# Firmware may only be fetched from the domain that serves the versions DB itself, so a
+# tampered/mistaken `link` can't turn the backend into a fetcher for arbitrary hosts.
+_FW_DOWNLOAD_DOMAIN = ".".join(urllib.parse.urlparse(SERVER_VERSIONS_DB_URL).hostname.split(".")[-2:])
 
 # The versions DB is fetched once per process (no TTL — re-downloaded on backend restart,
 # like the C++ viewer). Guarded by a lock since request-handler threads read/populate it.
+_VERSIONS_DB_ATTEMPTS = 3
 _versions_db_lock = threading.Lock()
 _versions_db_cache: Dict[str, Any] = {"entries": None}
 
@@ -75,16 +80,33 @@ def _device_name_matches(db_name, device_name):
     return db[:star] == cmp[:star]
 
 
+def platform_name():
+    """Host name in the versions-DB vocabulary (mirrors rsutils::os::get_platform_name).
+
+    The DB only ever carries "Windows amd64", "Windows x86", "Linux amd64", "Linux arm",
+    "Mac OS" or "*", so platform.system() alone ("Darwin", no arch) would never match.
+    """
+    system = platform.system()
+    if system == "Windows":
+        return "Windows amd64" if sys.maxsize > 2 ** 32 else "Windows x86"
+    if system == "Darwin":
+        return "Mac OS"
+    if system == "Linux":
+        machine = platform.machine().lower()
+        return "Linux arm" if machine.startswith(("arm", "aarch64")) else "Linux amd64"
+    return ""
+
+
 def _pick_recommended_fw(entries, device_name, host_platform):
     """Pick the best RECOMMENDED FIRMWARE (version, link) for a device from DB entries.
 
     Matches each entry's `device_name` against the device (prefix-agnostic, '*' wildcard);
     the most specific pattern (longest literal) wins. Entry `platform` must be '*' or
-    match the host. Returns (None, None) when nothing matches.
+    equal the host (exact compare, like the C++ query_versions). Returns (None, None)
+    when nothing matches.
     """
     if not entries or not device_name:
         return None, None
-    host = (host_platform or "").lower()
     best = None  # (specificity, version, link)
     for e in entries:
         if e.get("component") != "FIRMWARE" or e.get("policy_type") != "RECOMMENDED":
@@ -92,8 +114,8 @@ def _pick_recommended_fw(entries, device_name, host_platform):
         pattern = e.get("device_name", "")
         if not _device_name_matches(pattern, device_name):
             continue
-        plat = (e.get("platform") or "*").lower()
-        if plat != "*" and plat not in host and host not in plat:
+        plat = e.get("platform") or "*"
+        if plat != "*" and plat != host_platform:
             continue
         specificity = len(pattern.replace("*", ""))
         if best is None or specificity > best[0]:
@@ -102,36 +124,51 @@ def _pick_recommended_fw(entries, device_name, host_platform):
 
 
 def _fetch_versions_db():
-    """Return the DB 'versions' list (cached for the process lifetime), or None on failure."""
+    """Return the DB 'versions' list (cached for the process lifetime), or None on failure.
+
+    The host drops a noticeable share of connections, so a single attempt would leave the
+    proposal missing for no good reason; retry a couple of times before giving up.
+    """
     with _versions_db_lock:
         if _versions_db_cache["entries"] is not None:
             return _versions_db_cache["entries"]
-        try:
-            with urllib.request.urlopen(SERVER_VERSIONS_DB_URL, timeout=10) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            entries = data.get("versions", [])
-            _versions_db_cache["entries"] = entries
+        for attempt in range(_VERSIONS_DB_ATTEMPTS):
+            try:
+                with urllib.request.urlopen(SERVER_VERSIONS_DB_URL, timeout=5) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+            except Exception as e:  # network down, timeout, bad JSON — degrade gracefully
+                logging.warning("Could not fetch firmware versions DB (attempt %d): %s", attempt + 1, e)
+                continue
+            entries = data.get("versions") or []
+            # Only cache a non-empty DB: an empty list (CDN hiccup, wrong endpoint) would
+            # otherwise be served for the process lifetime and suppress every proposal.
+            if entries:
+                _versions_db_cache["entries"] = entries
             return entries
-        except Exception as e:  # network down, timeout, bad JSON — degrade gracefully
-            logging.warning("Could not fetch firmware versions DB: %s", e)
-            return None
+        return None
 
 
 def recommended_firmware(device_name):
     """Recommended FIRMWARE (version, link) for a device from the online DB, or (None, None)."""
-    return _pick_recommended_fw(_fetch_versions_db(), device_name, platform.system())
+    return _pick_recommended_fw(_fetch_versions_db(), device_name, platform_name())
 
 
 def download_firmware(url: str, on_progress=None) -> bytes:
     """Download a firmware .bin into memory (no disk cache). Raises RealSenseError on failure.
 
-    Restricts to http(s) URLs (the link comes from the versions DB; reject anything else
-    to avoid file:// / relative / other-scheme fetches). Streams in chunks and reports
-    0..1 progress via on_progress(fraction) when Content-Length is available.
+    The link comes from the versions DB, so it must be https on the DB's own domain —
+    that rejects file:// / relative / other-scheme links and keeps the fetch from being
+    pointed at an arbitrary host. Streams in chunks and reports 0..1 progress via
+    on_progress(fraction) when Content-Length is available.
     """
     parsed = urllib.parse.urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise RealSenseError(status_code=400, detail="Refusing to download firmware from a non-http(s) URL")
+    host = parsed.hostname or ""
+    if parsed.scheme != "https" or not (host == _FW_DOWNLOAD_DOMAIN or host.endswith("." + _FW_DOWNLOAD_DOMAIN)):
+        raise RealSenseError(
+            status_code=400,
+            detail=f"Refusing to download firmware from outside https://*.{_FW_DOWNLOAD_DOMAIN}",
+        )
+    reported = 0.0
     try:
         buf = bytearray()
         with urllib.request.urlopen(url, timeout=30) as resp:
@@ -144,7 +181,8 @@ def download_firmware(url: str, on_progress=None) -> bytes:
                 if len(buf) > _MAX_FW_DOWNLOAD_BYTES:
                     raise RealSenseError(status_code=413, detail="Firmware image exceeds size limit")
                 if on_progress and total:
-                    on_progress(min(len(buf) / total, 1.0))
+                    reported = min(len(buf) / total, 1.0)
+                    on_progress(reported)
         data = bytes(buf)
     except RealSenseError:
         raise
@@ -152,6 +190,6 @@ def download_firmware(url: str, on_progress=None) -> bytes:
         raise RealSenseError(status_code=502, detail=f"Failed to download firmware: {e}")
     if not data:
         raise RealSenseError(status_code=502, detail="Downloaded firmware image is empty")
-    if on_progress:
+    if on_progress and reported < 1.0:
         on_progress(1.0)
     return data

@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject, ReactElement } from 'react'
-import { X } from 'lucide-react'
 import { useAppStore } from '../store'
 import type { DeviceInfo, SensorInfo, OptionInfo, StreamConfig, DeviceState, FirmwareState, SensorConfig } from '../api/types'
 import { FirmwareProgressModal } from './FirmwareProgressModal'
@@ -53,6 +52,43 @@ function showMetadataEnablePromptIfNeeded(
       },
     },
   )
+}
+
+// Prompt once per (device, recommended version): a newer recommendation later re-prompts,
+// and dismissing the toast is enough — no persisted dismissal state. Same pattern as the
+// metadata prompt above. The serial number is in the message because the toast is global
+// while the proposal is per-camera.
+function showFirmwareUpdatePromptsIfNeeded(
+  deviceStates: Record<string, DeviceState>,
+  promptedRef: MutableRefObject<Set<string>>,
+  addToast: (type: ToastType, message: string, action?: ToastAction) => void,
+  removeToast: (id: string) => void,
+  onUpdate: (device: DeviceInfo) => void,
+): void {
+  const live = new Set<string>()
+  for (const ds of Object.values(deviceStates)) {
+    const fw = ds.firmware
+    if (fw?.status !== 'outdated') continue
+    const key = `${ds.device.device_id}:${fw.recommended ?? ''}`
+    live.add(key)
+    if (promptedRef.current.has(key)) continue
+    promptedRef.current.add(key)
+    addToast(
+      'info',
+      `${ds.device.name} (S/N ${ds.device.serial_number}): firmware ${fw.current ?? '?'} → ${fw.recommended ?? '?'} is available.`,
+      {
+        label: 'Update',
+        onClick: (toastId) => {
+          removeToast(toastId)
+          onUpdate(ds.device)
+        },
+      },
+    )
+  }
+  // Re-arm for proposals that are gone (device removed, or flashed and now up to date).
+  for (const key of promptedRef.current) {
+    if (!live.has(key)) promptedRef.current.delete(key)
+  }
 }
 
 // Reusable hidden-file-input hook. Returns the JSX to render once at a stable
@@ -180,9 +216,11 @@ export function DevicePanel() {
     updateFirmwareFromFile(deviceId, file)
   }
 
-  const handleUpdateFromRecommended = (device: DeviceInfo) => {
+  // Reads the firmware state through getState() rather than the deviceStates closure so it
+  // stays referentially stable — the proposal-toast effect below holds on to it.
+  const handleUpdateFromRecommended = useCallback((device: DeviceInfo) => {
     const deviceId = device.device_id
-    const fw = deviceStates[deviceId]?.firmware
+    const fw = useAppStore.getState().deviceStates[deviceId]?.firmware
     setFirmwareFileName(fw?.recommended ? `Firmware ${fw.recommended}` : 'Recommended firmware')
     setFirmwareProgressDeviceId(deviceId)
     const baseFirmware = fw || {
@@ -193,13 +231,27 @@ export function DevicePanel() {
     }
     setFirmwareProgressState({ ...baseFirmware, is_updating: true, phase: 'downloading', progress: 0, last_error: null })
     updateFirmwareFromRecommended(deviceId)
-  }
+  }, [updateFirmwareFromRecommended])
 
   const promptedSetRef = useRef<string>('')
   const enableInFlightRef = useRef<boolean>(false)
   useEffect(() => {
     showMetadataEnablePromptIfNeeded(devices, promptedSetRef, enableInFlightRef, addToast, removeToast, enableMetadata)
   }, [devices])
+
+  // Explicit "Check for Firmware Updates": an outdated result raises the proposal toast
+  // via the effect below, so only the no-proposal outcomes need reporting here.
+  const handleCheckFirmwareUpdates = async (deviceId: string) => {
+    await checkFirmwareUpdates(deviceId, true)
+    const status = useAppStore.getState().deviceStates[deviceId]?.firmware?.status
+    if (status === 'up_to_date') addToast('success', 'Firmware is up to date.')
+    else if (status === 'unknown') addToast('info', 'No firmware recommendation available for this device.')
+  }
+
+  const promptedFirmwareRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    showFirmwareUpdatePromptsIfNeeded(deviceStates, promptedFirmwareRef, addToast, removeToast, handleUpdateFromRecommended)
+  }, [deviceStates, handleUpdateFromRecommended])
 
   return (
     <div className="p-4">
@@ -287,9 +339,8 @@ export function DevicePanel() {
                 }
                 onStartSensorStreaming={(sensorId) => startSensorStreaming(device.device_id, sensorId)}
                 onStopSensorStreaming={(sensorId) => stopSensorStreaming(device.device_id, sensorId)}
-                onCheckFirmwareUpdates={() => checkFirmwareUpdates(device.device_id, true)}
+                onCheckFirmwareUpdates={() => handleCheckFirmwareUpdates(device.device_id)}
                 onUpdateFirmwareFromFile={(file) => handleUpdateFirmwareFromFile(device, file)}
-                onUpdateFromRecommended={() => handleUpdateFromRecommended(device)}
                 onShowToast={addToast}
               />
             )
@@ -345,7 +396,6 @@ interface DeviceCardProps {
   onStopSensorStreaming: (sensorId: string) => void
   onCheckFirmwareUpdates: () => void
   onUpdateFirmwareFromFile: (file: File) => void
-  onUpdateFromRecommended: () => void
   onShowToast: (type: ToastType, message: string) => void
 }
 
@@ -361,7 +411,6 @@ function DeviceCard({
   onStopSensorStreaming,
   onCheckFirmwareUpdates,
   onUpdateFirmwareFromFile,
-  onUpdateFromRecommended,
   onShowToast,
 }: DeviceCardProps) {
   const [showMenu, setShowMenu] = useState(false)
@@ -534,8 +583,8 @@ function DeviceCard({
           </div>
         </div>
 
-        {/* Firmware update proposal / download link */}
-        <FirmwareBanner deviceId={device.device_id} firmware={deviceState?.firmware} onUpdate={onUpdateFromRecommended} />
+        {/* Manual firmware download link (the update proposal is a toast) */}
+        <FirmwareBanner firmware={deviceState?.firmware} />
 
         {/* Device Details */}
         <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-gray-500">
@@ -618,81 +667,20 @@ function DeviceCard({
 }
 
 interface FirmwareBannerProps {
-  deviceId: string
   firmware?: FirmwareState
-  onUpdate: () => void
 }
 
-function FirmwareBanner({ deviceId, firmware, onUpdate }: FirmwareBannerProps) {
-  const downloadHref = firmware?.link || 'https://dev.realsenseai.com/docs/firmware-updates'
-  const isUpdating = firmware?.is_updating ?? false
-
-  // Dismissal is keyed by device + recommended version, so a newer recommendation
-  // later re-surfaces the proposal. Two scopes:
-  //   - permanent (X): localStorage — stays dismissed until a newer FW is recommended.
-  //   - "Remind me later": sessionStorage — re-appears next session.
-  // Computed fresh each render so an explicit "Check for Updates" (which clears these
-  // keys and pushes a new firmware object) revives the proposal without extra wiring.
-  const dismissKey = `rs-fw-dismissed:${deviceId}:${firmware?.recommended ?? ''}`
-  const [, forceRerender] = useState(0)
-  let dismissed = false
-  try {
-    dismissed = localStorage.getItem(dismissKey) === '1' || sessionStorage.getItem(dismissKey) === '1'
-  } catch { dismissed = false }
-
-  const dismiss = (storage: Storage) => {
-    try { storage.setItem(dismissKey, '1') } catch { /* ignore */ }
-    forceRerender((n) => n + 1)
-  }
-
-  // Proposal: the online versions DB recommends a newer firmware than what's installed.
-  if (firmware?.status === 'outdated' && !dismissed) {
-    return (
-      <div className="mt-2 p-2 rounded border border-amber-600/40 bg-amber-500/10 text-xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-amber-400 font-medium">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-            </svg>
-            Firmware update recommended
-          </div>
-          <button
-            onClick={() => dismiss(localStorage)}
-            title="Dismiss until a newer firmware is released"
-            className="text-gray-400 hover:text-gray-200 ml-2"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-        <div className="mt-1 text-gray-300 font-mono">
-          {`${firmware.current ?? '?'} → ${firmware.recommended ?? '?'}`}
-        </div>
-        <div className="mt-1.5 flex items-center gap-3">
-          <button
-            onClick={onUpdate}
-            disabled={isUpdating}
-            className="px-2.5 py-1 rounded bg-rs-blue text-white font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isUpdating ? 'Updating…' : 'Update'}
-          </button>
-          <a href={downloadHref} target="_blank" rel="noopener noreferrer" className="text-rs-blue hover:underline">
-            Download firmware →
-          </a>
-          <button onClick={() => dismiss(sessionStorage)} className="text-gray-400 hover:text-gray-200">
-            Remind me later
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // Up to date → nothing to offer. The plain download link remains as a fallback for
-  // other states (unknown/offline, missing_file, or a dismissed proposal).
-  if (firmware?.status === 'up_to_date') return null
-
+// The update proposal itself is a toast (see showFirmwareUpdatePromptsIfNeeded); this is
+// just the manual-download escape hatch, pointed at the recommended image when we know it.
+function FirmwareBanner({ firmware }: FirmwareBannerProps) {
   return (
     <div className="mt-2 text-xs text-gray-400">
-      <a href={downloadHref} target="_blank" rel="noopener noreferrer" className="text-rs-blue hover:underline">
+      <a
+        href={firmware?.link || 'https://dev.realsenseai.com/docs/firmware-updates'}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-rs-blue hover:underline"
+      >
         Download firmware →
       </a>
     </div>
