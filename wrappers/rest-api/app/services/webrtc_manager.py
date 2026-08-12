@@ -17,12 +17,6 @@ from app.core.errors import RealSenseError
 from app.core.config import get_settings
 from app.models.webrtc import WebRTCSession, WebRTCStatus
 
-# A frame gap can be a transient hiccup; repeat the last frame for a few wait
-# timeouts to keep RTP flowing, then end the track instead of freezing the
-# tile on a stale image forever.
-MAX_CONSECUTIVE_TIMEOUTS = 3
-
-
 class RealSenseVideoTrack(VideoStreamTrack):
     """Video track that captures frames from RealSense camera."""
 
@@ -36,7 +30,27 @@ class RealSenseVideoTrack(VideoStreamTrack):
         self._seq = 0
         self._last_pts = -1
         self._last_img = None
-        self._timeouts = 0
+        # Set by WebRTCManager; called once when the stream is gone so the
+        # session gets closed and the client can observe the disconnect.
+        self.on_gone = None
+
+    def _stream_alive(self) -> bool:
+        """True while this track's stream is still active on the device."""
+        try:
+            status = self.realsense_manager.get_stream_status(self.device_id)
+        except Exception:
+            return False
+        return status.is_streaming and any(
+            s.lower() == self.stream_type.lower() for s in status.active_streams
+        )
+
+    def _notify_gone(self) -> None:
+        callback, self.on_gone = self.on_gone, None
+        if callback:
+            try:
+                callback()
+            except Exception:
+                logging.exception("on_gone callback failed for %s", self.stream_type)
 
     def _next_pts(self) -> int:
         """Timestamp from the frame's real arrival time, so the receiver's
@@ -67,11 +81,15 @@ class RealSenseVideoTrack(VideoStreamTrack):
             )
 
             if frame_data is None:
-                self._timeouts += 1
-                if self._timeouts >= MAX_CONSECUTIVE_TIMEOUTS or self._last_img is None:
+                # Gap vs gone: repeat the last frame through transient gaps
+                # (USB hiccup, hardware reset) for as long as the stream is
+                # active; end the track only when it is genuinely stopped.
+                if not self._stream_alive():
                     raise MediaStreamError
+                if self._last_img is None:
+                    # Stream up but first frame not here yet — black keepalive.
+                    return self._to_video_frame(np.zeros((480, 640, 3), dtype=np.uint8))
                 return self._to_video_frame(self._last_img)
-            self._timeouts = 0
 
             # Handle different data types and normalize to uint8
             if frame_data.dtype == np.uint16:
@@ -101,13 +119,17 @@ class RealSenseVideoTrack(VideoStreamTrack):
             self._last_img = img
             return self._to_video_frame(img)
         except MediaStreamError:
-            # End-of-track: aiortc's sender loop stops on this exception.
+            # End-of-track: aiortc's sender loop stops on this exception, but
+            # the peer connection would stay "connected" — close the session
+            # too so the client can observe the disconnect.
+            self._notify_gone()
             raise
         except Exception as e:
             status_code = getattr(e, 'status_code', None)
             if status_code == 400:
                 # Stream stopped (get_latest_frame: "not streaming") — end the
                 # track instead of freezing on a stale image.
+                self._notify_gone()
                 raise MediaStreamError from e
             # On error, return a black frame. Pace it: without a new frame to
             # wait on, an un-delayed error path would spin the event loop.
@@ -165,6 +187,9 @@ class WebRTCManager:
         # Add video tracks for each stream type
         for stream_type in stream_types:
             video_track = RealSenseVideoTrack(self.realsense_manager, device_id, stream_type)
+            # When the stream is gone, close the whole session so the client
+            # sees the peer connection drop instead of a frozen tile.
+            video_track.on_gone = lambda sid=session_id: asyncio.create_task(self.close_session(sid))
             pc.addTrack(video_track)
 
         # Create offer
