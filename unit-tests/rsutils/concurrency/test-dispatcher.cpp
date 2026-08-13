@@ -61,11 +61,12 @@ TEST_CASE( "invoke and wait" )
     d.stop();
 }
 
-TEST_CASE( "invoke and wait is non-blocking by default" )
+TEST_CASE( "invoke and wait is blocking by default" )
 {
     std::atomic_bool worker_started{ false };
     std::atomic_bool release_worker{ false };
     std::atomic_bool queued_action_dropped{ false };
+    std::atomic_bool invoked_action_ran{ false };
     dispatcher d( 1, [&]( dispatcher::action const & ) { queued_action_dropped = true; } );
     d.start();
 
@@ -80,16 +81,16 @@ TEST_CASE( "invoke and wait is non-blocking by default" )
     d.invoke( []( dispatcher::cancellable_timer ) {} );
     auto invocation = std::async( std::launch::async, [&]() {
         d.invoke_and_wait(
-            []( dispatcher::cancellable_timer ) {},
+            [&]( dispatcher::cancellable_timer ) { invoked_action_ran = true; },
             []() { return false; } );
     } );
 
-    for( int i = 0; i < 100 && ! queued_action_dropped; ++i )
-        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
-    CHECK( queued_action_dropped );
+    CHECK( invocation.wait_for( std::chrono::milliseconds( 100 ) ) == std::future_status::timeout );
+    CHECK_FALSE( queued_action_dropped );
 
     release_worker = true;
     CHECK( invocation.wait_for( std::chrono::seconds( 1 ) ) == std::future_status::ready );
+    CHECK( invoked_action_ran );
     d.stop();
 }
 

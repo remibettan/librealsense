@@ -427,7 +427,7 @@ public:
     // Like above, but synchronous: will return only when the action has actually been dispatched.
     //
     template<class T>
-    void invoke_and_wait(T item, std::function<bool()> exit_condition, bool is_blocking = false)
+    void invoke_and_wait(T item, std::function<bool()> exit_condition, bool is_blocking = true)
     {
         if( exit_condition() )
             return;
