@@ -38,6 +38,19 @@ _versions_db_lock = threading.Lock()
 _versions_db_cache: Dict[str, Any] = {"entries": None}
 
 
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    """Refuse to follow redirects, so the domain check can't be sidestepped by a 3xx.
+
+    Returning None leaves urllib to raise HTTPError for the redirect status.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_fw_download_opener = urllib.request.build_opener(_NoRedirects)
+
+
 def _parse_fw_version(v: Optional[str]) -> Optional[tuple]:
     """Parse a dotted firmware version ("5.17.0.10") into an int tuple, or None."""
     if not v:
@@ -127,25 +140,29 @@ def _fetch_versions_db():
     """Return the DB 'versions' list (cached for the process lifetime), or None on failure.
 
     The host drops a noticeable share of connections, so a single attempt would leave the
-    proposal missing for no good reason; retry a couple of times before giving up.
+    proposal missing for no good reason; retry a couple of times before giving up. The
+    lock only guards the cache — holding it across the fetch would stall every other
+    request handler for the whole retry budget. Two threads may fetch on a cold cache;
+    they produce the same list, so the duplicate work is harmless.
     """
     with _versions_db_lock:
         if _versions_db_cache["entries"] is not None:
             return _versions_db_cache["entries"]
-        for attempt in range(_VERSIONS_DB_ATTEMPTS):
-            try:
-                with urllib.request.urlopen(SERVER_VERSIONS_DB_URL, timeout=5) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-            except Exception as e:  # network down, timeout, bad JSON — degrade gracefully
-                logging.warning("Could not fetch firmware versions DB (attempt %d): %s", attempt + 1, e)
-                continue
-            entries = data.get("versions") or []
-            # Only cache a non-empty DB: an empty list (CDN hiccup, wrong endpoint) would
-            # otherwise be served for the process lifetime and suppress every proposal.
-            if entries:
+    for attempt in range(_VERSIONS_DB_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(SERVER_VERSIONS_DB_URL, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except Exception as e:  # network down, timeout, bad JSON — degrade gracefully
+            logging.warning("Could not fetch firmware versions DB (attempt %d): %s", attempt + 1, e)
+            continue
+        entries = data.get("versions") or []
+        # Only cache a non-empty DB: an empty list (CDN hiccup, wrong endpoint) would
+        # otherwise be served for the process lifetime and suppress every proposal.
+        if entries:
+            with _versions_db_lock:
                 _versions_db_cache["entries"] = entries
-            return entries
-        return None
+        return entries
+    return None
 
 
 def recommended_firmware(device_name):
@@ -158,7 +175,8 @@ def download_firmware(url: str, on_progress=None) -> bytes:
 
     The link comes from the versions DB, so it must be https on the DB's own domain —
     that rejects file:// / relative / other-scheme links and keeps the fetch from being
-    pointed at an arbitrary host. Streams in chunks and reports 0..1 progress via
+    pointed at an arbitrary host. Redirects are refused too, so the domain check can't be
+    bounced onward to some other address. Streams in chunks and reports 0..1 progress via
     on_progress(fraction) when Content-Length is available.
     """
     parsed = urllib.parse.urlparse(url)
@@ -171,7 +189,7 @@ def download_firmware(url: str, on_progress=None) -> bytes:
     reported = 0.0
     try:
         buf = bytearray()
-        with urllib.request.urlopen(url, timeout=30) as resp:
+        with _fw_download_opener.open(url, timeout=30) as resp:
             total = int(resp.headers.get("Content-Length") or 0)
             while True:
                 chunk = resp.read(256 * 1024)

@@ -148,6 +148,31 @@ def test_versions_db_fetch_retries_before_giving_up(monkeypatch):
     assert calls["n"] == firmware._VERSIONS_DB_ATTEMPTS
 
 
+def test_versions_db_fetch_does_not_hold_the_lock_during_io(monkeypatch):
+    # The lock guards the cache only. Holding it across the fetch would stall every other
+    # request handler for the whole retry budget.
+    monkeypatch.setattr(firmware, "_versions_db_cache", {"entries": None})
+    locked_during_io = []
+
+    def check_lock(*_args, **_kwargs):
+        locked_during_io.append(firmware._versions_db_lock.locked())
+        resp = mock.MagicMock()
+        resp.read.return_value = json.dumps({"versions": _DB}).encode()
+        resp.__enter__.return_value = resp
+        return resp
+
+    with mock.patch("urllib.request.urlopen", side_effect=check_lock):
+        assert _fetch_versions_db() == _DB
+    assert locked_during_io == [False]
+
+
+def test_download_refuses_to_follow_redirects():
+    # The domain allowlist only inspects the URL we are given, so an allowlisted host
+    # must not be able to bounce the fetch onward to another address.
+    handler = firmware._NoRedirects()
+    assert handler.redirect_request(None, None, 302, "Found", {}, "https://10.0.0.1/x.bin") is None
+
+
 @pytest.mark.parametrize("url", [
     "file:///etc/passwd",
     "/Releases/RS4xx/FW/image.bin",                       # relative — no scheme/host
