@@ -60,9 +60,14 @@ __global__  void kernel_map_depth_to_other(int2* mapped_pixels, const uint16_t* 
     int depth_x = blockIdx.x * blockDim.x + threadIdx.x;
     int depth_y = blockIdx.y * blockDim.y + threadIdx.y;
 
-    int depth_pixel_index = depth_y * depth_intrin->width + depth_x;
-    if (depth_pixel_index >= depth_intrin->width * depth_intrin->height)
+    // Bound x and y separately, as the other kernels here do. Testing the flattened index
+    // instead lets an out-of-range x wrap onto the next row: at 848x480 the grid is rounded
+    // up to 27*32 = 864 columns, so threads x=848..863 of row y alias onto x=0..15 of row
+    // y+1 and race the legitimate threads for those pixels, corrupting the pixel map.
+    if (depth_x >= depth_intrin->width || depth_y >= depth_intrin->height)
         return;
+
+    int depth_pixel_index = depth_y * depth_intrin->width + depth_x;
     float depth_val = depth_in[depth_pixel_index] * depth_scale;
     kernel_transfer_pixels(mapped_pixels, depth_intrin, other_intrin, depth_to_other, depth_val, depth_x, depth_y, blockIdx.z);
 }
@@ -147,6 +152,11 @@ __global__  void kernel_replace_to_zero(uint16_t* aligned_out, const rs2_intrins
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
+    // Guard both axes: the grid is rounded up to whole blocks, so without this the tail threads
+    // read and write past the end of the last row. Today that lands in cudaMalloc slack and is
+    // invisible; it is still an out-of-bounds access, and compute-sanitizer flags it.
+    if (x >= other_intrin->width || y >= other_intrin->height)
+        return;
 
     auto other_pixel_index = y * other_intrin->width + x;
     if (aligned_out[other_pixel_index] == 0xffff)
