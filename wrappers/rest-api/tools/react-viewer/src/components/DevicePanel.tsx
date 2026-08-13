@@ -586,8 +586,7 @@ function DeviceCard({
           </div>
         </div>
 
-        {/* Manual firmware download link (the update proposal is a toast) */}
-        <FirmwareBanner firmware={deviceState?.firmware} />
+        <FirmwareStatusLine firmware={deviceState?.firmware} />
 
         {/* Device Details */}
         <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-gray-500">
@@ -669,25 +668,15 @@ function DeviceCard({
   )
 }
 
-interface FirmwareBannerProps {
+interface FirmwareStatusLineProps {
   firmware?: FirmwareState
 }
 
-// The update proposal itself is a toast (see showFirmwareUpdatePromptsIfNeeded); this is
-// just the manual-download escape hatch, pointed at the recommended image when we know it.
-function FirmwareBanner({ firmware }: FirmwareBannerProps) {
-  return (
-    <div className="mt-2 text-xs text-gray-400">
-      <a
-        href={firmware?.link || 'https://dev.realsenseai.com/docs/firmware-updates'}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-rs-blue hover:underline"
-      >
-        Download firmware →
-      </a>
-    </div>
-  )
+// Confirms the camera matches the versions-DB recommendation. Everything else is silent:
+// an outdated camera is prompted by the toast, and unknown/offline has nothing to report.
+function FirmwareStatusLine({ firmware }: FirmwareStatusLineProps) {
+  if (firmware?.status !== 'up_to_date') return null
+  return <div className="mt-2 text-xs text-gray-400">✓ Firmware is up to date</div>
 }
 
 interface SensorStreamControlsProps {

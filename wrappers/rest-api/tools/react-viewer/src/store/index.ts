@@ -411,7 +411,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
           recommended: firmwareStatus.recommended || ds.device.recommended_firmware_version,
           status: (firmwareStatus.status as FirmwareState['status']) || 'unknown',
           file_available: firmwareStatus.file_available,
-          link: firmwareStatus.link,
           is_updating: false,
           progress: undefined,
           last_error: null,

@@ -104,7 +104,6 @@ class ApiClient {
     recommended?: string
     status: string
     file_available?: boolean
-    link?: string
   }> {
     const response = await this.client.get(`/devices/${deviceId}/firmware/`)
     return response.data

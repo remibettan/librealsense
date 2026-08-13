@@ -310,16 +310,28 @@ describe('DevicePanel', () => {
       await waitFor(() => expect(screen.getAllByText(/is available/)).toHaveLength(1))
     })
 
-    it('always offers the plain download link on the card', () => {
+    it('confirms on the card when the camera matches the recommendation', () => {
       const device = createMockDevice()
       const ds = createMockDeviceState(device, {
-        firmware: { current: '5.17.0.10', status: 'unknown', link: 'https://example/fw.bin' },
+        firmware: { current: '5.17.3.10', recommended: '5.17.3.10', status: 'up_to_date' },
       })
       render(<DevicePanel />, {
         initialStoreState: { devices: [device], deviceStates: { [device.device_id]: ds } },
       })
 
-      expect(screen.getByText('Download firmware →')).toHaveAttribute('href', 'https://example/fw.bin')
+      expect(screen.getByText('✓ Firmware is up to date')).toBeInTheDocument()
+    })
+
+    it('says nothing on the card while the recommendation is unknown', () => {
+      const device = createMockDevice()
+      const ds = createMockDeviceState(device, {
+        firmware: { current: '5.17.0.10', status: 'unknown' },
+      })
+      render(<DevicePanel />, {
+        initialStoreState: { devices: [device], deviceStates: { [device.device_id]: ds } },
+      })
+
+      expect(screen.queryByText(/Firmware is up to date/)).not.toBeInTheDocument()
     })
   })
 })
