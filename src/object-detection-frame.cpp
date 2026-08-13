@@ -6,17 +6,44 @@
 #include <rsutils/number/crc32.h>
 #include <rsutils/string/from.h>
 #include <rsutils/easylogging/easyloggingpp.h>
+#include <utility>
 
 namespace librealsense
 {
 
+object_detection_frame::object_detection_frame( object_detection_frame && other )
+    : perception_frame( std::move( other ) )
+{
+}
+
+object_detection_frame & object_detection_frame::operator=( object_detection_frame && other )
+{
+    perception_frame::operator=( std::move( other ) );
+    _validation_state.store( validation_state::not_checked, std::memory_order_release );
+    return *this;
+}
+
 bool object_detection_frame::validate() const
 {
-    if( data.size() < MIN_FRAME_SIZE )
+    auto const state = _validation_state.load( std::memory_order_acquire );
+    if( state != validation_state::not_checked )
+        return state == validation_state::valid;
+
+    bool const valid = validate_payload();
+    _validation_state.store( valid ? validation_state::valid : validation_state::invalid,
+                             std::memory_order_release );
+    return valid;
+}
+
+bool object_detection_frame::validate_payload() const
+{
+    if( data.size() < MIN_FRAME_SIZE || data.size() > MAX_FRAME_SIZE )
         return false;
 
     const object_detection_payload * payload = reinterpret_cast< const object_detection_payload * >( data.data() );
 
+    // The firmware ABI excludes the fixed frame header from CRC coverage. Validate its fields
+    // independently; header.size never determines a memory-access or CRC bound.
     if( payload->header.magic_number != MAGIC_NUMBER )
         return false;
 
@@ -37,8 +64,8 @@ bool object_detection_frame::validate() const
     size_t expected_size_field = PAYLOAD_HEADER_SIZE + detections_size;
     size_t expected_data_size_with_detections = FRAME_HEADER_SIZE + expected_size_field;
 
-    // data.size() may exceed the payload: the UVC transport delivers fixed-size frames, so the buffer
-    // can carry trailing padding after the detections. The valid length is given by the header.
+    // data.size() may exceed the payload: the UVC transport can pad a short logical payload up to the
+    // ABI maximum frame size. The header declares the valid length within that bounded buffer.
     if( data.size() < expected_data_size_with_detections || payload->header.size != expected_size_field )
     {
         LOG_WARNING( "Object Detection frame size mismatch: got " << data.size() << ", expected at least " << expected_data_size_with_detections <<

@@ -7,6 +7,7 @@
 #include "core/extension.h"
 #include <librealsense2/h/rs_types.h>
 #include <rsutils/string/from.h>
+#include <atomic>
 #include <cstddef>
 
 namespace librealsense {
@@ -74,11 +75,25 @@ public:
     static_assert( MIN_FRAME_SIZE == 43, "Object Detection minimum frame ABI must be 43 bytes" );
     static_assert( MAX_FRAME_SIZE == 1067, "Object Detection maximum frame ABI must be 1067 bytes" );
 
+    object_detection_frame() = default;
+    object_detection_frame( object_detection_frame && other );
+    object_detection_frame & operator=( object_detection_frame && other );
+
     size_t get_detection_count() const;
     object_detection_entry get_detection( size_t index ) const;
 
 private:
+    enum class validation_state : uint8_t
+    {
+        not_checked,
+        valid,
+        invalid
+    };
+
     bool validate() const;
+    bool validate_payload() const;
+
+    mutable std::atomic< validation_state > _validation_state{ validation_state::not_checked };
 };
 
 MAP_EXTENSION(RS2_EXTENSION_OBJECT_DETECTION_FRAME, librealsense::object_detection_frame);
