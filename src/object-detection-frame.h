@@ -67,13 +67,11 @@ public:
         = offsetof( object_detection_payload, detections ) - FRAME_HEADER_SIZE;
     static constexpr size_t ENTRY_SIZE = sizeof( object_detection_entry );
     static constexpr size_t MIN_FRAME_SIZE = FRAME_HEADER_SIZE + PAYLOAD_HEADER_SIZE;
-    static constexpr size_t MAX_FRAME_SIZE = MIN_FRAME_SIZE + MAX_DETECTIONS * ENTRY_SIZE;
 
     static_assert( FRAME_HEADER_SIZE == 20, "Object Detection frame header ABI must be 20 bytes" );
     static_assert( PAYLOAD_HEADER_SIZE == 23, "Object Detection payload header ABI must be 23 bytes" );
     static_assert( ENTRY_SIZE == 16, "Object Detection entry ABI must be 16 bytes" );
     static_assert( MIN_FRAME_SIZE == 43, "Object Detection minimum frame ABI must be 43 bytes" );
-    static_assert( MAX_FRAME_SIZE == 1067, "Object Detection maximum frame ABI must be 1067 bytes" );
 
     object_detection_frame() = default;
     object_detection_frame( object_detection_frame && other );

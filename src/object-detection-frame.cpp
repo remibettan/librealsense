@@ -35,7 +35,7 @@ bool object_detection_frame::validate() const
 
 bool object_detection_frame::validate_payload() const
 {
-    if( data.size() < MIN_FRAME_SIZE || data.size() > MAX_FRAME_SIZE )
+    if( data.size() < MIN_FRAME_SIZE )
         return false;
 
     const object_detection_payload * payload = reinterpret_cast< const object_detection_payload * >( data.data() );
@@ -62,8 +62,8 @@ bool object_detection_frame::validate_payload() const
     size_t expected_size_field = PAYLOAD_HEADER_SIZE + detections_size;
     size_t expected_data_size_with_detections = FRAME_HEADER_SIZE + expected_size_field;
 
-    // data.size() may exceed the payload: the UVC transport can pad a short logical payload up to the
-    // ABI maximum frame size. The header declares the valid length within that bounded buffer.
+    // data.size() may exceed the logical payload if the transport adds trailing padding. The header
+    // declares the valid length, and the bounded detection count keeps every read within the buffer.
     if( data.size() < expected_data_size_with_detections || payload->header.size != expected_size_field )
     {
         LOG_WARNING( "Object Detection frame size mismatch: got " << data.size() << ", expected at least " << expected_data_size_with_detections <<

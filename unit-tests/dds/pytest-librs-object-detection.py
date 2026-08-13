@@ -238,7 +238,7 @@ else:
             if check.is_true( odf, msg='frame is not an object_detection_frame' ):
                 raw = memoryview( odf.get_data() )
                 if corruption == 'count':
-                    raw[38:40] = b'\x41\x00'  # little-endian detection count 65
+                    raw[36:38] = b'\x41\x00'  # little-endian detection count 65
                 else:
                     raw[-1] ^= 0x01
                 check.equal( odf.get_detection_count(), 0 )
