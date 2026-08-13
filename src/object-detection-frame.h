@@ -83,17 +83,10 @@ public:
     object_detection_entry get_detection( size_t index ) const;
 
 private:
-    enum class validation_state : uint8_t
-    {
-        not_checked,
-        valid,
-        invalid
-    };
-
     bool validate() const;
     bool validate_payload() const;
 
-    mutable std::atomic< validation_state > _validation_state{ validation_state::not_checked };
+    mutable std::atomic_bool _validated{ false };
 };
 
 MAP_EXTENSION(RS2_EXTENSION_OBJECT_DETECTION_FRAME, librealsense::object_detection_frame);

@@ -228,23 +228,8 @@ else:
     #
     #############################################################################################
     #
-    def test_rejects_detection_count_above_abi_max(remote_and_streaming):
-        remote, _, _, queue = remote_and_streaming
-        remote.run( 'publish_two_detections()' )
-        f = queue.wait_for_frame( 500 )
-        if check.is_true( f, msg='no frame received' ):
-            odf = f.as_object_detection_frame()
-            if check.is_true( odf, msg='frame is not an object_detection_frame' ):
-                # number_of_detections is a little-endian uint16 at byte offset 38.
-                raw = memoryview( odf.get_data() )
-                raw[38] = 65
-                raw[39] = 0
-                check.equal( odf.get_detection_count(), 0 )
-
-    #
-    #############################################################################################
-    #
-    def test_rejects_crc_mismatch(remote_and_streaming):
+    @pytest.mark.parametrize( 'corruption', ['count', 'crc'] )
+    def test_rejects_invalid_payload(remote_and_streaming, corruption):
         remote, _, _, queue = remote_and_streaming
         remote.run( 'publish_two_detections()' )
         f = queue.wait_for_frame( 500 )
@@ -252,7 +237,10 @@ else:
             odf = f.as_object_detection_frame()
             if check.is_true( odf, msg='frame is not an object_detection_frame' ):
                 raw = memoryview( odf.get_data() )
-                raw[-1] = raw[-1] ^ 0x01
+                if corruption == 'count':
+                    raw[38:40] = b'\x41\x00'  # little-endian detection count 65
+                else:
+                    raw[-1] ^= 0x01
                 check.equal( odf.get_detection_count(), 0 )
 
     #

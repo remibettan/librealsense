@@ -5067,11 +5067,10 @@ void rs2_get_frame_object_detection(const rs2_frame* frame, unsigned int index, 
     VALIDATE_NOT_NULL(frame);
     VALIDATE_NOT_NULL(detection);
     auto od_frame = VALIDATE_INTERFACE((frame_interface*)frame, librealsense::object_detection_frame);
-
-    auto const count = od_frame->get_detection_count();
-    if(index >= count )
+    
+    if(index >= od_frame->get_detection_count() )
         throw invalid_value_exception( "index " + std::to_string(index) + " is out of range (" +
-                                        std::to_string(count) + ")" );
+                                        std::to_string(od_frame->get_detection_count()) + ")" );
 
     const auto & entry = od_frame->get_detection( index );
     detection->class_id       = entry.detection_type;

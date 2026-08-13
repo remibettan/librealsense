@@ -19,20 +19,18 @@ object_detection_frame::object_detection_frame( object_detection_frame && other 
 object_detection_frame & object_detection_frame::operator=( object_detection_frame && other )
 {
     perception_frame::operator=( std::move( other ) );
-    _validation_state.store( validation_state::not_checked, std::memory_order_release );
+    _validated = false;
     return *this;
 }
 
 bool object_detection_frame::validate() const
 {
-    auto const state = _validation_state.load( std::memory_order_acquire );
-    if( state != validation_state::not_checked )
-        return state == validation_state::valid;
-
-    bool const valid = validate_payload();
-    _validation_state.store( valid ? validation_state::valid : validation_state::invalid,
-                             std::memory_order_release );
-    return valid;
+    if( _validated )
+        return true;
+    if( ! validate_payload() )
+        return false;
+    _validated = true;
+    return true;
 }
 
 bool object_detection_frame::validate_payload() const
