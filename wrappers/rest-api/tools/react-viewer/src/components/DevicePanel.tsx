@@ -586,8 +586,6 @@ function DeviceCard({
           </div>
         </div>
 
-        <FirmwareStatusLine firmware={deviceState?.firmware} />
-
         {/* Device Details */}
         <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-gray-500">
           {device.firmware_version && (
@@ -666,17 +664,6 @@ function DeviceCard({
       )}
     </div>
   )
-}
-
-interface FirmwareStatusLineProps {
-  firmware?: FirmwareState
-}
-
-// Confirms the camera matches the versions-DB recommendation. Everything else is silent:
-// an outdated camera is prompted by the toast, and unknown/offline has nothing to report.
-function FirmwareStatusLine({ firmware }: FirmwareStatusLineProps) {
-  if (firmware?.status !== 'up_to_date') return null
-  return <div className="mt-2 text-xs text-gray-400">✓ Firmware is up to date</div>
 }
 
 interface SensorStreamControlsProps {

@@ -310,7 +310,7 @@ describe('DevicePanel', () => {
       await waitFor(() => expect(screen.getAllByText(/is available/)).toHaveLength(1))
     })
 
-    it('confirms on the card when the camera matches the recommendation', () => {
+    it('keeps firmware state off the card entirely — the toast owns it', () => {
       const device = createMockDevice()
       const ds = createMockDeviceState(device, {
         firmware: { current: '5.17.3.10', recommended: '5.17.3.10', status: 'up_to_date' },
@@ -319,19 +319,8 @@ describe('DevicePanel', () => {
         initialStoreState: { devices: [device], deviceStates: { [device.device_id]: ds } },
       })
 
-      expect(screen.getByText('✓ Firmware is up to date')).toBeInTheDocument()
-    })
-
-    it('says nothing on the card while the recommendation is unknown', () => {
-      const device = createMockDevice()
-      const ds = createMockDeviceState(device, {
-        firmware: { current: '5.17.0.10', status: 'unknown' },
-      })
-      render(<DevicePanel />, {
-        initialStoreState: { devices: [device], deviceStates: { [device.device_id]: ds } },
-      })
-
-      expect(screen.queryByText(/Firmware is up to date/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/up to date/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Download firmware/)).not.toBeInTheDocument()
     })
   })
 })
