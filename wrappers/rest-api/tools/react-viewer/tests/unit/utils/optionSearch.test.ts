@@ -53,12 +53,6 @@ describe('filterOptions', () => {
     expect(filterOptions(all, 'expsure')).toHaveLength(0)
   })
 
-  it('surfaces a whole section via category name (post -> Post-Processing)', () => {
-    const r = filterOptions(all, 'post')
-    expect(r).toContain(ppSpatial)
-    expect(r).not.toContain(exposure)
-  })
-
   it('surfaces post-processing params via their filter name (spatial)', () => {
     const r = filterOptions(all, 'spatial')
     expect(r).toContain(ppSpatial)

@@ -346,7 +346,7 @@ function DeviceCard({
 }: DeviceCardProps) {
   const [showMenu, setShowMenu] = useState(false)
   const [expandedSensor, setExpandedSensor] = useState<string | null>(null)
-  const [controlSearch, setControlSearch] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const fwPicker = useFilePicker(onUpdateFirmwareFromFile, '.bin')
 
   const isActive = deviceState?.isActive || false
@@ -579,13 +579,13 @@ function DeviceCard({
           {/* Camera Controls */}
           <div className="border-t border-gray-700 p-3">
             <h4 className="text-sm font-medium text-gray-300 mb-2">Controls</h4>
-            <ControlsSearchBox value={controlSearch} onChange={setControlSearch} />
+            <ControlsSearchBox value={searchQuery} onChange={setSearchQuery} />
             {(() => {
-              const searching = controlSearch.trim().length > 0
+              const searching = searchQuery.trim().length > 0
               const sensorMatches = sensors.map((sensor) => ({
                 sensor,
                 matchCount: searching
-                  ? filterOptions(options[sensor.sensor_id] || [], controlSearch).length
+                  ? filterOptions(options[sensor.sensor_id] || [], searchQuery).length
                   : (options[sensor.sensor_id] || []).length,
               }))
               const anyMatch = sensorMatches.some((s) => s.matchCount > 0)
@@ -596,7 +596,7 @@ function DeviceCard({
                       key={sensor.sensor_id}
                       sensor={sensor}
                       options={options[sensor.sensor_id] || []}
-                      searchQuery={controlSearch}
+                      searchQuery={searchQuery}
                       isExpanded={
                         searching ? matchCount > 0 : expandedSensor === sensor.sensor_id
                       }
@@ -611,7 +611,7 @@ function DeviceCard({
                   ))}
                   {searching && !anyMatch && (
                     <p className="text-gray-500 text-xs py-1">
-                      No controls match “{controlSearch.trim()}”.
+                      No controls match “{searchQuery.trim()}”.
                     </p>
                   )}
                 </>
@@ -882,17 +882,6 @@ function StreamConfigItem({ config, sensors, onUpdate, disabled, isMotionSensor 
   )
 }
 
-function groupOptionsByCategory(options: OptionInfo[]): Record<string, OptionInfo[]> {
-  return options.reduce((acc, option) => {
-    const category = option.category || 'Basic Controls'
-    if (!acc[category]) {
-      acc[category] = []
-    }
-    acc[category].push(option)
-    return acc
-  }, {} as Record<string, OptionInfo[]>)
-}
-
 interface ControlsSearchBoxProps {
   value: string
   onChange: (value: string) => void
@@ -936,13 +925,15 @@ function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle
 
   const searching = searchQuery.trim().length > 0
 
-  // Two groupings: the filtered one drives what is rendered, the full one drives
-  // restore-defaults and the "modified" indicators, which must also cover options
-  // the search is currently hiding.
-  const allOptionsByCategory = groupOptionsByCategory(options)
-  const optionsByCategory = searching
-    ? groupOptionsByCategory(filterOptions(options, searchQuery))
-    : allOptionsByCategory
+  // Group options by category
+  const optionsByCategory = options.reduce((acc, option) => {
+    const category = option.category || 'Basic Controls'
+    if (!acc[category]) {
+      acc[category] = []
+    }
+    acc[category].push(option)
+    return acc
+  }, {} as Record<string, OptionInfo[]>)
 
   // Ensure consistent category order: Basic Controls first, then Post-Processing
   const categoryOrder = ['Basic Controls', 'Post-Processing']
@@ -971,7 +962,7 @@ function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle
   }
 
   const handleRestoreCategoryDefaults = async (category: string) => {
-    const categoryOptions = allOptionsByCategory[category] || []
+    const categoryOptions = optionsByCategory[category] || []
     for (const option of categoryOptions) {
       if (!option.read_only && option.current_value !== option.default_value) {
         await onSetOption(sensor.sensor_id, option.option_id, option.default_value)
@@ -1033,13 +1024,15 @@ function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle
                 </button>
               )}
 
-              {sortedCategories.map(category => (
+              {sortedCategories
+                // Hide sections with nothing matching the search
+                .filter(category => filterOptions(optionsByCategory[category], searchQuery).length > 0)
+                .map(category => (
                 <CategorySection
                   key={category}
                   category={category}
                   options={optionsByCategory[category]}
-                  allOptions={allOptionsByCategory[category] || []}
-                  searching={searching}
+                  searchQuery={searchQuery}
                   isExpanded={searching ? true : expandedCategories.has(category)}
                   onToggle={() => toggleCategory(category)}
                   onRestoreDefaults={() => handleRestoreCategoryDefaults(category)}
@@ -1058,9 +1051,7 @@ function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle
 interface CategorySectionProps {
   category: string
   options: OptionInfo[]
-  /** Every option of the category, including ones the search is hiding. */
-  allOptions: OptionInfo[]
-  searching: boolean
+  searchQuery: string
   isExpanded: boolean
   onToggle: () => void
   onRestoreDefaults: () => void
@@ -1068,17 +1059,18 @@ interface CategorySectionProps {
   onSetOption: (sensorId: string, optionId: string, value: number | boolean | string) => Promise<void>
 }
 
-function CategorySection({ category, options, allOptions, searching, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption }: CategorySectionProps) {
-  // Restore defaults acts on the whole category, so the indicator tracks the full
-  // list rather than the currently visible subset.
-  const hasModifiedOptions = allOptions.some(opt => !opt.read_only && opt.current_value !== opt.default_value)
+function CategorySection({ category, options, searchQuery, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption }: CategorySectionProps) {
+  // Restore defaults acts on the whole category, so the indicator covers options
+  // the search hides too.
+  const hasModifiedOptions = options.some(opt => !opt.read_only && opt.current_value !== opt.default_value)
+  const visibleOptions = filterOptions(options, searchQuery)
 
   // For Post-Processing category, render specialized filter sections
   if (category === 'Post-Processing') {
     return (
       <PostProcessingSection
         options={options}
-        searching={searching}
+        searchQuery={searchQuery}
         isExpanded={isExpanded}
         onToggle={onToggle}
         onRestoreDefaults={onRestoreDefaults}
@@ -1121,10 +1113,10 @@ function CategorySection({ category, options, allOptions, searching, isExpanded,
 
       {isExpanded && (
         <div className="p-1.5 space-y-1 bg-gray-800/30">
-          {options.map((option) => (
-            <OptionControl 
-              key={option.option_id} 
-              option={option} 
+          {visibleOptions.map((option) => (
+            <OptionControl
+              key={option.option_id}
+              option={option}
               sensorId={sensorId}
               onSetOption={onSetOption}
             />
@@ -1137,7 +1129,7 @@ function CategorySection({ category, options, allOptions, searching, isExpanded,
 
 interface PostProcessingSectionProps {
   options: OptionInfo[]
-  searching: boolean
+  searchQuery: string
   isExpanded: boolean
   onToggle: () => void
   onRestoreDefaults: () => void
@@ -1146,11 +1138,13 @@ interface PostProcessingSectionProps {
   hasModifiedOptions: boolean
 }
 
-function PostProcessingSection({ options, searching, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption, hasModifiedOptions }: PostProcessingSectionProps) {
+function PostProcessingSection({ options, searchQuery, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption, hasModifiedOptions }: PostProcessingSectionProps) {
   const [expandedFilters, setExpandedFilters] = useState<Set<string>>(new Set())
 
+  const searching = searchQuery.trim().length > 0
+
   // Group options by filter_name
-  const filterGroups = options.reduce((acc, option) => {
+  const filterGroups = filterOptions(options, searchQuery).reduce((acc, option) => {
     const filterName = option.filter_name || 'Other'
     if (!acc[filterName]) {
       acc[filterName] = { enableOption: null as OptionInfo | null, paramOptions: [] as OptionInfo[] }
