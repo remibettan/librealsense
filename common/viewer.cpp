@@ -933,6 +933,9 @@ namespace rs2
         _hidden_options.emplace(RS2_OPTION_NOISE_ESTIMATION);
         _hidden_options.emplace(RS2_OPTION_REGION_OF_INTEREST);
         _hidden_options.emplace(RS2_OPTION_READOUT_SHAPING);
+        // Rendered as a "more" popup Selectable in device-model.cpp instead of a sensor
+        // control, so it doesn't need to appear in the sensor's Controls tree.
+        _hidden_options.emplace(RS2_OPTION_SENSORS_CONFIG_MODE);
     }
 
     void viewer_model::update_configuration(config_file* new_cfg)

@@ -188,19 +188,6 @@ export interface SensorStartRequest {
   config: SensorStreamConfig
 }
 
-export interface SensorStartItem {
-  sensor_id: string
-  config: SensorStreamConfig
-}
-
-export interface BatchSensorStartRequest {
-  sensors: SensorStartItem[]
-}
-
-export interface BatchSensorStopRequest {
-  sensor_ids?: string[] | null
-}
-
 export interface SensorStreamStatus {
   sensor_id: string
   name: string
@@ -217,11 +204,4 @@ export interface SensorStreamStatus {
   started_at?: string | null
   // UI-only: pending operation state for optimistic updates
   pendingOp?: 'stopping' | null
-}
-
-export interface BatchSensorStatus {
-  device_id: string
-  mode: 'idle' | 'pipeline' | 'sensor'
-  sensors: SensorStreamStatus[]
-  errors: string[]
 }

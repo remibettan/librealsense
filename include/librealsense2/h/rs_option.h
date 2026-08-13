@@ -140,6 +140,7 @@ extern "C" {
         RS2_OPTION_DOWNSCALE_RATIO, /**< Embedded filter: secondary-frame downscale ratio (pre-stream only) */
         RS2_OPTION_READOUT_SHAPING, /**< IR/depth sensor readout shaping [0-100%]; higher slows readout to avoid dropped frames */
         RS2_OPTION_DETECTION_DISTANCE, /**< Enable firmware calculation of per-detection distance (meters) on the object-detection stream */
+        RS2_OPTION_SENSORS_CONFIG_MODE, /**< D5x5: 0 = dedicated color sensor (3C), 1 = dual RGB (2C). Requires a hardware_reset after setting; the device then re-enumerates under the new PID. */
         RS2_OPTION_COUNT /**< Number of enumeration values. Not a valid input: intended to be used in for-loops. */
     } rs2_option;
 
@@ -186,6 +187,17 @@ extern "C" {
         int16_t x1, y1;
         int16_t x2, y2;
     } rs2_option_rect;
+
+    /**
+    * The range of values an option accepts.
+    */
+    typedef struct rs2_option_range
+    {
+        float min;
+        float max;
+        float def;
+        float step;                       /**< granularity of options accepting discrete values; zero if continuous */
+    } rs2_option_range;
 
     /** \brief The value of an option, in a known option type.
     */
@@ -420,6 +432,15 @@ extern "C" {
     * \return temporary (goes away with the options-list) pointer to the option-value struct
     */
     rs2_option_value const * rs2_get_option_value_from_list( const rs2_options_list * options, int i, rs2_error ** error );
+
+    /**
+    * get the range of the specific option from options list
+    * \param[in] i          the index of the option
+    * \param[out] out_range filled with the range; left untouched if the option has no range
+    * \param[out] error     if non-null, receives any error that occurs during this call, otherwise, errors are ignored
+    * \return 0 if this option has no queryable range; 1 otherwise
+    */
+    int rs2_get_option_range_from_list( const rs2_options_list * options, int i, rs2_option_range * out_range, rs2_error ** error );
 
     /**
     * Clean up a value and all it points to
