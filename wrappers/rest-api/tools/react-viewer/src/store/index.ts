@@ -5,7 +5,6 @@ import type {
   OptionInfo,
   StreamConfig,
   MetadataUpdate,
-  StreamMetadata,
   IMUData,
   ViewMode,
   DeviceState,
@@ -146,7 +145,6 @@ interface AppState {
   fetchSensors: (deviceId: string) => Promise<void>
 
   // Per-device options
-  fetchOptions: (deviceId: string, sensorId: string) => Promise<void>
   setOption: (
     deviceId: string,
     sensorId: string,
@@ -161,10 +159,6 @@ interface AppState {
   // Per-device streaming
   startDeviceStreaming: (deviceId: string) => Promise<void>
   stopDeviceStreaming: (deviceId: string) => Promise<void>
-  startAllStreaming: () => Promise<void>
-  stopAllStreaming: () => Promise<void>
-  startStreaming: () => Promise<void>
-  stopStreaming: () => Promise<void>
 
   // Per-sensor streaming (sensor API)
   startSensorStreaming: (deviceId: string, sensorId: string) => Promise<void>
@@ -178,10 +172,6 @@ interface AppState {
   maxIMUHistoryLength: number
   addIMUData: (type: 'accel' | 'gyro', data: IMUData) => void
   clearIMUHistory: () => void
-
-  // Point cloud (per device)
-  togglePointCloud: (deviceId?: string) => Promise<void>
-  setPointCloudVertices: (deviceIdOrVertices: string | Float32Array | null, vertices?: Float32Array | null) => void
 
   // UI state
   viewMode: ViewMode
@@ -207,8 +197,6 @@ interface AppState {
   setError: (error: string | null) => void
   clearError: () => void
 
-  isStreaming: boolean
-  isPointCloudEnabled: boolean
   pointCloudVertices: Float32Array | null
   // Per-vertex RGB sampled from the live color frame on the server (1 Uint8 per
   // channel, 3 channels per vertex; aligned 1:1 with pointCloudVertices). Null
@@ -439,26 +427,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   // Per-device options
-  fetchOptions: async (deviceId, sensorId) => {
-    try {
-      const options = await apiClient.getOptions(deviceId, sensorId)
-      set((state) => ({
-        deviceStates: {
-          ...state.deviceStates,
-          [deviceId]: {
-            ...state.deviceStates[deviceId],
-            options: {
-              ...state.deviceStates[deviceId]?.options,
-              [sensorId]: options,
-            },
-          },
-        },
-      }))
-    } catch (error) {
-      console.error(`Failed to fetch options for sensor ${sensorId}:`, error)
-    }
-  },
-
   setOption: async (deviceId, sensorId, optionId, value) => {
     try {
       await apiClient.setOption(deviceId, sensorId, optionId, value)
@@ -658,36 +626,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
         },
       }))
     }
-  },
-
-  startAllStreaming: async () => {
-    const state = get()
-    const activeDevices = Object.values(state.deviceStates).filter(ds => ds.isActive)
-    
-    for (const deviceState of activeDevices) {
-      const enabledConfigs = deviceState.streamConfigs.filter(c => c.enable)
-      if (enabledConfigs.length > 0) {
-        await get().startDeviceStreaming(deviceState.device.device_id)
-      }
-    }
-  },
-
-  stopAllStreaming: async () => {
-    const state = get()
-    const streamingDevices = Object.values(state.deviceStates).filter(ds => ds.isStreaming)
-    
-    for (const deviceState of streamingDevices) {
-      await get().stopDeviceStreaming(deviceState.device.device_id)
-    }
-  },
-
-  // Legacy streaming methods
-  startStreaming: async () => {
-    await get().startAllStreaming()
-  },
-
-  stopStreaming: async () => {
-    await get().stopAllStreaming()
   },
 
   // Per-sensor streaming (sensor API)
@@ -970,41 +908,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
   clearIMUHistory: () => set({ imuHistory: { accel: [], gyro: [] } }),
 
-  togglePointCloud: async (deviceId?: string) => {
-    const state = get()
-    // Fall back to the first active device when caller passes no id.
-    const targetDeviceId = deviceId || Object.values(state.deviceStates).find(ds => ds.isActive)?.device.device_id
-    if (!targetDeviceId) return
-
-    const deviceState = state.deviceStates[targetDeviceId]
-    if (!deviceState) return
-
-    // Check if point cloud is currently enabled by looking at vertices
-    const hasPointCloud = deviceState.streamMetadata?.['depth']?.point_cloud !== undefined
-
-    try {
-      if (hasPointCloud) {
-        await apiClient.disablePointCloud(targetDeviceId)
-      } else {
-        await apiClient.enablePointCloud(targetDeviceId)
-      }
-    } catch (error) {
-      set({
-        error: `Failed to toggle point cloud: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      })
-    }
-  },
-
-  setPointCloudVertices: (deviceIdOrVertices: string | Float32Array | null, vertices?: Float32Array | null) => {
-    // Legacy support: if first arg is Float32Array or null, use it directly
-    if (typeof deviceIdOrVertices !== 'string') {
-      set({ pointCloudVertices: deviceIdOrVertices })
-      return
-    }
-    // New signature: deviceId, vertices - store globally for now
-    set({ pointCloudVertices: vertices || null })
-  },
-
   // UI state
   viewMode: '2d',
   setViewMode: async (mode) => {
@@ -1237,19 +1140,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
   error: null,
   setError: (error) => set({ error }),
   clearError: () => set({ error: null }),
-
-  get isStreaming() {
-    const state = get()
-    // Return true if any device is streaming
-    return Object.values(state.deviceStates).some(ds => ds.isStreaming)
-  },
-
-  get isPointCloudEnabled() {
-    const state = get()
-    return Object.values(state.deviceStates).some(
-      ds => ds.streamMetadata?.['depth']?.point_cloud !== undefined,
-    )
-  },
 
   pointCloudVertices: null,
   pointCloudColors: null,

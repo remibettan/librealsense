@@ -12,8 +12,9 @@ import {
 import { useAppStore } from '../store'
 
 export function IMUViewer() {
-  const { isIMUViewerExpanded, toggleIMUViewer, imuHistory, clearIMUHistory, isStreaming } =
+  const { isIMUViewerExpanded, toggleIMUViewer, imuHistory, clearIMUHistory, isAnyDeviceStreaming } =
     useAppStore()
+  const isStreaming = isAnyDeviceStreaming()
 
   const hasIMUData = imuHistory.accel.length > 0 || imuHistory.gyro.length > 0
 
