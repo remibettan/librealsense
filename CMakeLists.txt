@@ -118,3 +118,17 @@ include(CMake/embedd_udev_rules.cmake)
 if( BUILD_RS2_ALL )
     include( src/realsense2-all.cmake )
 endif()
+
+# --- Packaging ------------------------------------------------------------
+# Force our own CPack config, overwriting anything a third-party subproject may have
+# written. Concretely: Fast-CDR (pulled in by external_fastcdr.cmake for ROS2 bag
+# serialization) calls include(CPack) during its add_subdirectory, and that writes a
+# CPackConfig.cmake at ${CMAKE_BINARY_DIR} that lists fastcdr as an install project.
+# Running cpack -G WIX against that config errors out with "Error when generating
+# package: fastcdr". By explicitly setting CPACK_INSTALL_CMAKE_PROJECTS ourselves and
+# calling include(CPack) LAST here, our config takes precedence.
+set(CPACK_PACKAGE_NAME "${LRS_TARGET}" CACHE INTERNAL "" FORCE)
+set(CPACK_PACKAGE_VENDOR "Intel RealSense" CACHE INTERNAL "" FORCE)
+set(CPACK_PACKAGE_VERSION "${REALSENSE_VERSION_STRING}" CACHE INTERNAL "" FORCE)
+set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};${LRS_TARGET};ALL;/" CACHE INTERNAL "" FORCE)
+include(CPack)
