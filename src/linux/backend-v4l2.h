@@ -448,6 +448,8 @@ namespace librealsense
 
             std::vector<std::shared_ptr<buffer>> _buffers;
             stream_profile _profile;
+            // Kernel reports the format as compressed: frames may be shorter than the buffer
+            bool _variable_frame_size = false;
             frame_callback _callback;
             std::atomic<bool> _is_capturing;
             std::atomic<bool> _is_alive;

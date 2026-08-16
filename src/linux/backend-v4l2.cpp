@@ -1258,12 +1258,16 @@ namespace librealsense
                 v4l2_fmtdesc pixel_format = {};
                 pixel_format.type = _dev.buf_type;
 
+                _variable_frame_size = false;
                 while (ioctl(_fd, VIDIOC_ENUM_FMT, &pixel_format) == 0)
                 {
                     v4l2_frmsizeenum frame_size = {};
                     frame_size.pixel_format = pixel_format.pixelformat;
 
                     uint32_t fourcc = (const big_endian<int> &)pixel_format.pixelformat;
+
+                    if (fourcc == profile.format)
+                        _variable_frame_size = (pixel_format.flags & V4L2_FMT_FLAG_COMPRESSED) != 0;
 
                     if (pixel_format.pixelformat == 0)
                     {
@@ -1543,7 +1547,7 @@ namespace librealsense
                         }
 
                         // Relax the required frame size for compressed formats, i.e. MJPG, Z16H
-                        bool compressed_format = val_in_range(_profile.format, { 0x4d4a5047U , 0x5a313648U});
+                        bool compressed_format = _variable_frame_size || val_in_range(_profile.format, { 0x4d4a5047U , 0x5a313648U});
 
                         // METADATA STREAM
                         // Read metadata. Metadata node performs a blocking call to ensure video and metadata sync
