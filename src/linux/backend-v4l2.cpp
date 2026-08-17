@@ -1550,8 +1550,8 @@ namespace librealsense
                         // Relax the required frame size for compressed formats, i.e. MJPG, Z16H
                         bool compressed_format = val_in_range(_profile.format, { 0x4d4a5047U , 0x5a313648U});
 
-                        // Compressed formats and kernel-reported variable-size ones both deliver frames shorter than the buffer
-                        bool variable_frame_size = compressed_format || _variable_frame_size;
+                        // Compressed and kernel-reported variable-size formats deliver frames shorter than the buffer, so the size check doesn't apply
+                        bool skip_partial_frame_check = compressed_format || _variable_frame_size;
 
                         // METADATA STREAM
                         // Read metadata. Metadata node performs a blocking call to ensure video and metadata sync
@@ -1600,7 +1600,7 @@ namespace librealsense
                                 }
 
                                 // Drop partial and overflow frames (assumes D4XX metadata only)
-                                bool partial_frame = (!variable_frame_size && (buf.bytesused < buffer->get_full_length() - MAX_META_DATA_SIZE));
+                                bool partial_frame = (!skip_partial_frame_check && (buf.bytesused < buffer->get_full_length() - MAX_META_DATA_SIZE));
                                 bool overflow_frame = (buf.bytesused ==  buffer->get_length_frame_only() + MAX_META_DATA_SIZE);
                                 if (_dev.buf_type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
                                     /* metadata size is one line of profile, temporary disable validation */
