@@ -107,3 +107,26 @@ def test_color_fps(test_device):
             failures.append(f"Color {requested_fps}Hz: got {fps:.1f}Hz")
 
     assert not failures, "Color FPS out of tolerance:\n" + "\n".join(failures)
+
+
+def test_object_detection_fps(test_device):
+    dev, ctx = test_device
+
+    try:
+        ps = dev.first_perception_sensor()
+    except RuntimeError:
+        pytest.skip("Device has no perception sensor")
+
+    op = next((p for p in ps.profiles if p.stream_type() == rs.stream.object_detection), None)
+    if op is None:
+        pytest.skip("Perception sensor has no object-detection profile")
+
+    requested_fps = op.fps()
+    fps_helper.TIME_TO_COUNT_FRAMES = 5
+    fps_dict = fps_helper.measure_fps({ps: [op]})
+    fps = fps_dict.get(op.stream_name(), 0)
+    log.info(f"Requested fps: {requested_fps:.1f} [Hz], actual fps: {fps:.1f} [Hz]")
+
+    delta_Hz = requested_fps * 0.05
+    assert fps >= requested_fps - delta_Hz and fps <= requested_fps + delta_Hz, \
+        f"Object Detection {requested_fps}Hz: got {fps:.1f}Hz"
