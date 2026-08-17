@@ -73,10 +73,10 @@ namespace librealsense
             static constexpr uint8_t RS_DEPTH_AUTO_EXPOSURE_MODE        = 0x11;
             static constexpr uint8_t RS_EXTERNAL_SYNC                   = 0x12;
             static constexpr uint8_t RS_READOUT_SHAPING                 = 0x13;
-            static constexpr uint8_t RS_EXTERNAL_SYNC_D500              = 0x1A; // d500_xu_id::EXTERNAL_SYNC_MODE
             static constexpr uint8_t RS_PVT_TEMPERATURE                 = 0x15;
             static constexpr uint8_t RS_PROJECTOR_TEMPERATURE           = 0x16;
             static constexpr uint8_t RS_OHM_TEMPERATURE                 = 0x17;
+            static constexpr uint8_t RS_EXTERNAL_SYNC_D500              = 0x1A; // d500_xu_id::EXTERNAL_SYNC_MODE
 
             bool is_auto_exposure_control( uint8_t control )
             {
@@ -294,7 +294,7 @@ namespace librealsense
                 }
             }
 
-            // D457 controls map - temporal solution to bypass backend interface with actual codes
+            // MIPI controls map - temporal solution to bypass backend interface with actual codes
             uint32_t xu_to_cid( const extension_unit & xu, uint8_t control )
             {
                 if( 0 == xu.subdevice )
