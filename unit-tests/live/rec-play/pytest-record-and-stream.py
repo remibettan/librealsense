@@ -42,7 +42,11 @@ def record(file_name, default_profile):
     depth_sensor.start(frame_queue)
 
     recorder = rs.recorder(file_name, dev)
-    time.sleep(3)
+    time.sleep(1)
+    if depth_sensor.supports(rs.option.emitter_enabled):
+        emitter = depth_sensor.get_option(rs.option.emitter_enabled)
+        depth_sensor.set_option(rs.option.emitter_enabled, 0 if emitter else 1)
+    time.sleep(2)
     recorder.pause()
     recorder = None
 
@@ -64,11 +68,16 @@ def try_streaming(default_profile):
     return frame_queue
 
 
-def play_recording(file_name, default_profile):
+def play_recording(file_name, default_profile, recorded_options):
     global depth_sensor
 
     playback = ctx.load_device(file_name)
     depth_sensor = playback.first_depth_sensor()
+
+    # An option re-written while recording used to replace the whole recorded option snapshot
+    missing = sorted(str(o) for o in recorded_options - set(depth_sensor.get_supported_options()))
+    check.equal(missing, [])
+
     frame_queue = try_streaming(default_profile)
 
     check.is_true(frame_queue.poll_for_frame())
@@ -80,11 +89,12 @@ def test_record_and_stream(test_device, tmp_path):
 
     dev, ctx = test_device
     depth_sensor = dev.first_depth_sensor()
+    recorded_options = set(depth_sensor.get_supported_options())
     default_profile = find_default_profile()
     record(file_name, default_profile)
 
     # after we finish recording we close the sensor and then open it again and try streaming
     try_streaming(default_profile)
 
-    play_recording(file_name, default_profile)
+    play_recording(file_name, default_profile, recorded_options)
 ################################################################################################
