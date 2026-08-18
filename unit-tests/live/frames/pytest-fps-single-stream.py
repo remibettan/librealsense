@@ -111,15 +111,15 @@ def test_color_fps(test_device):
 
 def test_object_detection_fps(test_device):
     dev, ctx = test_device
+    camera_name = dev.get_info(rs.camera_info.name)
 
-    try:
-        ps = dev.first_perception_sensor()
-    except RuntimeError:
-        pytest.skip("Device has no perception sensor")
+    if not any(model in camera_name for model in ["D555", "D585"]):
+        pytest.skip(f"Object detection is not expected on {camera_name}")
+
+    ps = dev.first_perception_sensor()
 
     op = next((p for p in ps.profiles if p.stream_type() == rs.stream.object_detection), None)
-    if op is None:
-        pytest.skip("Perception sensor has no object-detection profile")
+    assert op is not None, "Perception sensor has no object-detection profile"
 
     requested_fps = op.fps()
     fps_helper.TIME_TO_COUNT_FRAMES = 5
