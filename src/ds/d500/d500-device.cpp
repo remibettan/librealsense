@@ -733,7 +733,8 @@ namespace librealsense
             register_info( RS2_CAMERA_INFO_DFU_DEVICE_PATH, group.uvc_devices.front().dfu_device_path );
             _mipi_dfu_adapter = std::make_unique< d500_mipi_dfu_adapter >(
                 group.uvc_devices.front().dfu_device_path,
-                _ds_device_common );
+                _ds_device_common,
+                _hw_monitor );
         }
 
         if (_pid == D585S_PID)

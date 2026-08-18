@@ -10,6 +10,7 @@
 namespace librealsense
 {
     class ds_device_common;
+    class hw_monitor;
 
     // Runtime implementation of update_device_interface for operational D5xx GMSL.
     // d500_device holds an instance and returns it from extend_to(), so
@@ -20,7 +21,8 @@ namespace librealsense
     {
     public:
         d500_mipi_dfu_adapter( const std::string & dfu_device_path,
-                               std::shared_ptr< ds_device_common > device_common );
+                               std::shared_ptr< ds_device_common > device_common,
+                               std::shared_ptr< hw_monitor > hw_monitor );
 
         void update( const void * fw_image, int fw_image_size,
                      rs2_update_progress_callback_sptr = nullptr ) const override;
@@ -33,5 +35,6 @@ namespace librealsense
     private:
         std::string _dfu_device_path;
         std::shared_ptr< ds_device_common > _device_common;
+        std::shared_ptr< hw_monitor > _hw_monitor;
     };
 }
