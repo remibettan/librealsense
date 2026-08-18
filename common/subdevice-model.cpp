@@ -399,6 +399,15 @@ namespace rs2
             depth_colorizer->set_option(RS2_OPTION_VISUAL_PRESET, option_value);
         }
 
+        // The preset above also resets equalization, discarding what the user last chose. Re-apply
+        // the saved value so the config and the control agree.
+        auto & cfg = config_file::instance();
+        auto equalization_key = std::string( "colorizer." )
+                              + depth_colorizer->get_option_name( RS2_OPTION_HISTOGRAM_EQUALIZATION_ENABLED );
+        if( cfg.contains( equalization_key.c_str() ) )
+            depth_colorizer->set_option( RS2_OPTION_HISTOGRAM_EQUALIZATION_ENABLED,
+                                         cfg.get( equalization_key.c_str() ) );
+
         std::stringstream ss;
         ss << "##" << dev.get_info(RS2_CAMERA_INFO_NAME)
             << "/" << s->get_info(RS2_CAMERA_INFO_NAME)
