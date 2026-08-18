@@ -56,7 +56,7 @@ namespace librealsense
                 device_info.mi = info.mi;
                 device_info.unique_id = info.unique_id;
                 device_info.device_path = info.id;
-                device_info.conn_spec = info.conn_spec;
+                device_info.usb_conn_spec = info.conn_spec;
                 //LOG_INFO("Found UVC device: " << std::string(device_info).c_str());
                 rv.push_back(device_info);
             }
@@ -199,7 +199,7 @@ namespace librealsense
                             break;
                     }
                 }
-            }, [this, state](){ return state == _power_state; });
+            }, [this, state](){ return state == _power_state; }, true);
 
             if(state != _power_state)
                 throw std::runtime_error("failed to set power state");
@@ -350,7 +350,7 @@ namespace librealsense
 
         usb_spec rs_uvc_device::get_usb_specification() const
         {
-            // On Win7, USB type is determined only when the USB device is created, _info.conn_spec holds wrong information
+            // On Win7 the cached uvc_device_info.usb_conn_spec is wrong, so read it live from the USB device's own info
             return _usb_device->get_info().conn_spec; 
         }
 
@@ -518,7 +518,7 @@ namespace librealsense
                             0);
                 }
 
-            }, [this](){ return !_messenger; });
+            }, [this](){ return !_messenger; }, true);
 
             if (sts != RS2_USB_STATUS_SUCCESS)
                 throw std::runtime_error("get_data_usb failed, error: " + usb_status_to_string.at(sts));
@@ -608,7 +608,7 @@ namespace librealsense
                           0);
                 }
 
-            }, [this](){ return !_messenger; });
+            }, [this](){ return !_messenger; }, true);
 
             if (sts != RS2_USB_STATUS_SUCCESS)
                 throw std::runtime_error("set_data_usb failed, error: " + usb_status_to_string.at(sts));
@@ -619,7 +619,7 @@ namespace librealsense
 
         bool rs_uvc_device::uvc_get_ctrl(uint8_t unit, uint8_t ctrl, void *data, int len, uvc_req_code req_code) const
         {
-            usb_status sts;
+            usb_status sts = RS2_USB_STATUS_OTHER;
             _action_dispatcher.invoke_and_wait([&, this](dispatcher::cancellable_timer c)
             {
                 if (_messenger)
@@ -632,7 +632,7 @@ namespace librealsense
                             static_cast<unsigned char *>(data),
                             len, transferred, CONTROL_TRANSFER_TIMEOUT);
                 }
-            }, [this](){ return !_messenger; });
+            }, [this](){ return !_messenger; }, true);
 
             if (sts == RS2_USB_STATUS_NO_DEVICE)
                 throw std::runtime_error("usb device disconnected");
@@ -642,7 +642,7 @@ namespace librealsense
 
         bool rs_uvc_device::uvc_set_ctrl(uint8_t unit, uint8_t ctrl, void *data, int len)
         {
-            usb_status sts;
+            usb_status sts = RS2_USB_STATUS_OTHER;
             _action_dispatcher.invoke_and_wait([&, this](dispatcher::cancellable_timer c)
             {
                 if (_messenger)
@@ -655,7 +655,7 @@ namespace librealsense
                             static_cast<unsigned char *>(data),
                             len, transferred, CONTROL_TRANSFER_TIMEOUT);
                 }
-            }, [this](){ return !_messenger; });
+            }, [this](){ return !_messenger; }, true);
 
             if (sts == RS2_USB_STATUS_NO_DEVICE)
                 throw std::runtime_error("usb device disconnected");
@@ -854,7 +854,7 @@ namespace librealsense
                 }
             }
 
-            usb_status sts;
+            usb_status sts = RS2_USB_STATUS_OTHER;
             _action_dispatcher.invoke_and_wait([&, this](dispatcher::cancellable_timer c)
             {
                 if (_messenger)
@@ -870,7 +870,7 @@ namespace librealsense
                                 buf, static_cast<uint32_t>(len), transferred, 0);
                     } while (sts != RS2_USB_STATUS_SUCCESS && retries++ < 5);
                 }
-            }, [this](){ return !_messenger; });
+            }, [this](){ return !_messenger; }, true);
 
             if (sts != RS2_USB_STATUS_SUCCESS)
             {

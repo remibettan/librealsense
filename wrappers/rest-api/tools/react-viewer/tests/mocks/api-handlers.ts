@@ -164,41 +164,8 @@ export const handlers = [
     })
   }),
 
-  // Batch sensor start
-  http.post(`${API_BASE}/devices/:deviceId/sensors/batch/start`, async ({ params }) => {
-    const deviceId = params.deviceId as string
-    return HttpResponse.json({
-      device_id: deviceId,
-      mode: 'sensor',
-      sensors: [],
-      errors: [],
-    })
-  }),
-
-  // Batch sensor stop
-  http.post(`${API_BASE}/devices/:deviceId/sensors/batch/stop`, async ({ params }) => {
-    const deviceId = params.deviceId as string
-    return HttpResponse.json({
-      device_id: deviceId,
-      mode: 'idle',
-      sensors: [],
-      errors: [],
-    })
-  }),
-
-  // Batch sensor status
-  http.get(`${API_BASE}/devices/:deviceId/sensors/batch/status`, async ({ params }) => {
-    const deviceId = params.deviceId as string
-    return HttpResponse.json({
-      device_id: deviceId,
-      mode: 'idle',
-      sensors: [],
-      errors: [],
-    })
-  }),
-
   // Firmware status (bundled FW removed; recommended is always null)
-  http.get(`${API_BASE}/devices/:deviceId/status`, ({ params }) => {
+  http.get(`${API_BASE}/devices/:deviceId/firmware/`, ({ params }) => {
     const device = mockDeviceList.find((d) => d.device_id === params.deviceId)
     return HttpResponse.json({
       device_id: params.deviceId,

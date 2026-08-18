@@ -103,8 +103,21 @@ namespace rs2
             auto supported_options = s->get_supported_option_values();
             for( rs2::option_value option : supported_options )
             {
-                options_metadata[option->id]
-                    = create_option_model( option, opt_base_label, this, s, options_invalidated, error_message );
+                // Build the model first and insert only on success: options that cannot be
+                // queried (e.g. a MIPI color control with no V4L2 CID mapping) throw here, and
+                // map::operator[] would otherwise leave a default-constructed (null-endpoint)
+                // entry that crashes subdevice_model::update(). Isolate per option so one bad
+                // control does not drop the rest.
+                try
+                {
+                    auto model = create_option_model( option, opt_base_label, this, s, options_invalidated, error_message );
+                    options_metadata[option->id] = std::move( model );
+                }
+                catch( const std::exception & e )
+                {
+                    if( viewer.not_model )
+                        viewer.not_model->add_log( e.what(), RS2_LOG_SEVERITY_WARN );
+                }
             }
 
             s->on_options_changed( [this]( const options_list & list )
@@ -311,6 +324,31 @@ namespace rs2
             auto model = std::make_shared<embedded_filter_model>(
                 this, shared_filter->get_type(), shared_filter, viewer, error_message);
 
+            // Dual-color variants (0C01/0C04/0C07) share a depth+color sensor, so close-range runs depth-only.
+            std::string device_pid = s->supports( RS2_CAMERA_INFO_PRODUCT_ID )
+                                   ? s->get_info( RS2_CAMERA_INFO_PRODUCT_ID ) : "";
+            const bool is_dual_color = ( device_pid == "0C01" || device_pid == "0C04" || device_pid == "0C07" );
+            if( shared_filter->get_type() == RS2_EMBEDDED_FILTER_TYPE_CLOSE_RANGE && is_dual_color )
+            {
+                // Safe to capture this: the lambda lives in model which lives in embedded_filters,
+                // a member of this subdevice_model — so it cannot outlive its owner.
+                model->available_predicate = [this]()
+                {
+                    // Only a live color stream conflicts with close range; while stopped
+                    // the toggle stays available even if color is selected for the next run.
+                    if( !streaming )
+                        return true;
+                    for( auto& p : profiles )
+                    {
+                        auto it = stream_enabled.find( p.unique_id() );
+                        if( it != stream_enabled.end() && it->second && p.stream_type() == RS2_STREAM_COLOR )
+                            return false;
+                    }
+                    return true;
+                };
+                model->unavailable_tooltip = "Improved Close Range Depth cannot be activated while color streams are active";
+            }
+
             embedded_filters.push_back(model);
         }
 
@@ -359,18 +397,6 @@ namespace rs2
         {
             auto option_value = depth_colorizer->get_option(RS2_OPTION_VISUAL_PRESET);
             depth_colorizer->set_option(RS2_OPTION_VISUAL_PRESET, option_value);
-        }
-
-        // Disable histogram equalization for D585 prototype variants (0C07, 0C08).
-        // Must be applied AFTER the VISUAL_PRESET restore block above: re-setting the Dynamic
-        // preset (default) re-enables histogram equalization via its on_set callback.
-        if (s->supports(RS2_CAMERA_INFO_PRODUCT_ID))
-        {
-            std::string device_pid = s->get_info(RS2_CAMERA_INFO_PRODUCT_ID);
-            if (device_pid == "0C07" || device_pid == "0C08")
-            {
-                depth_colorizer->set_option(RS2_OPTION_HISTOGRAM_EQUALIZATION_ENABLED, 0.f);
-            }
         }
 
         std::stringstream ss;
@@ -787,6 +813,11 @@ namespace rs2
 
                         if (stream_enabled[f.first])
                         {
+                            // The two imagers stream mono IR (Y8) OR Bayer color (BA81), not both,
+                            // so enabling a color stream disables IR and vice versa (depth is free).
+                            if( is_dual_color_subdevice() )
+                                enforce_dual_color_ir_exclusion(f.first);
+
                             // Find the stream type for this unique_id
                             rs2_stream stream_type = RS2_STREAM_ANY;
                             for (auto& p : profiles)
@@ -1529,6 +1560,64 @@ namespace rs2
         return is_cal_format;
     }
 
+    bool subdevice_model::is_dual_color_subdevice() const
+    {
+        // The color<->IR imager conflict is specific to the D401 GMSL dual-RGB, where the two OV9782
+        // imagers each stream mono IR OR Bayer color (never both). Gate strictly on that product id
+        // (0xABCC == RS401_GMSL_PID, the same gate d400-device.cpp uses for the whole feature) so
+        // this stays a no-op on EVERY other camera -- standard D4xx (color on a separate sensor /
+        // single color) never reach the color>=2 check anyway, but the D500 dual-RGB (separate color
+        // sensors, 2 colors + stereo on one sensor) would, and it has no such imager conflict.
+        if (!dev.supports(RS2_CAMERA_INFO_PRODUCT_ID)
+            || std::string(dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID)) != "ABCC")   // RS401_GMSL_PID
+            return false;
+
+        // Structural sanity: this subdevice actually exposes the dual-RGB config (two color streams
+        // alongside the stereo streams) rather than, say, the plain depth sensor of the same device.
+        int color_streams = 0;
+        bool has_stereo = false;
+        for (auto&& p : profiles)
+        {
+            if (p.stream_type() == RS2_STREAM_COLOR)
+                ++color_streams;
+            else if (p.stream_type() == RS2_STREAM_INFRARED || p.stream_type() == RS2_STREAM_DEPTH)
+                has_stereo = true;
+        }
+        return color_streams >= 2 && has_stereo;
+    }
+
+    void subdevice_model::enforce_dual_color_ir_exclusion(int just_enabled_unique_id)
+    {
+        // Caller gates this on is_dual_color_subdevice().
+        auto stream_type_of = [this](int unique_id) -> rs2_stream
+        {
+            for (auto&& p : profiles)
+                if (p.unique_id() == unique_id)
+                    return p.stream_type();
+            return RS2_STREAM_ANY;
+        };
+
+        auto is_color = [](rs2_stream st) { return st == RS2_STREAM_COLOR; };
+        auto is_ir    = [](rs2_stream st) { return st == RS2_STREAM_INFRARED; };
+
+        rs2_stream enabled_type = stream_type_of(just_enabled_unique_id);
+        // Only color<->IR conflict (the two imagers stream mono IR OR Bayer color, not both). Depth
+        // is a separate node - enabling it clears nothing, and it survives enabling color or IR.
+        if (!is_color(enabled_type) && !is_ir(enabled_type))
+            return;
+
+        for (auto& other : stream_enabled)
+        {
+            if (other.first == just_enabled_unique_id || !other.second)
+                continue;
+
+            rs2_stream other_type = stream_type_of(other.first);
+            if ((is_color(enabled_type) && is_ir(other_type)) ||
+                (is_ir(enabled_type) && is_color(other_type)))
+                other.second = false;   // color and IR share the imagers -> mutually exclusive
+        }
+    }
+
     bool subdevice_model::is_depth_calibration_profile() const
     {
         // Check if D555 at depth resolution of 1280x800
@@ -1974,7 +2063,14 @@ namespace rs2
                     else
                     {
                         auto id = f.get_profile().unique_id();
-                        viewer.ppf.frames_queue[id].enqueue(f);
+                        {
+                            std::lock_guard< std::mutex > lock( viewer.streams_mutex );
+                            auto queue = viewer.ppf.frames_queue.find( id );
+                            if( queue == viewer.ppf.frames_queue.end() )
+                                return;
+
+                            queue->second.enqueue( f );
+                        }
 
                         on_frame();
                     }
