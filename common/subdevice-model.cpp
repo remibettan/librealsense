@@ -399,14 +399,31 @@ namespace rs2
             depth_colorizer->set_option(RS2_OPTION_VISUAL_PRESET, option_value);
         }
 
-        // The preset above also resets equalization, discarding what the user last chose. Re-apply
-        // the saved value so the config and the control agree.
+        // Each preset also assigns color scheme, min/max and equalization, so the re-set above
+        // discards what restore_processing_block applied. Re-apply those, equalization last -
+        // setting min/max unsets it through the observers.
         auto & cfg = config_file::instance();
-        auto equalization_key = std::string( "colorizer." )
-                              + depth_colorizer->get_option_name( RS2_OPTION_HISTOGRAM_EQUALIZATION_ENABLED );
-        if( cfg.contains( equalization_key.c_str() ) )
-            depth_colorizer->set_option( RS2_OPTION_HISTOGRAM_EQUALIZATION_ENABLED,
-                                         cfg.get( equalization_key.c_str() ) );
+        for( auto opt : { RS2_OPTION_COLOR_SCHEME,
+                          RS2_OPTION_MIN_DISTANCE,
+                          RS2_OPTION_MAX_DISTANCE,
+                          RS2_OPTION_HISTOGRAM_EQUALIZATION_ENABLED } )
+        {
+            if( ! depth_colorizer->supports( opt ) )
+                continue;
+            auto key = std::string( "colorizer." ) + depth_colorizer->get_option_name( opt );
+            if( ! cfg.contains( key.c_str() ) )
+                continue;
+            try
+            {
+                float value = cfg.get( key.c_str() );
+                auto range = depth_colorizer->get_option_range( opt );
+                if( value >= range.min && value <= range.max )
+                    depth_colorizer->set_option( opt, value );
+            }
+            catch( ... )
+            {
+            }
+        }
 
         std::stringstream ss;
         ss << "##" << dev.get_info(RS2_CAMERA_INFO_NAME)
