@@ -113,7 +113,7 @@ def test_object_detection_fps(test_device):
     dev, ctx = test_device
     camera_name = dev.get_info(rs.camera_info.name)
 
-    if not any(model in camera_name for model in ["D555", "D585"]):
+    if "D585S" in camera_name or not any(model in camera_name for model in ["D555", "D585"]):
         pytest.skip(f"Object detection is not expected on {camera_name}")
 
     ps = dev.first_perception_sensor()
