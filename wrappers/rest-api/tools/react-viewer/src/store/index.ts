@@ -42,7 +42,7 @@ function buildStreamConfigs(sensors: SensorInfo[]): StreamConfig[] {
       const streamTypeLower = profile.stream_type.toLowerCase()
       const enableByDefault =
         streamTypeLower === 'depth' || streamTypeLower === 'color' ||
-        streamTypeLower.includes('gyro') || streamTypeLower.includes('accel')
+        streamTypeLower === 'gyro' || streamTypeLower === 'accel'
       configs.push({
         sensor_id: sensor.sensor_id,
         stream_type: profile.stream_type,

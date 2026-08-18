@@ -722,7 +722,6 @@ function SensorStreamControls({
                 onClick={() => toggleSensor(sensor.sensor_id)}
                 className="flex items-center gap-2 flex-1 min-w-0 text-left"
                 aria-expanded={isExpanded}
-                title={isExpanded ? 'Collapse' : 'Expand stream settings'}
               >
                 <svg
                   className={`w-3 h-3 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
