@@ -5112,5 +5112,9 @@ void rs2_get_frame_object_detection(const rs2_frame* frame, unsigned int index, 
     detection->bottom_right_x = entry.bottom_right_x;
     detection->bottom_right_y = entry.bottom_right_y;
     detection->depth          = entry.distance;
+    detection->world_position = entry.world_position;
+    detection->image_x        = entry.image_x;
+    detection->image_y        = entry.image_y;
+    detection->com_valid      = entry.com_valid ? 1 : 0;
 }
 HANDLE_EXCEPTIONS_AND_RETURN(, frame, index, output_arg(detection))

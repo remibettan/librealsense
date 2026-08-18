@@ -2265,6 +2265,9 @@ namespace rs2
                     {
                         ImGui::PushFont( font2 );
                         std::string str = rsutils::string::from() << std::setprecision( 2 ) << object.mean_depth << " m";
+                        if( object.world_x != 0.f || object.world_y != 0.f )
+                            str += rsutils::string::from() << " (X:" << std::setprecision( 2 ) << object.world_x
+                                                            << ", Y:" << std::setprecision( 2 ) << object.world_y << ")";
                         auto size = ImGui::CalcTextSize( str.c_str() );
                         if( size.y < h  &&  size.x < bbox.w )
                         {
@@ -4055,12 +4058,19 @@ namespace rs2
                 float viewer_depth_m = 0.f;
                 float com_rel_u = 0.5f, com_rel_v = 0.5f;
 
+                if( det.com_valid && color_bbox.w > 0.f && color_bbox.h > 0.f )
+                {
+                    auto clamp01 = []( float v ) { return v < 0.f ? 0.f : v > 1.f ? 1.f : v; };
+                    com_rel_u = clamp01( ( det.image_x - color_bbox.x ) / color_bbox.w );
+                    com_rel_v = clamp01( ( det.image_y - color_bbox.y ) / color_bbox.h );
+                }
+
                 // TODO: temporary fallback — viewer-side COM runs only when HKR firmware
                 // returns 0 (XU command not supported or device not ready).
                 // Checked per-detection intentionally: firmware could return 0 for individual
                 // detections (e.g. out-of-range) even when HKR COM is otherwise working.
                 // Remove once HKR COM is fully implemented and reliable on all devices.
-                if( hkr_depth_m == 0.f )
+                if( ! det.com_valid && hkr_depth_m == 0.f )
                 {
                     if( !depth8u_ready )
                     {
@@ -4116,7 +4126,9 @@ namespace rs2
                 std::string name = object_type_to_string( static_cast< object_type >( det.class_id ) );
                 new_objects.emplace_back( obj_id++, name, normalized_color_bbox, normalized_depth_bbox, mean_depth,
                                           hkr_depth_m, com_rel_u, com_rel_v, det.score,
-                                          static_cast< object_type >( det.class_id ) );
+                                          static_cast< object_type >( det.class_id ),
+                                          det.com_valid ? det.world_position.x : 0.f,
+                                          det.com_valid ? det.world_position.y : 0.f );
             }
 
             std::lock_guard< std::mutex > lock( objects->mutex );
