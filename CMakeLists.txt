@@ -130,5 +130,10 @@ endif()
 set(CPACK_PACKAGE_NAME "${LRS_TARGET}" CACHE INTERNAL "" FORCE)
 set(CPACK_PACKAGE_VENDOR "Intel RealSense" CACHE INTERNAL "" FORCE)
 set(CPACK_PACKAGE_VERSION "${REALSENSE_VERSION_STRING}" CACHE INTERNAL "" FORCE)
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "Intel RealSense SDK 2.0" CACHE INTERNAL "" FORCE)
 set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};${LRS_TARGET};ALL;/" CACHE INTERNAL "" FORCE)
+# WIX requires a stable per-product upgrade GUID so future MSIs supersede this one.
+# Fixed here so all librealsense2 releases share the same upgrade lineage; do NOT
+# change once shipped, or upgrades will install alongside instead of replacing.
+set(CPACK_WIX_UPGRADE_GUID "E8C8A8A0-4D5F-4B2E-B8C3-1A9D8F7E6C5B" CACHE INTERNAL "" FORCE)
 include(CPack)
