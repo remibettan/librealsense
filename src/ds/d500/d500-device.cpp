@@ -7,6 +7,7 @@
 #include <src/platform/platform-utils.h>
 
 #include "d500-device.h"
+#include "d500-mipi-dfu-adapter.h"
 #include "d500-private.h"
 #include "d500-options.h"
 #include "d500-info.h"
@@ -401,6 +402,16 @@ namespace librealsense
         _device_alive->store( false );
     }
 
+    bool d500_device::extend_to( rs2_extension extension_type, void ** ptr )
+    {
+        if( extension_type == RS2_EXTENSION_UPDATE_DEVICE && _mipi_dfu_adapter && ptr )
+        {
+            *ptr = static_cast< update_device_interface * >( _mipi_dfu_adapter.get() );
+            return true;
+        }
+        return false;
+    }
+
     void d500_device::init(std::shared_ptr<context> ctx,
         const platform::backend_device_group& group)
     {
@@ -717,6 +728,13 @@ namespace librealsense
         register_info( RS2_CAMERA_INFO_PRODUCT_ID, pid_hex_str );
         register_info(RS2_CAMERA_INFO_PRODUCT_LINE, "D500");
         register_info(RS2_CAMERA_INFO_CAMERA_LOCKED, _is_locked ? "YES" : "NO");
+        if( _is_mipi_device )
+        {
+            register_info( RS2_CAMERA_INFO_DFU_DEVICE_PATH, group.uvc_devices.front().dfu_device_path );
+            _mipi_dfu_adapter = std::make_unique< d500_mipi_dfu_adapter >(
+                group.uvc_devices.front().dfu_device_path,
+                _ds_device_common );
+        }
 
         if (_pid == D585S_PID)
         {
