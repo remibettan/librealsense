@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { MutableRefObject, ReactElement } from 'react'
 import { useAppStore } from '../store'
 import type { DeviceInfo, SensorInfo, OptionInfo, StreamConfig, DeviceState, FirmwareState, SensorConfig } from '../api/types'
+import { Search, X } from 'lucide-react'
 import { FirmwareProgressModal } from './FirmwareProgressModal'
 import { ToastContainer, type ToastType, type ToastAction } from './Toast'
+import { filterOptions } from '../utils/optionSearch'
 
 interface Toast {
   id: string
@@ -344,6 +346,7 @@ function DeviceCard({
 }: DeviceCardProps) {
   const [showMenu, setShowMenu] = useState(false)
   const [expandedSensor, setExpandedSensor] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const fwPicker = useFilePicker(onUpdateFirmwareFromFile, '.bin')
 
   const isActive = deviceState?.isActive || false
@@ -576,18 +579,44 @@ function DeviceCard({
           {/* Camera Controls */}
           <div className="border-t border-gray-700 p-3">
             <h4 className="text-sm font-medium text-gray-300 mb-2">Controls</h4>
-            {sensors.map((sensor) => (
-              <SensorOptionsPanel
-                key={sensor.sensor_id}
-                sensor={sensor}
-                options={options[sensor.sensor_id] || []}
-                isExpanded={expandedSensor === sensor.sensor_id}
-                onToggle={() =>
-                  setExpandedSensor(expandedSensor === sensor.sensor_id ? null : sensor.sensor_id)
-                }
-                onSetOption={onSetOption}
-              />
-            ))}
+            <ControlsSearchBox value={searchQuery} onChange={setSearchQuery} />
+            {(() => {
+              const searching = searchQuery.trim().length > 0
+              const sensorMatches = sensors.map((sensor) => ({
+                sensor,
+                matchCount: searching
+                  ? filterOptions(options[sensor.sensor_id] || [], searchQuery).length
+                  : (options[sensor.sensor_id] || []).length,
+              }))
+              const anyMatch = sensorMatches.some((s) => s.matchCount > 0)
+              return (
+                <>
+                  {sensorMatches.map(({ sensor, matchCount }) => (
+                    <SensorOptionsPanel
+                      key={sensor.sensor_id}
+                      sensor={sensor}
+                      options={options[sensor.sensor_id] || []}
+                      searchQuery={searchQuery}
+                      isExpanded={
+                        searching ? matchCount > 0 : expandedSensor === sensor.sensor_id
+                      }
+                      onToggle={() => {
+                        // While searching the header is force-expanded, so a click would
+                        // only rewrite the state restored after the query is cleared.
+                        if (searching) return
+                        setExpandedSensor(expandedSensor === sensor.sensor_id ? null : sensor.sensor_id)
+                      }}
+                      onSetOption={onSetOption}
+                    />
+                  ))}
+                  {searching && !anyMatch && (
+                    <p className="text-gray-500 text-xs py-1">
+                      No controls match “{searchQuery.trim()}”.
+                    </p>
+                  )}
+                </>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -637,8 +666,16 @@ function SensorStreamControls({
   onStartSensorStreaming,
   onStopSensorStreaming,
 }: SensorStreamControlsProps) {
+  // Each sensor module is collapsed by default; the play button stays visible.
+  const [expandedSensors, setExpandedSensors] = useState<Set<string>>(new Set())
+  const toggleSensor = (sensorId: string) => setExpandedSensors(prev => {
+    const next = new Set(prev)
+    next.has(sensorId) ? next.delete(sensorId) : next.add(sensorId)
+    return next
+  })
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-1.5">
       {sensors.map((sensor) => {
         const sensorStreamConfigs = streamsBySensor[sensor.sensor_id] || []
         if (sensorStreamConfigs.length === 0) return null
@@ -651,6 +688,7 @@ function SensorStreamControls({
         const sensorConfig = sensorConfigs[sensor.sensor_id]
 
         const canStartSensor = hasEnabledSensorStreams && streamingMode !== 'pipeline'
+        const isExpanded = expandedSensors.has(sensor.sensor_id)
 
         const computeCommonOptions = () => {
           const profiles = sensor.supported_stream_profiles
@@ -677,15 +715,25 @@ function SensorStreamControls({
         const { resolutions: availableResolutions, fps: availableFps } = computeCommonOptions()
 
         return (
-          <div key={sensor.sensor_id} className="bg-gray-800/50 rounded-lg p-2">
-            {/* Sensor header with per-sensor start button */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-300">{sensor.name}</span>
+          <div key={sensor.sensor_id} className="bg-gray-800/50 rounded-lg px-2 py-1">
+            {/* Sensor header: collapse toggle (name) on the left, start button always visible on the right */}
+            <div className={`flex items-center justify-between ${isExpanded ? 'mb-2' : ''}`}>
+              <button
+                onClick={() => toggleSensor(sensor.sensor_id)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                aria-expanded={isExpanded}
+              >
+                <svg
+                  className={`w-3 h-3 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="text-sm font-medium text-gray-300 truncate">{sensor.name}</span>
                 {isSensorStreaming && (
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
                 )}
-              </div>
+              </button>
               <button
                 onClick={() => isSensorStreaming
                   ? onStopSensorStreaming(sensor.sensor_id)
@@ -715,6 +763,7 @@ function SensorStreamControls({
               </div>
             )}
 
+            {isExpanded && (<>
             {sensorConfig && !sensorConfig.isMotionSensor && (
               <div className="mb-2 flex items-center gap-2 text-xs">
                 <div className="flex items-center gap-1">
@@ -765,6 +814,7 @@ function SensorStreamControls({
                 />
               ))}
             </div>
+            </>)}
           </div>
         )
       })}
@@ -853,16 +903,48 @@ function StreamConfigItem({ config, sensors, onUpdate, disabled, isMotionSensor 
   )
 }
 
+interface ControlsSearchBoxProps {
+  value: string
+  onChange: (value: string) => void
+}
+
+function ControlsSearchBox({ value, onChange }: ControlsSearchBoxProps) {
+  return (
+    <div className="relative mb-2">
+      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search controls…"
+        className="w-full pl-7 pr-7 py-1.5 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-rs-blue text-xs"
+      />
+      {value && (
+        <button
+          onClick={() => onChange('')}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+          title="Clear search"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
 interface SensorOptionsPanelProps {
   sensor: SensorInfo
   options: OptionInfo[]
+  searchQuery: string
   isExpanded: boolean
   onToggle: () => void
   onSetOption: (sensorId: string, optionId: string, value: number | boolean | string) => Promise<void>
 }
 
-function SensorOptionsPanel({ sensor, options, isExpanded, onToggle, onSetOption }: SensorOptionsPanelProps) {
+function SensorOptionsPanel({ sensor, options, searchQuery, isExpanded, onToggle, onSetOption }: SensorOptionsPanelProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+
+  const searching = searchQuery.trim().length > 0
 
   // Group options by category
   const optionsByCategory = options.reduce((acc, option) => {
@@ -886,6 +968,9 @@ function SensorOptionsPanel({ sensor, options, isExpanded, onToggle, onSetOption
   })
 
   const toggleCategory = (category: string) => {
+    // Categories are force-expanded while searching - ignore clicks so the
+    // pre-search expansion state survives the query.
+    if (searching) return
     setExpandedCategories(prev => {
       const newSet = new Set(prev)
       if (newSet.has(category)) {
@@ -923,22 +1008,20 @@ function SensorOptionsPanel({ sensor, options, isExpanded, onToggle, onSetOption
         onClick={onToggle}
         className="w-full flex items-center justify-between p-1.5 bg-gray-800/50 rounded hover:bg-gray-700 transition-colors text-xs"
       >
-        <span className="font-medium">{sensor.name}</span>
-        <div className="flex items-center gap-1">
-          {modifiedCount > 0 && (
-            <span className="px-1.5 py-0.5 bg-rs-blue/20 text-rs-blue rounded text-[10px]">
-              {modifiedCount} modified
-            </span>
-          )}
+        <span className="flex items-center gap-1.5 font-medium min-w-0">
           <svg
-            className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+            className={`w-3.5 h-3.5 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-        </div>
+          <span className="truncate">{sensor.name}</span>
+        </span>
+        {modifiedCount > 0 && (
+          <span className="px-1.5 py-0.5 bg-rs-blue/20 text-rs-blue rounded text-[10px]">
+            {modifiedCount} modified
+          </span>
+        )}
       </button>
 
       {isExpanded && (
@@ -960,12 +1043,16 @@ function SensorOptionsPanel({ sensor, options, isExpanded, onToggle, onSetOption
                 </button>
               )}
 
-              {sortedCategories.map(category => (
+              {sortedCategories
+                // Hide sections with nothing matching the search
+                .filter(category => filterOptions(optionsByCategory[category], searchQuery).length > 0)
+                .map(category => (
                 <CategorySection
                   key={category}
                   category={category}
                   options={optionsByCategory[category]}
-                  isExpanded={expandedCategories.has(category)}
+                  searchQuery={searchQuery}
+                  isExpanded={searching ? true : expandedCategories.has(category)}
                   onToggle={() => toggleCategory(category)}
                   onRestoreDefaults={() => handleRestoreCategoryDefaults(category)}
                   sensorId={sensor.sensor_id}
@@ -983,6 +1070,7 @@ function SensorOptionsPanel({ sensor, options, isExpanded, onToggle, onSetOption
 interface CategorySectionProps {
   category: string
   options: OptionInfo[]
+  searchQuery: string
   isExpanded: boolean
   onToggle: () => void
   onRestoreDefaults: () => void
@@ -990,14 +1078,18 @@ interface CategorySectionProps {
   onSetOption: (sensorId: string, optionId: string, value: number | boolean | string) => Promise<void>
 }
 
-function CategorySection({ category, options, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption }: CategorySectionProps) {
+function CategorySection({ category, options, searchQuery, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption }: CategorySectionProps) {
+  // Restore defaults acts on the whole category, so the indicator covers options
+  // the search hides too.
   const hasModifiedOptions = options.some(opt => !opt.read_only && opt.current_value !== opt.default_value)
+  const visibleOptions = filterOptions(options, searchQuery)
 
   // For Post-Processing category, render specialized filter sections
   if (category === 'Post-Processing') {
     return (
       <PostProcessingSection
         options={options}
+        searchQuery={searchQuery}
         isExpanded={isExpanded}
         onToggle={onToggle}
         onRestoreDefaults={onRestoreDefaults}
@@ -1013,17 +1105,15 @@ function CategorySection({ category, options, isExpanded, onToggle, onRestoreDef
       <div className="flex items-center bg-gray-750 hover:bg-gray-700 transition-colors">
         <button
           onClick={onToggle}
-          className="flex-1 flex items-center justify-between p-1.5"
+          className="flex-1 flex items-center gap-1.5 p-1.5"
         >
-          <span className="text-xs font-medium text-gray-300">{category}</span>
           <svg
-            className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+            className={`w-3 h-3 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
+          <span className="text-xs font-medium text-gray-300">{category}</span>
         </button>
         {hasModifiedOptions && (
           <button
@@ -1040,10 +1130,10 @@ function CategorySection({ category, options, isExpanded, onToggle, onRestoreDef
 
       {isExpanded && (
         <div className="p-1.5 space-y-1 bg-gray-800/30">
-          {options.map((option) => (
-            <OptionControl 
-              key={option.option_id} 
-              option={option} 
+          {visibleOptions.map((option) => (
+            <OptionControl
+              key={option.option_id}
+              option={option}
               sensorId={sensorId}
               onSetOption={onSetOption}
             />
@@ -1056,6 +1146,7 @@ function CategorySection({ category, options, isExpanded, onToggle, onRestoreDef
 
 interface PostProcessingSectionProps {
   options: OptionInfo[]
+  searchQuery: string
   isExpanded: boolean
   onToggle: () => void
   onRestoreDefaults: () => void
@@ -1064,11 +1155,13 @@ interface PostProcessingSectionProps {
   hasModifiedOptions: boolean
 }
 
-function PostProcessingSection({ options, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption, hasModifiedOptions }: PostProcessingSectionProps) {
+function PostProcessingSection({ options, searchQuery, isExpanded, onToggle, onRestoreDefaults, sensorId, onSetOption, hasModifiedOptions }: PostProcessingSectionProps) {
   const [expandedFilters, setExpandedFilters] = useState<Set<string>>(new Set())
 
+  const searching = searchQuery.trim().length > 0
+
   // Group options by filter_name
-  const filterGroups = options.reduce((acc, option) => {
+  const filterGroups = filterOptions(options, searchQuery).reduce((acc, option) => {
     const filterName = option.filter_name || 'Other'
     if (!acc[filterName]) {
       acc[filterName] = { enableOption: null as OptionInfo | null, paramOptions: [] as OptionInfo[] }
@@ -1082,6 +1175,9 @@ function PostProcessingSection({ options, isExpanded, onToggle, onRestoreDefault
   }, {} as Record<string, { enableOption: OptionInfo | null; paramOptions: OptionInfo[] }>)
 
   const toggleFilter = (filterName: string) => {
+    // Filters are force-expanded while searching - ignore clicks so the
+    // pre-search expansion state survives the query.
+    if (searching) return
     setExpandedFilters(prev => {
       const newSet = new Set(prev)
       if (newSet.has(filterName)) {
@@ -1098,17 +1194,15 @@ function PostProcessingSection({ options, isExpanded, onToggle, onRestoreDefault
       <div className="flex items-center bg-gray-750 hover:bg-gray-700 transition-colors">
         <button
           onClick={onToggle}
-          className="flex-1 flex items-center justify-between p-1.5"
+          className="flex-1 flex items-center gap-1.5 p-1.5"
         >
-          <span className="text-xs font-medium text-gray-300">Post-Processing</span>
           <svg
-            className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+            className={`w-3 h-3 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
+          <span className="text-xs font-medium text-gray-300">Post-Processing</span>
         </button>
         {hasModifiedOptions && (
           <button
@@ -1131,7 +1225,7 @@ function PostProcessingSection({ options, isExpanded, onToggle, onRestoreDefault
               filterName={filterName}
               enableOption={group.enableOption}
               paramOptions={group.paramOptions}
-              isExpanded={expandedFilters.has(filterName)}
+              isExpanded={searching ? true : expandedFilters.has(filterName)}
               onToggle={() => toggleFilter(filterName)}
               sensorId={sensorId}
               onSetOption={onSetOption}

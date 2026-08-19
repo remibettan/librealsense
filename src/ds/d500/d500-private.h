@@ -36,9 +36,11 @@ namespace librealsense
         {
             DETECTION_DISTANCE    = 0x01,  // Enable FW depth-derived distance for detections
             ALIGN_DEPTH           = 0x10,  // Enable depth-to-RGB alignment for OD distance; must be sent before depth streaming starts
+            DUAL_RGB_MODE         = 0x12,  // FW spec: csEU_CONTROL_ADVANCED_DEVICE_MODE. 1-byte GET/SET: 0 = dedicated color sensor (3C), 1 = dual RGB (2C). SET triggers PID change on next enumeration.
             PVT_TEMPERATURE       = 0x15,
             PROJECTOR_TEMPERATURE = 0x16,
-            OHM_TEMPERATURE       = 0x17
+            OHM_TEMPERATURE       = 0x17,
+            EXTERNAL_SYNC_MODE    = 0x1A
         };
 
         // Same GUID as safety_xu. FW publishes as either safety or inference, not both.
@@ -74,9 +76,12 @@ namespace librealsense
             D585_3C_PROTO_PID
         };
 
-        // D5x5 (non-safety, non-legacy) interactive Triggered Calibration flow.
-        // D555 stays on the D400 OCC path; D585S and D585_LEGACY_PID stay on the current D500 triggered-calibration flow.
-        static const std::set<std::uint16_t> d5x5_interactive_triggered_calibration_pids = {
+        // D5x5 (non-safety, non-legacy) SKU family: D535 and D585 in their 2C/3C/F/proto variants.
+        // Used to gate features that are only exposed by the modern D5x5 FW branch — currently:
+        //   - interactive Triggered Calibration flow (D555 stays on the D400 OCC path;
+        //     D585S and D585_LEGACY_PID stay on the current D500 triggered-calibration flow)
+        //   - the DUAL_RGB_MODE XU (0x12) selector that toggles Dual-RGB (2C) vs Dedicated-Color (3C)
+        static const std::set<std::uint16_t> d5x5_family_pids = {
             D535_2C_PID,
             D535_3C_PID,
             D535F_PID,
@@ -89,7 +94,7 @@ namespace librealsense
 
         inline bool uses_interactive_triggered_calibration( uint16_t pid )
         {
-            return d5x5_interactive_triggered_calibration_pids.find( pid ) != d5x5_interactive_triggered_calibration_pids.end();
+            return d5x5_family_pids.find( pid ) != d5x5_family_pids.end();
         }
 
         static const std::map< std::uint16_t, std::string > rs500_sku_names = {
@@ -445,7 +450,19 @@ namespace librealsense
             EHU_IDX_FLASH_DATA_CRC_ERR         = 125U,
             EHU_IDX_FRAME_DELAY_ERR            = 126U,
             EHU_IDX_DSP_UP_CHECKSUM_ERR        = 127U,
-        }; 
+            EHU_IDX_SN_NOT_MATCHED             = 128U,
+            EHU_IDX_FLASH_ACCESS_ERR           = 129U,
+            EHU_IDX_OHM_ACCESS_ERR             = 130U,
+            EHU_IDX_I2C_PORT_ERR               = 131U,
+            EHU_IDX_SYS_IPC_ERR                = 132U,
+            EHU_IDX_PIPE_BUILD_ERR             = 133U,
+            EHU_IDX_PIPE_START_ERR             = 134U,
+            EHU_IDX_PIPE_RUN_ERR               = 135U,
+            EHU_IDX_PIPE_STOP_ERR              = 136U,
+            EHU_IDX_PIPE_TASK_TIMEOUT_ERR      = 137U,
+            EHU_IDX_POT_FAIL                   = 138U,
+            EHU_IDX_IPU_SW_FUNCTION_ERR        = 139U,
+        };
 
         const std::map< int, std::string > d500_fw_error_report = { // Received from HKR team [RSDEV-643]
             { EHU_IDX_START, "NO ERROR" },
@@ -572,10 +589,22 @@ namespace librealsense
             { EHU_IDX_OPT_PARITY_ERR, "OPT PARITY ERROR" },
             { EHU_IDX_EHU_LOCK, "EHU LOCK ERROR" },
             { EHU_IDX_SW_OS_EXCEPTION, "SW OS EXCEPTION ERROR" },
-            { EHU_IDX_FRAME_DELAY_ERR, "FRAME DELAY ERROR" },
             { EHU_IDX_SF_OS_EXCEPTION, "SF OS EXCEPTION ERROR" },
             { EHU_IDX_FLASH_DATA_CRC_ERR, "FLASH DATA CRC ERROR" },
+            { EHU_IDX_FRAME_DELAY_ERR, "FRAME DELAY ERROR" },
             { EHU_IDX_DSP_UP_CHECKSUM_ERR, "DSP UP CHECKSUM ERROR" },
+            { EHU_IDX_SN_NOT_MATCHED, "SN NOT MATCHED" },
+            { EHU_IDX_FLASH_ACCESS_ERR, "FLASH ACCESS ERROR" },
+            { EHU_IDX_OHM_ACCESS_ERR, "OHM ACCESS ERROR" },
+            { EHU_IDX_I2C_PORT_ERR, "I2C PORT ERROR" },
+            { EHU_IDX_SYS_IPC_ERR, "SYS IPC ERROR" },
+            { EHU_IDX_PIPE_BUILD_ERR, "PIPE BUILD ERROR" },
+            { EHU_IDX_PIPE_START_ERR, "PIPE START ERROR" },
+            { EHU_IDX_PIPE_RUN_ERR, "PIPE RUN ERROR" },
+            { EHU_IDX_PIPE_STOP_ERR, "PIPE STOP ERROR" },
+            { EHU_IDX_PIPE_TASK_TIMEOUT_ERR, "PIPE TASK TIMEOUT ERROR" },
+            { EHU_IDX_POT_FAIL, "POT FAIL" },
+            { EHU_IDX_IPU_SW_FUNCTION_ERR, "IPU SW FUNCTION ERROR" },
         };
 
         class d500_hwmon_response : public hwmon_response_interface

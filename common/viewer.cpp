@@ -933,6 +933,9 @@ namespace rs2
         _hidden_options.emplace(RS2_OPTION_NOISE_ESTIMATION);
         _hidden_options.emplace(RS2_OPTION_REGION_OF_INTEREST);
         _hidden_options.emplace(RS2_OPTION_READOUT_SHAPING);
+        // Rendered as a "more" popup Selectable in device-model.cpp instead of a sensor
+        // control, so it doesn't need to appear in the sensor's Controls tree.
+        _hidden_options.emplace(RS2_OPTION_SENSORS_CONFIG_MODE);
     }
 
     void viewer_model::update_configuration(config_file* new_cfg)
@@ -2422,11 +2425,15 @@ namespace rs2
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        clear_gl_errors();
+
         glLoadIdentity();
 
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
-        gluPerspective(45, non_negative(viewer_rect.w / win.framebuf_height()), 0.001f, 100.0f);
+        const auto aspect = non_negative( viewer_rect.w )
+            / std::max( 1.f, non_negative( win.framebuf_height() ) );
+        gluPerspective( 45, aspect > 0.f ? aspect : 1.f, 0.001f, 100.0f );
         matrix4 perspective_mat;
         glGetFloatv(GL_PROJECTION_MATRIX, perspective_mat);
         glPopMatrix();
@@ -3770,10 +3777,14 @@ namespace rs2
 
     void viewer_model::begin_stream(std::shared_ptr<subdevice_model> d, rs2::stream_profile p)
     {
+        {
+            std::lock_guard< std::mutex > lock( streams_mutex );
+            streams[p.unique_id()].begin_stream(d, p, *this);
+            ppf.frames_queue.emplace(p.unique_id(), rs2::frame_queue(5));
+        }
+
         // Starting post processing filter rendering thread
         ppf.start();
-        streams[p.unique_id()].begin_stream(d, p, *this);
-        ppf.frames_queue.emplace(p.unique_id(), rs2::frame_queue(5));
     }
 
     bool viewer_model::is_3d_texture_source(frame f) const

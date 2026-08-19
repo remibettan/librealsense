@@ -142,16 +142,16 @@ class TestCliOptionsRegistered:
                                "--exclude-device", "D455", "--exclude-device", "D435")
         assert_outcomes(out, passed=1)  # only D401 remains
 
-    def test_exclude_device_space_separated(self):
-        """--exclude-device 'D455 D435' (single flag, space-separated) — Jenkins TEST_EXCLUDE_DEVICES form."""
+    def test_exclude_device_comma_separated(self):
+        """--exclude-device 'D455,D435' (single flag, comma-separated) — Jenkins TEST_EXCLUDE_DEVICES form."""
         rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_multi_exclude",
-                               "--exclude-device", "D455 D435")
+                               "--exclude-device", "D455,D435")
         assert_outcomes(out, passed=1)  # only D401 remains
 
-    def test_device_space_separated(self):
-        """--device 'D455 D435' (single flag, space-separated) must include both devices."""
+    def test_device_comma_separated(self):
+        """--device 'D455,D435' (single flag, comma-separated) must include both devices."""
         rc, out, *_ = run_e2e("pytest-cli.py", "-k", "test_multi_include",
-                               "--device", "D455 D435")
+                               "--device", "D455,D435")
         assert_outcomes(out, passed=2)
 
     def test_device_and_exclude_combined(self):
@@ -164,6 +164,20 @@ class TestCliOptionsRegistered:
         """--not-live is accepted and skips device tests."""
         rc, out, *_ = run_e2e("pytest-live.py", "--not-live")
         assert_outcomes(out, passed=1, skipped=1)
+
+    def test_custom_fw_options(self):
+        """--custom-fw-d400/-d555/-d585 are accepted and their values reach the tests
+        via request.config.getoption (consumed by pytest-fw-update)."""
+        rc, out, *_ = run_e2e("pytest-custom-fw.py", "-k", "test_values",
+                               "--custom-fw-d400", "d400.bin",
+                               "--custom-fw-d555", "d555.bin",
+                               "--custom-fw-d585", "d585.bin")
+        assert_outcomes(out, passed=1)
+
+    def test_custom_fw_defaults(self):
+        """Without --custom-fw-* flags the options default to None (pytest-fw-update skips)."""
+        rc, out, *_ = run_e2e("pytest-custom-fw.py", "-k", "test_defaults")
+        assert_outcomes(out, passed=1)
 
     def test_tag_filters_by_marker(self):
         """--tag <name> should run only tests with pytest.mark.<name> (alias for -m)."""

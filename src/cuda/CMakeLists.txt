@@ -52,6 +52,8 @@ target_sources(${LRS_TARGET}
         "${RS_GPU_POINTCLOUD_SOURCE}"
         "${CMAKE_CURRENT_LIST_DIR}/cuda-pointcloud.cuh"
         "${CMAKE_CURRENT_LIST_DIR}/cuda-compat.h"
+        "${CMAKE_CURRENT_LIST_DIR}/cuda-rggb.cu"
+        "${CMAKE_CURRENT_LIST_DIR}/cuda-rggb.cuh"
         "${CMAKE_CURRENT_LIST_DIR}/rscuda_utils.cuh"
         ${RS_GPU_EXTRA_SOURCES}
 )
