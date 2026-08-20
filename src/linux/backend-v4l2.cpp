@@ -1550,8 +1550,21 @@ namespace librealsense
                         // Relax the required frame size for compressed formats, i.e. MJPG, Z16H
                         bool compressed_format = val_in_range(_profile.format, { 0x4d4a5047U , 0x5a313648U});
 
+                        // D555 object detection also uses a variable-length payload: the UVC
+                        // descriptor advertises the maximum EP13 frame size, while bytesused is
+                        // the actual 43-byte header plus the populated detection entries. This is
+                        // kept out of compressed_format (which also drives acquire_metadata's D4XX
+                        // metadata-appendix heuristic below) since the OD payload has no such
+                        // trailing metadata block; routing it through compressed_format would make
+                        // that heuristic compute an out-of-bounds pointer for short OD frames.
+                        constexpr uint16_t d555_pid = 0x0b56;
+                        constexpr uint8_t d555_object_detection_mi = 9;
+                        bool d555_object_detection_variable_length
+                            = _info.pid == d555_pid && _info.mi == d555_object_detection_mi;
+
                         // Compressed and kernel-reported variable-size formats deliver frames shorter than the buffer, so the size check doesn't apply
-                        bool skip_partial_frame_check = compressed_format || _variable_frame_size;
+                        bool skip_partial_frame_check
+                            = compressed_format || _variable_frame_size || d555_object_detection_variable_length;
 
                         // METADATA STREAM
                         // Read metadata. Metadata node performs a blocking call to ensure video and metadata sync

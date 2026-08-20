@@ -109,11 +109,11 @@ public:
     size_t get_detection_count() const;
     object_detection_entry get_detection( size_t index ) const;
     object_detection_payload_header get_payload_header() const;
+    uint16_t get_version() const;
 
 private:
     bool validate() const;
     bool validate_payload() const;
-    uint16_t get_version() const;
     size_t entry_size() const;
 
     mutable std::atomic_bool _validated{ false };

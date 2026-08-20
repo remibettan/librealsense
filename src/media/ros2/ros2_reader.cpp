@@ -180,23 +180,13 @@ namespace librealsense
             auto j = rsutils::json::parse( json_str );
 
             auto n_detections = j.value( "number_of_detections", uint16_t(0) );
-
             auto dets_j = j.find( "detections" );
-            bool has_com = n_detections > 0 && dets_j != j.end() && dets_j->is_array()
-                        && dets_j->size() >= n_detections;
-            if( has_com )
-            {
-                for( uint16_t i = 0; i < n_detections; ++i )
-                {
-                    auto const & det = (*dets_j)[i];
-                    if( ! det.contains( "world_pos" ) || ! det["world_pos"].is_object()
-                        || ! det.contains( "image_pos" ) || ! det["image_pos"].is_object() )
-                    {
-                        has_com = false;
-                        break;
-                    }
-                }
-            }
+
+            // od_version is what the writer recorded for this frame's actual wire format; older
+            // recordings made before this field existed default to V2 (no COM data).
+            uint16_t const od_version
+                = j.value( "od_version", uint16_t( object_detection_frame::VERSION_V2 ) );
+            bool const has_com = od_version == object_detection_frame::VERSION_V3;
 
             size_t const entry_size = has_com ? sizeof( object_detection_frame::object_detection_entry_v3 )
                                               : sizeof( object_detection_frame::object_detection_entry_v2 );
@@ -235,13 +225,20 @@ namespace librealsense
                     {
                         object_detection_frame::object_detection_entry_v3 entry{};
                         entry.detection = common;
-                        auto const & world = det["world_pos"];
-                        auto const & image = det["image_pos"];
-                        entry.world_x = world.value( "x", 0.0f );
-                        entry.world_y = world.value( "y", 0.0f );
-                        entry.world_z = world.value( "z", 0.0f );
-                        entry.image_x = image.value( "x", 0.0f );
-                        entry.image_y = image.value( "y", 0.0f );
+                        // A V3 frame can still have individual detections with no COM (firmware
+                        // reported it invalid for that one); leave world/image zeroed in that case
+                        // rather than assuming the keys are present.
+                        if( det.contains( "world_pos" ) && det["world_pos"].is_object()
+                            && det.contains( "image_pos" ) && det["image_pos"].is_object() )
+                        {
+                            auto const & world = det["world_pos"];
+                            auto const & image = det["image_pos"];
+                            entry.world_x = world.value( "x", 0.0f );
+                            entry.world_y = world.value( "y", 0.0f );
+                            entry.world_z = world.value( "z", 0.0f );
+                            entry.image_x = image.value( "x", 0.0f );
+                            entry.image_y = image.value( "y", 0.0f );
+                        }
                         memcpy( entries + i * entry_size, &entry, sizeof( entry ) );
                     }
                     else
@@ -251,8 +248,7 @@ namespace librealsense
 
             // Fill header so object_detection_frame::validate() passes
             header->magic_number = object_detection_frame::MAGIC_NUMBER;
-            header->version      = has_com ? object_detection_frame::VERSION_V3
-                                           : object_detection_frame::VERSION_V2;
+            header->version      = od_version;
             header->data_type    = static_cast< uint8_t >( perception_frame::type::OBJECT_DETECTION );
             header->flags        = 0;
             header->spare        = 0;

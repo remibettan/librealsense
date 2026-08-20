@@ -126,6 +126,7 @@ object_detection_frame::object_detection_entry object_detection_frame::get_detec
         result.world_position = { wire.world_x, wire.world_y, wire.world_z };
         result.image_x = wire.image_x;
         result.image_y = wire.image_y;
+        // world_z is never negative; firmware uses exactly 0 to mean COM wasn't calculated.
         result.com_valid = wire.world_z > 0.f;
     }
     else
