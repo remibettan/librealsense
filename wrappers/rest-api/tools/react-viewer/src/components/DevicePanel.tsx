@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject, ReactElement } from 'react'
 import { useAppStore } from '../store'
 import type { DeviceInfo, SensorInfo, OptionInfo, StreamConfig, DeviceState, FirmwareState, SensorConfig } from '../api/types'
+import { firmwareStatus } from '../api/types'
 import { Search, X } from 'lucide-react'
 import { FirmwareProgressModal } from './FirmwareProgressModal'
 import { ToastContainer, type ToastType, type ToastAction } from './Toast'
@@ -70,14 +71,14 @@ function showFirmwareUpdatePromptsIfNeeded(
   const live = new Set<string>()
   for (const ds of Object.values(deviceStates)) {
     const fw = ds.firmware
-    if (fw?.status !== 'outdated') continue
-    const key = `${ds.device.device_id}:${fw.recommended ?? ''}`
+    if (firmwareStatus(ds.device.firmware_version, fw?.recommended) !== 'outdated') continue
+    const key = `${ds.device.device_id}:${fw?.recommended ?? ''}`
     live.add(key)
     if (promptedRef.current.has(key)) continue
     promptedRef.current.add(key)
     addToast(
       'info',
-      `${ds.device.name} (S/N ${ds.device.serial_number}): firmware ${fw.current ?? '?'} → ${fw.recommended ?? '?'} is available.`,
+      `${ds.device.name} (S/N ${ds.device.serial_number}): firmware ${ds.device.firmware_version ?? '?'} → ${fw?.recommended ?? '?'} is available.`,
       {
         label: 'Update',
         onClick: (toastId) => {
@@ -88,9 +89,7 @@ function showFirmwareUpdatePromptsIfNeeded(
     )
   }
   // Re-arm for proposals that are gone (device removed, or flashed and now up to date).
-  for (const key of promptedRef.current) {
-    if (!live.has(key)) promptedRef.current.delete(key)
-  }
+  promptedRef.current = live
 }
 
 // Reusable hidden-file-input hook. Returns the JSX to render once at a stable
@@ -143,7 +142,8 @@ export function DevicePanel() {
 
   const [toasts, setToasts] = useState<Toast[]>([])
   // Only one FW update can run at a time, so a single-value state is enough.
-  const [firmwareProgressDeviceId, setFirmwareProgressDeviceId] = useState<string | null>(null)
+  // Snapshot, not a lookup: the camera leaves the device list while it is in DFU.
+  const [firmwareProgressDevice, setFirmwareProgressDevice] = useState<DeviceInfo | null>(null)
   const [firmwareProgressState, setFirmwareProgressState] = useState<FirmwareState | null>(null)
   const [firmwareFileName, setFirmwareFileName] = useState<string | null>(null)
 
@@ -167,7 +167,7 @@ export function DevicePanel() {
     setFirmwareProgressState((prev) =>
       prev
         ? { ...prev, progress, ...(phase ? { phase } : {}) }
-        : { status: 'unknown' as const, is_updating: true, progress, phase }
+        : { is_updating: true, progress, phase }
     )
   }
 
@@ -175,7 +175,7 @@ export function DevicePanel() {
     setFirmwareProgressState((prev) =>
       prev
         ? { ...prev, progress: 1.0, is_updating: false }
-        : { status: 'unknown' as const, is_updating: false, progress: 1.0 }
+        : { is_updating: false, progress: 1.0 }
     )
     addToast('success', `Firmware update successful! Version: ${fwVersion || 'Unknown'}`)
     // Backend has already refreshed the device list (in _refresh_until_device_returns)
@@ -188,7 +188,7 @@ export function DevicePanel() {
     setFirmwareProgressState((prev) =>
       prev
         ? { ...prev, is_updating: false, last_error: error }
-        : { status: 'unknown' as const, is_updating: false, progress: 0, last_error: error }
+        : { is_updating: false, progress: 0, last_error: error }
     )
     addToast('error', `Firmware update failed: ${error}`)
     // Device may or may not have returned; refresh so the UI reflects the
@@ -197,46 +197,39 @@ export function DevicePanel() {
   }
 
   const handleCloseFirmwareModal = () => {
-    setFirmwareProgressDeviceId(null)
+    setFirmwareProgressDevice(null)
     setFirmwareProgressState(null)
     setFirmwareFileName(null)
   }
 
-  const handleUpdateFirmwareFromFile = (device: DeviceInfo, file: File) => {
-    const deviceId = device.device_id
-    setFirmwareFileName(file.name)
-    setFirmwareProgressDeviceId(deviceId)
-    const baseFirmware = deviceStates[deviceId]?.firmware || {
-      current: device.firmware_version,
-      recommended: device.recommended_firmware_version,
-      status: 'unknown' as const,
-      file_available: device.firmware_file_available,
-    }
-    setFirmwareProgressState({
-      ...baseFirmware,
-      is_updating: true,
-      progress: 0,
-      last_error: null,
-    })
-    updateFirmwareFromFile(deviceId, file)
-  }
+  // Reads firmware state through getState() rather than the deviceStates closure so the
+  // callbacks stay referentially stable — the proposal-toast effect below holds on to one.
+  const startFirmwareUpdate = useCallback(
+    (device: DeviceInfo, label: string, phase: FirmwareState['phase'], run: (deviceId: string) => void) => {
+      const deviceId = device.device_id
+      const fw = useAppStore.getState().deviceStates[deviceId]?.firmware
+      setFirmwareFileName(label)
+      setFirmwareProgressDevice(device)
+      setFirmwareProgressState({
+        ...fw,
+        is_updating: true,
+        phase,
+        progress: 0,
+        last_error: null,
+      })
+      run(deviceId)
+    },
+    [],
+  )
 
-  // Reads the firmware state through getState() rather than the deviceStates closure so it
-  // stays referentially stable — the proposal-toast effect below holds on to it.
+  const handleUpdateFirmwareFromFile = (device: DeviceInfo, file: File) =>
+    startFirmwareUpdate(device, file.name, undefined, (deviceId) => updateFirmwareFromFile(deviceId, file))
+
   const handleUpdateFromRecommended = useCallback((device: DeviceInfo) => {
-    const deviceId = device.device_id
-    const fw = useAppStore.getState().deviceStates[deviceId]?.firmware
-    setFirmwareFileName(fw?.recommended ? `Firmware ${fw.recommended}` : 'Recommended firmware')
-    setFirmwareProgressDeviceId(deviceId)
-    const baseFirmware = fw || {
-      current: device.firmware_version,
-      recommended: device.recommended_firmware_version,
-      status: 'unknown' as const,
-      file_available: device.firmware_file_available,
-    }
-    setFirmwareProgressState({ ...baseFirmware, is_updating: true, phase: 'downloading', progress: 0, last_error: null })
-    updateFirmwareFromRecommended(deviceId)
-  }, [updateFirmwareFromRecommended])
+    const recommended = useAppStore.getState().deviceStates[device.device_id]?.firmware?.recommended
+    const label = recommended ? `Firmware ${recommended}` : 'Recommended firmware'
+    startFirmwareUpdate(device, label, 'downloading', updateFirmwareFromRecommended)
+  }, [startFirmwareUpdate, updateFirmwareFromRecommended])
 
   const promptedSetRef = useRef<string>('')
   const enableInFlightRef = useRef<boolean>(false)
@@ -248,7 +241,8 @@ export function DevicePanel() {
   // via the effect below, so only the no-proposal outcomes need reporting here.
   const handleCheckFirmwareUpdates = async (deviceId: string) => {
     await checkFirmwareUpdates(deviceId, true)
-    const status = useAppStore.getState().deviceStates[deviceId]?.firmware?.status
+    const ds = useAppStore.getState().deviceStates[deviceId]
+    const status = firmwareStatus(ds?.device.firmware_version, ds?.firmware?.recommended)
     if (status === 'up_to_date') addToast('success', 'Firmware is up to date.')
     else if (status === 'unknown') addToast('info', 'No firmware recommendation available for this device.')
   }
@@ -353,28 +347,11 @@ export function DevicePanel() {
         </div>
       )}
 
-      {firmwareProgressDeviceId && (
+      {firmwareProgressDevice && (
         <FirmwareProgressModal
           isOpen={true}
-          device={
-            devices.find((d) => d.device_id === firmwareProgressDeviceId) || {
-              // Keep the real device_id so the modal's socket subscriptions
-              // remain bound to firmware_*_<id> across DFU/re-enumeration.
-              device_id: firmwareProgressDeviceId,
-              name: firmwareFileName || 'Updating device',
-            }
-          }
-          firmware={
-            firmwareProgressState || {
-              current: undefined,
-              recommended: undefined,
-              status: 'unknown' as const,
-              file_available: false,
-              is_updating: true,
-              progress: 0,
-              last_error: null,
-            }
-          }
+          device={firmwareProgressDevice}
+          firmware={firmwareProgressState || { is_updating: true, progress: 0, last_error: null }}
           fileName={firmwareFileName || undefined}
           onClose={handleCloseFirmwareModal}
           onProgressUpdate={handleFirmwareProgressUpdate}

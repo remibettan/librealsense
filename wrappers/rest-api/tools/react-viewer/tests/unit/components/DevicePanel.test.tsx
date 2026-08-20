@@ -251,10 +251,12 @@ describe('DevicePanel', () => {
 
   describe('Firmware Update Proposal', () => {
     const outdated = (overrides = {}) => {
-      const device = createMockDevice({ serial_number: '123456789012', ...overrides })
-      const ds = createMockDeviceState(device, {
-        firmware: { current: '5.17.0.10', recommended: '5.17.3.10', status: 'outdated' },
+      const device = createMockDevice({
+        serial_number: '123456789012',
+        firmware_version: '5.17.0.10',
+        ...overrides,
       })
+      const ds = createMockDeviceState(device, { firmware: { recommended: '5.17.3.10' } })
       return { device, ds }
     }
 
@@ -283,10 +285,8 @@ describe('DevicePanel', () => {
     })
 
     it('does not toast when firmware is up to date', async () => {
-      const device = createMockDevice()
-      const ds = createMockDeviceState(device, {
-        firmware: { current: '5.17.3.10', recommended: '5.17.3.10', status: 'up_to_date' },
-      })
+      const device = createMockDevice({ firmware_version: '5.17.3.10' })
+      const ds = createMockDeviceState(device, { firmware: { recommended: '5.17.3.10' } })
       render(<DevicePanel />, {
         initialStoreState: { devices: [device], deviceStates: { [device.device_id]: ds } },
       })

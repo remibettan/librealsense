@@ -1,13 +1,10 @@
 import { useEffect } from 'react'
 import { apiClient } from '../api/client'
-import type { FirmwareState } from '../api/types'
+import type { DeviceInfo, FirmwareState } from '../api/types'
 
 interface FirmwareProgressModalProps {
   isOpen: boolean
-  device: {
-    device_id: string
-    name: string
-  }
+  device: DeviceInfo
   firmware: FirmwareState
   fileName?: string
   onClose: () => void
@@ -29,12 +26,7 @@ export function FirmwareProgressModal({
   useEffect(() => {
     if (!isOpen) return
 
-    const unsubscribeProgress = apiClient.onFirmwareProgress(
-      device.device_id,
-      (progress: number, phase?: 'downloading' | 'installing') => {
-        onProgressUpdate(progress, phase)
-      },
-    )
+    const unsubscribeProgress = apiClient.onFirmwareProgress(device.device_id, onProgressUpdate)
 
     const unsubscribeSuccess = apiClient.onFirmwareSuccess(device.device_id, (fwVersion: string | null) => {
       onSuccess(fwVersion)
@@ -53,7 +45,10 @@ export function FirmwareProgressModal({
 
   if (!isOpen) return null
 
-  const progress = Math.round((firmware.progress || 0) * 100)
+  // Download and install each report 0..1; give them one shared 0-20/20-100 scale so the
+  // bar never rewinds between the two phases.
+  const fraction = firmware.progress || 0
+  const progress = Math.round((firmware.phase === 'downloading' ? fraction * 0.2 : 0.2 + fraction * 0.8) * 100)
   // Download can hit 100% before install starts — only "complete" once installing finishes.
   const done = progress === 100 && firmware.phase !== 'downloading'
 
@@ -109,9 +104,9 @@ export function FirmwareProgressModal({
             </div>
           </div>
 
-          {!firmware.last_error && firmware.current && (
+          {!firmware.last_error && device.firmware_version && (
             <div className="mb-6 p-3 bg-gray-800 rounded text-xs text-gray-300">
-              <div>Current: <span className="text-white">{firmware.current}</span></div>
+              <div>Current: <span className="text-white">{device.firmware_version}</span></div>
             </div>
           )}
 

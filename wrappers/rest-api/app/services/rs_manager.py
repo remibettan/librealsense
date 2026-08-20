@@ -211,11 +211,6 @@ class RealSenseManager:
             name=_info(rs.camera_info.name, "Unknown Device"),
             serial_number=device_id,
             firmware_version=_info(rs.camera_info.firmware_version),
-            # Recommended version comes from the online versions DB, fetched lazily on the
-            # firmware-status check (the SDK no longer bundles/reports it); unknown until then.
-            recommended_firmware_version=None,
-            firmware_status=fw.FW_STATUS_UNKNOWN,
-            firmware_file_available=False,  # no bundled firmware — user supplies the image
             physical_port=_info(rs.camera_info.physical_port),
             usb_type=_info(rs.camera_info.usb_type_descriptor),
             product_id=_info(rs.camera_info.product_id),
@@ -303,18 +298,11 @@ class RealSenseManager:
                 return device
         raise RealSenseError(status_code=404, detail=f"Device {device_id} not found")
 
-    def get_firmware_status(self, device_id: str) -> Dict[str, Any]:
-        """Return firmware status metadata for a device."""
+    def get_recommended_firmware(self, device_id: str) -> Dict[str, Any]:
+        """Return the firmware version the online DB recommends for a device, if any."""
         device = self.get_device(device_id)
-        recommended, link = fw.recommended_firmware(device.name)
-        return {
-            "device_id": device_id,
-            "current": device.firmware_version,
-            "recommended": recommended,
-            "status": fw.firmware_update_status(device.firmware_version, recommended),
-            "file_available": False,  # no bundled image — user downloads the .bin (see link)
-            "link": link,
-        }
+        recommended, _link = fw.recommended_firmware(device.name)
+        return {"device_id": device_id, "recommended": recommended}
 
     def update_firmware_from_recommended(self, device_id: str) -> Dict[str, Any]:
         """Download the device's recommended firmware image and flash it.
@@ -324,9 +312,15 @@ class RealSenseManager:
         progress/success/failure events are emitted exactly as for a user-supplied file.
         """
         device = self.get_device(device_id)
-        _recommended, link = fw.recommended_firmware(device.name)
+        recommended, link = fw.recommended_firmware(device.name)
         if not link:
             raise RealSenseError(status_code=404, detail="No recommended firmware available for this device")
+        # Refuse before downloading ~2 MiB to flash a version the device already has or beats.
+        if fw.is_newer_or_same(device.firmware_version, recommended):
+            raise RealSenseError(
+                status_code=409,
+                detail=f"Device already runs firmware {device.firmware_version}; recommended is {recommended}",
+            )
         # Emit download progress under the "downloading" phase so the UI can show it
         # before the (separate) install phase begins.
         _holder, on_download = self._make_fw_progress_callback(device_id, phase="downloading")
@@ -385,11 +379,9 @@ class RealSenseManager:
             firmware_update_id = self._resolve_firmware_update_id(target_dev, device_id)
 
             progress_holder, on_progress = self._make_fw_progress_callback(device_id)
-            # Always emit a starting progress so the UI doesn't stay at 0% forever
-            self._emit_socket_event(
-                f"firmware_progress_{device_id}",
-                {"device_id": device_id, "progress": 0.0, "phase": "installing"},
-            )
+            # Mark the install phase up front: the one-click path has been showing download
+            # progress, and the SDK's first flash tick only arrives after DFU re-enumeration.
+            on_progress(0.0)
 
             try:
                 update_dev = self._enter_dfu_and_get_update_dev(
@@ -429,10 +421,6 @@ class RealSenseManager:
 
             updated_info = self._refresh_until_device_returns(device_id)
 
-            self._emit_socket_event(
-                f"firmware_progress_{device_id}",
-                {"device_id": device_id, "progress": 1.0, "phase": "installing"},
-            )
             self._emit_socket_event(
                 f"firmware_update_success_{device_id}",
                 {

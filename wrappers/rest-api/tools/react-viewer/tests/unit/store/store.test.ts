@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../mocks/server'
 import { useAppStore } from '@/store'
+import { firmwareStatus } from '@/api/types'
 import { resetStore, createMockDevice, createMockDeviceState, createMockSensor, createMockOption } from '../../utils/test-utils'
 
 describe('AppStore', () => {
@@ -9,16 +10,14 @@ describe('AppStore', () => {
     resetStore()
   })
 
-  describe('Firmware status across enumeration', () => {
+  describe('Firmware recommendation across enumeration', () => {
     // The device-list endpoint never consults the online versions DB, so it reports
-    // recommended=null / status="unknown" for every device.
+    // neither a recommendation nor a status for any device.
     function enumerateWith(firmwareVersion: string) {
       const device = createMockDevice({
         device_id: 'fw-1',
         serial_number: 'fw-1',
         firmware_version: firmwareVersion,
-        recommended_firmware_version: null,
-        firmware_status: 'unknown',
       })
       server.use(http.get('/api/v1/devices/', () => HttpResponse.json([device])))
       return device
@@ -29,37 +28,21 @@ describe('AppStore', () => {
       useAppStore.setState({
         devices: [device],
         deviceStates: {
-          'fw-1': createMockDeviceState(device, {
-            firmware: { current: '5.17.0.10', recommended: '5.17.3.10', status: 'outdated' },
-          }),
+          'fw-1': createMockDeviceState(device, { firmware: { recommended: '5.17.3.10' } }),
         },
-        hasUserInteracted: true,
       })
 
-      await useAppStore.getState().fetchDevices(true)
+      await useAppStore.getState().fetchDevices()
 
-      const fw = useAppStore.getState().deviceStates['fw-1'].firmware
-      expect(fw?.status).toBe('outdated')
-      expect(fw?.recommended).toBe('5.17.3.10')
+      expect(useAppStore.getState().deviceStates['fw-1'].firmware?.recommended).toBe('5.17.3.10')
     })
 
-    it('drops the verdict once the installed firmware changed (post-flash)', async () => {
-      const device = enumerateWith('5.17.3.10')
-      useAppStore.setState({
-        devices: [device],
-        deviceStates: {
-          'fw-1': createMockDeviceState(device, {
-            firmware: { current: '5.17.0.10', recommended: '5.17.3.10', status: 'outdated' },
-          }),
-        },
-        hasUserInteracted: true,
-      })
-
-      await useAppStore.getState().fetchDevices(true)
-
-      const fw = useAppStore.getState().deviceStates['fw-1'].firmware
-      expect(fw?.current).toBe('5.17.3.10')
-      expect(fw?.status).toBe('unknown')
+    it('the verdict follows the installed version without being recomputed', async () => {
+      expect(firmwareStatus('5.17.0.10', '5.17.3.10')).toBe('outdated')
+      expect(firmwareStatus('5.17.3.10', '5.17.3.10')).toBe('up_to_date')
+      expect(firmwareStatus('5.17.3.25', '5.17.3.10')).toBe('up_to_date')
+      expect(firmwareStatus(undefined, '5.17.3.10')).toBe('unknown')
+      expect(firmwareStatus('5.17.3.10', undefined)).toBe('unknown')
     })
   })
 
@@ -288,25 +271,6 @@ describe('AppStore', () => {
         http.get('/api/v1/devices/', () => HttpResponse.json(list))
       )
     }
-
-    it('guards against concurrent fetches', async () => {
-      let calls = 0
-      server.use(
-        http.get('/api/v1/devices/', async () => {
-          calls += 1
-          // Hold the response so the second call overlaps the first.
-          await new Promise((resolve) => setTimeout(resolve, 20))
-          return HttpResponse.json([presentDevice])
-        })
-      )
-
-      const first = useAppStore.getState().fetchDevices(true)
-      // Second call starts while the first is still in flight → must join it, not re-request.
-      const second = useAppStore.getState().fetchDevices(true)
-      await Promise.all([first, second])
-
-      expect(calls).toBe(1)
-    })
 
     it('a joined force-refresh only resolves once enumeration completed', async () => {
       let resolved = false

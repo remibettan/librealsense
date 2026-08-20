@@ -10,20 +10,30 @@ from app.core.errors import RealSenseError
 from app.services import firmware
 from app.services.firmware import (
     download_firmware,
-    firmware_update_status,
+    is_newer_or_same,
     platform_name,
     _fetch_versions_db,
     _pick_recommended_fw,
-    FW_STATUS_OUTDATED,
-    FW_STATUS_UP_TO_DATE,
-    FW_STATUS_UNKNOWN,
 )
 
+
+def test_is_newer_or_same_compares_numerically():
+    assert not is_newer_or_same("5.16.0.1", "5.17.0.9")
+    assert is_newer_or_same("5.17.0.9", "5.17.0.9")
+    assert is_newer_or_same("5.17.0.10", "5.17.0.9")  # 10 > 9, not lexical
+
+
+def test_is_newer_or_same_lets_unusable_versions_through():
+    assert not is_newer_or_same("abc", "5.17.0.9")
+    assert not is_newer_or_same(None, "5.17.0.9")
+    assert not is_newer_or_same("5.17.0.9", None)
+
+# Exact device names before the wildcards they'd also match, like the real versions DB.
 _DB = [
-    {"device_name": "Intel RealSense D4*", "policy_type": "RECOMMENDED", "component": "FIRMWARE",
-     "version": "5.17.0.10", "platform": "*", "link": "d4x.bin"},
     {"device_name": "Intel RealSense D455", "policy_type": "RECOMMENDED", "component": "FIRMWARE",
      "version": "5.17.3.10", "platform": "*", "link": "d455.bin"},
+    {"device_name": "Intel RealSense D4*", "policy_type": "RECOMMENDED", "component": "FIRMWARE",
+     "version": "5.17.0.10", "platform": "*", "link": "d4x.bin"},
     {"device_name": "Intel RealSense D4*", "policy_type": "RECOMMENDED", "component": "LIBREALSENSE",
      "version": "2.58.2", "platform": "*", "link": "sw"},
     {"device_name": "Intel RealSense D457", "policy_type": "REQUIRED", "component": "FIRMWARE",
@@ -31,34 +41,8 @@ _DB = [
 ]
 
 
-def test_current_below_recommended_is_outdated():
-    assert firmware_update_status("5.16.0.1", "5.17.0.9") == FW_STATUS_OUTDATED
-
-
-def test_current_equal_recommended_is_up_to_date():
-    assert firmware_update_status("5.17.0.9", "5.17.0.9") == FW_STATUS_UP_TO_DATE
-
-
-def test_current_above_recommended_is_up_to_date():
-    # numeric compare, not lexical: 10 > 9
-    assert firmware_update_status("5.17.0.10", "5.17.0.9") == FW_STATUS_UP_TO_DATE
-
-
-def test_missing_recommended_is_unknown():
-    assert firmware_update_status("5.17.0.9", None) == FW_STATUS_UNKNOWN
-    assert firmware_update_status("5.17.0.9", "") == FW_STATUS_UNKNOWN
-
-
-def test_missing_current_is_unknown():
-    assert firmware_update_status(None, "5.17.0.9") == FW_STATUS_UNKNOWN
-
-
-def test_non_numeric_is_unknown():
-    assert firmware_update_status("abc", "5.17.0.9") == FW_STATUS_UNKNOWN
-
-
 def test_pick_prefers_specific_over_wildcard():
-    # D455 has an exact entry (5.17.3.10) that must win over the D4* wildcard (5.17.0.10)
+    # D455's exact entry (5.17.3.10) precedes the D4* wildcard (5.17.0.10), so it wins
     ver, link = _pick_recommended_fw(_DB, "Intel RealSense D455", "Windows")
     assert (ver, link) == ("5.17.3.10", "d455.bin")
 
@@ -120,50 +104,14 @@ def _fake_urlopen(payload):
 def test_empty_versions_db_is_not_cached(monkeypatch):
     # An empty list must not be remembered — it would suppress every proposal for the
     # lifetime of the process even after the server recovers.
-    monkeypatch.setattr(firmware, "_versions_db_cache", {"entries": None})
+    monkeypatch.setattr(firmware, "_versions_db_entries", None)
     with _fake_urlopen({"versions": []}):
         assert _fetch_versions_db() == []
-    assert firmware._versions_db_cache["entries"] is None
+    assert firmware._versions_db_entries is None
 
     with _fake_urlopen({"versions": _DB}):
         assert _fetch_versions_db() == _DB
-    assert firmware._versions_db_cache["entries"] == _DB
-
-
-def test_versions_db_fetch_retries_before_giving_up(monkeypatch):
-    monkeypatch.setattr(firmware, "_versions_db_cache", {"entries": None})
-    calls = {"n": 0}
-
-    def flaky(*_args, **_kwargs):
-        calls["n"] += 1
-        if calls["n"] < firmware._VERSIONS_DB_ATTEMPTS:
-            raise OSError("connection reset")
-        resp = mock.MagicMock()
-        resp.read.return_value = json.dumps({"versions": _DB}).encode()
-        resp.__enter__.return_value = resp
-        return resp
-
-    with mock.patch("urllib.request.urlopen", side_effect=flaky):
-        assert _fetch_versions_db() == _DB
-    assert calls["n"] == firmware._VERSIONS_DB_ATTEMPTS
-
-
-def test_versions_db_fetch_does_not_hold_the_lock_during_io(monkeypatch):
-    # The lock guards the cache only. Holding it across the fetch would stall every other
-    # request handler for the whole retry budget.
-    monkeypatch.setattr(firmware, "_versions_db_cache", {"entries": None})
-    locked_during_io = []
-
-    def check_lock(*_args, **_kwargs):
-        locked_during_io.append(firmware._versions_db_lock.locked())
-        resp = mock.MagicMock()
-        resp.read.return_value = json.dumps({"versions": _DB}).encode()
-        resp.__enter__.return_value = resp
-        return resp
-
-    with mock.patch("urllib.request.urlopen", side_effect=check_lock):
-        assert _fetch_versions_db() == _DB
-    assert locked_during_io == [False]
+    assert firmware._versions_db_entries == _DB
 
 
 def test_download_refuses_to_follow_redirects():

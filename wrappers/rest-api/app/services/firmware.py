@@ -1,29 +1,22 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-"""Firmware version comparison, online versions-DB lookup, and image download.
+"""Online versions-DB lookup and firmware image download.
 
-Pure logic with no pyrealsense2 dependency, so tests can import it directly without
-loading the SDK. The SDK no longer bundles firmware, so the recommended version is
-looked up from the online versions DB (mirrors the C++ viewer's server_versions_db_url),
-and the image is downloaded into memory and flashed from there (like the C++ viewer's
-download_to_bytes_vector) — no temp files.
+No pyrealsense2 dependency, so tests can import it without loading the SDK. Images are
+downloaded into memory and flashed from there — no temp files.
 """
 
 import json
 import logging
 import platform
+import re
 import sys
-import threading
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from app.core.errors import RealSenseError
-
-FW_STATUS_UNKNOWN = "unknown"
-FW_STATUS_OUTDATED = "outdated"
-FW_STATUS_UP_TO_DATE = "up_to_date"
 
 SERVER_VERSIONS_DB_URL = "https://librealsense.realsenseai.com/Releases/rs_versions_db.json"
 _MAX_FW_DOWNLOAD_BYTES = 64 * 1024 * 1024
@@ -31,11 +24,8 @@ _MAX_FW_DOWNLOAD_BYTES = 64 * 1024 * 1024
 # tampered/mistaken `link` can't turn the backend into a fetcher for arbitrary hosts.
 _FW_DOWNLOAD_DOMAIN = ".".join(urllib.parse.urlparse(SERVER_VERSIONS_DB_URL).hostname.split(".")[-2:])
 
-# The versions DB is fetched once per process (no TTL — re-downloaded on backend restart,
-# like the C++ viewer). Guarded by a lock since request-handler threads read/populate it.
-_VERSIONS_DB_ATTEMPTS = 3
-_versions_db_lock = threading.Lock()
-_versions_db_cache: Dict[str, Any] = {"entries": None}
+# Fetched once per process (no TTL — re-downloaded on backend restart, like the C++ viewer).
+_versions_db_entries = None
 
 
 class _NoRedirects(urllib.request.HTTPRedirectHandler):
@@ -51,46 +41,27 @@ class _NoRedirects(urllib.request.HTTPRedirectHandler):
 _fw_download_opener = urllib.request.build_opener(_NoRedirects)
 
 
-def _parse_fw_version(v: Optional[str]) -> Optional[tuple]:
-    """Parse a dotted firmware version ("5.17.0.10") into an int tuple, or None."""
-    if not v:
-        return None
-    try:
-        return tuple(int(p) for p in v.split("."))
-    except ValueError:
-        return None
+def is_newer_or_same(current: Optional[str], recommended: Optional[str]) -> bool:
+    """Numeric version compare. Unparseable versions answer False, so a flash isn't
+    refused over a version string we don't understand."""
+    def parse(v):
+        try:
+            return tuple(int(p) for p in (v or "").split("."))
+        except ValueError:
+            return None
 
-
-def firmware_update_status(current: Optional[str], recommended: Optional[str]) -> str:
-    """Compare current vs recommended FW versions numerically.
-
-    Returns FW_STATUS_OUTDATED when current < recommended, FW_STATUS_UP_TO_DATE when
-    current >= recommended, and FW_STATUS_UNKNOWN when either can't be parsed.
-    """
-    cur = _parse_fw_version(current)
-    rec = _parse_fw_version(recommended)
-    if cur is None or rec is None:
-        return FW_STATUS_UNKNOWN
-    return FW_STATUS_OUTDATED if cur < rec else FW_STATUS_UP_TO_DATE
-
-
-def _strip_intel_prefix(name):
-    """Drop the legacy 'Intel ' vendor prefix. Newer SDKs report names without it while
-    the DB still carries it, so comparisons must be prefix-agnostic (mirrors the C++
-    versions_db_manager::strip_intel_prefix)."""
-    prefix = "Intel "
-    return name[len(prefix):] if name.startswith(prefix) else name
+    cur, rec = parse(current), parse(recommended)
+    return bool(cur and rec) and cur >= rec
 
 
 def _device_name_matches(db_name, device_name):
-    """True if a DB device_name pattern matches the reported name, '*' = trailing wildcard.
-    Mirrors versions_db_manager::is_device_name_equal (prefix-stripped, compare up to '*')."""
-    db = _strip_intel_prefix(db_name or "")
-    cmp = _strip_intel_prefix(device_name or "")
-    star = db.find("*")
-    if star == -1:
-        return db == cmp
-    return db[:star] == cmp[:star]
+    """True if a DB device_name pattern ('*' = wildcard) matches the reported name.
+
+    The legacy 'Intel ' prefix is stripped from both sides: newer SDKs report names
+    without it while the DB still carries it (mirrors is_device_name_equal).
+    """
+    pattern = re.escape((db_name or "").removeprefix("Intel ")).replace(r"\*", ".*")
+    return re.fullmatch(pattern, (device_name or "").removeprefix("Intel ")) is not None
 
 
 def platform_name():
@@ -111,58 +82,36 @@ def platform_name():
 
 
 def _pick_recommended_fw(entries, device_name, host_platform):
-    """Pick the best RECOMMENDED FIRMWARE (version, link) for a device from DB entries.
+    """First matching RECOMMENDED FIRMWARE (version, link) for a device, or (None, None).
 
-    Matches each entry's `device_name` against the device (prefix-agnostic, '*' wildcard);
-    the most specific pattern (longest literal) wins. Entry `platform` must be '*' or
-    equal the host (exact compare, like the C++ query_versions). Returns (None, None)
-    when nothing matches.
+    First match wins, like the C++ query_versions: the DB lists exact device names ahead
+    of the wildcard patterns they'd also match.
     """
-    if not entries or not device_name:
-        return None, None
-    best = None  # (specificity, version, link)
-    for e in entries:
-        if e.get("component") != "FIRMWARE" or e.get("policy_type") != "RECOMMENDED":
-            continue
-        pattern = e.get("device_name", "")
-        if not _device_name_matches(pattern, device_name):
-            continue
-        plat = e.get("platform") or "*"
-        if plat != "*" and plat != host_platform:
-            continue
-        specificity = len(pattern.replace("*", ""))
-        if best is None or specificity > best[0]:
-            best = (specificity, e.get("version"), e.get("link"))
-    return (best[1], best[2]) if best else (None, None)
+    for e in entries or []:
+        if (e.get("component") == "FIRMWARE" and e.get("policy_type") == "RECOMMENDED"
+                and (e.get("platform") or "*") in ("*", host_platform)
+                and _device_name_matches(e.get("device_name"), device_name)):
+            return e.get("version"), e.get("link")
+    return None, None
 
 
 def _fetch_versions_db():
-    """Return the DB 'versions' list (cached for the process lifetime), or None on failure.
-
-    The host drops a noticeable share of connections, so a single attempt would leave the
-    proposal missing for no good reason; retry a couple of times before giving up. The
-    lock only guards the cache — holding it across the fetch would stall every other
-    request handler for the whole retry budget. Two threads may fetch on a cold cache;
-    they produce the same list, so the duplicate work is harmless.
-    """
-    with _versions_db_lock:
-        if _versions_db_cache["entries"] is not None:
-            return _versions_db_cache["entries"]
-    for attempt in range(_VERSIONS_DB_ATTEMPTS):
-        try:
-            with urllib.request.urlopen(SERVER_VERSIONS_DB_URL, timeout=5) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-        except Exception as e:  # network down, timeout, bad JSON — degrade gracefully
-            logging.warning("Could not fetch firmware versions DB (attempt %d): %s", attempt + 1, e)
-            continue
-        entries = data.get("versions") or []
-        # Only cache a non-empty DB: an empty list (CDN hiccup, wrong endpoint) would
-        # otherwise be served for the process lifetime and suppress every proposal.
-        if entries:
-            with _versions_db_lock:
-                _versions_db_cache["entries"] = entries
-        return entries
-    return None
+    """Return the DB 'versions' list (cached for the process lifetime), or None on failure."""
+    global _versions_db_entries
+    if _versions_db_entries is not None:
+        return _versions_db_entries
+    try:
+        with urllib.request.urlopen(SERVER_VERSIONS_DB_URL, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:  # network down, timeout, bad JSON — degrade gracefully
+        logging.warning("Could not fetch firmware versions DB: %s", e)
+        return None
+    entries = data.get("versions") or []
+    # Only cache a non-empty DB: an empty list (CDN hiccup, wrong endpoint) would
+    # otherwise be served for the process lifetime and suppress every proposal.
+    if entries:
+        _versions_db_entries = entries
+    return entries
 
 
 def recommended_firmware(device_name):
@@ -171,13 +120,10 @@ def recommended_firmware(device_name):
 
 
 def download_firmware(url: str, on_progress=None) -> bytes:
-    """Download a firmware .bin into memory (no disk cache). Raises RealSenseError on failure.
+    """Download a firmware .bin into memory, reporting 0..1 progress via on_progress().
 
-    The link comes from the versions DB, so it must be https on the DB's own domain —
-    that rejects file:// / relative / other-scheme links and keeps the fetch from being
-    pointed at an arbitrary host. Redirects are refused too, so the domain check can't be
-    bounced onward to some other address. Streams in chunks and reports 0..1 progress via
-    on_progress(fraction) when Content-Length is available.
+    Restricted to https on the versions DB's own domain, redirects refused, so a tampered
+    link can't point the fetch elsewhere.
     """
     parsed = urllib.parse.urlparse(url)
     host = parsed.hostname or ""
