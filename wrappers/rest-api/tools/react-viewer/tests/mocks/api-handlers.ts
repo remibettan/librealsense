@@ -165,8 +165,6 @@ export const handlers = [
   }),
 
   // Recommended firmware (none, unless a test says otherwise)
-  http.get(`${API_BASE}/devices/:deviceId/firmware/`, ({ params }) =>
-    HttpResponse.json({ device_id: params.deviceId, recommended: null })
-  ),
+  http.get(`${API_BASE}/devices/:deviceId/firmware/`, () => HttpResponse.json({ recommended: null })),
 ]
 

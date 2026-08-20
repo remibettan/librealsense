@@ -15,8 +15,6 @@ router = APIRouter()
 # leaves headroom for future products without letting an unrelated file through.
 MAX_FW_UPLOAD_BYTES = 64 * 1024 * 1024
 
-_FW_UPLOAD_CHUNK = 1024 * 1024  # 1 MiB
-
 
 @router.get("/", response_model=dict)
 async def get_recommended_firmware(
@@ -25,12 +23,16 @@ async def get_recommended_firmware(
 ):
     """Get the firmware version the online versions DB recommends for a device."""
     try:
-        return rs_manager.get_recommended_firmware(device_id)
+        # Off the event loop: an unreachable versions DB would stall every other request.
+        return await run_in_threadpool(rs_manager.get_recommended_firmware, device_id)
     except RealSenseError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
     except Exception:
         logging.exception("Unexpected error fetching recommended firmware for %s", device_id)
         raise HTTPException(status_code=500, detail="Unexpected error while fetching recommended firmware")
+
+
+_FW_UPLOAD_CHUNK = 1024 * 1024  # 1 MiB
 
 
 @router.post("/update_from_file", response_model=dict)

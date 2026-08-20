@@ -89,9 +89,7 @@ export const mockSensorConfigs: Record<string, SensorConfig> = {
 export const mockDeviceState: DeviceState = {
   device: mockDevice,
   firmware: {
-    current: '5.16.0.1',
     recommended: '5.16.0.1',
-    status: 'up_to_date',
     is_updating: false,
     progress: undefined,
     last_error: null,

@@ -49,8 +49,8 @@ export function FirmwareProgressModal({
   // bar never rewinds between the two phases.
   const fraction = firmware.progress || 0
   const progress = Math.round((firmware.phase === 'downloading' ? fraction * 0.2 : 0.2 + fraction * 0.8) * 100)
-  // Download can hit 100% before install starts — only "complete" once installing finishes.
-  const done = progress === 100 && firmware.phase !== 'downloading'
+  // Only a terminal event means done: the SDK hits 100% long before the camera is back.
+  const done = firmware.is_updating === false && !firmware.last_error
 
   return (
     <>

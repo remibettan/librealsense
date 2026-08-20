@@ -18,6 +18,9 @@ import type {
 // Used to await completion before allowing a new start
 const pendingStopPromises = new Map<string, Promise<void>>()
 
+// Enumerations are unordered across connections; only the newest response may be applied.
+let _fetchSeq = 0
+
 // Server sends point-cloud buffers as base64 strings over Socket.IO; the
 // ArrayBuffer branch is here for a future binary-attachment transport.
 function decodeUint8Payload(raw: ArrayBuffer | string): Uint8Array {
@@ -128,7 +131,7 @@ interface AppState {
   isLoadingDevices: boolean
   fetchDevices: (forceRefresh?: boolean) => Promise<void>
   enableMetadata: () => Promise<{ status: string; note?: string }>
-  checkFirmwareUpdates: (deviceId: string, explicit?: boolean) => Promise<void>
+  checkFirmwareUpdates: (deviceId: string) => Promise<string | undefined>
   updateFirmwareFromFile: (deviceId: string, file: File) => Promise<void>
   updateFirmwareFromRecommended: (deviceId: string) => Promise<void>
 
@@ -240,13 +243,11 @@ async function performFirmwareUpdate(
     await get().fetchDevices(true)
     setFirmwareState({ is_updating: false, progress: 1 })
   } catch (error) {
-    // Only on the device's firmware state: the modal and toast (from the Socket.IO failure
-    // event) already tell the user, and the global banner would be a third copy.
     const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-    setFirmwareState({
-      is_updating: false,
-      last_error: detail || (error instanceof Error ? error.message : 'Firmware update failed'),
-    })
+    const message = detail || (error instanceof Error ? error.message : 'Firmware update failed')
+    setFirmwareState({ is_updating: false, last_error: message })
+    // A request rejected outright emits no Socket.IO event, so only the caller can react.
+    throw new Error(message)
   }
 }
 
@@ -263,8 +264,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
   // Unguarded on purpose: dropping a concurrent call loses the post-flash refresh.
   fetchDevices: async (forceRefresh = false) => {
     set({ isLoadingDevices: true, error: null })
+    const seq = ++_fetchSeq
     try {
       const devices = await apiClient.getDevices(forceRefresh)
+      // A newer enumeration already landed: this response is older than what we show.
+      if (seq !== _fetchSeq) return
       const known = new Set(get().devices.map((d) => d.device_id))
       // Carry over the UI state of devices that are still here; the rest drop out.
       set((state) => ({
@@ -303,29 +307,21 @@ export const useAppStore = create<AppState>()((set, get) => ({
     return result
   },
 
-  // Stores the recommendation only; the verdict is derived where it is read.
-  checkFirmwareUpdates: async (deviceId: string, explicit = false) => {
-    try {
-      const { recommended } = await apiClient.getRecommendedFirmware(deviceId)
-      set((state) => {
-        const ds = state.deviceStates[deviceId]
-        if (!ds) return state
-        return {
-          deviceStates: {
-            ...state.deviceStates,
-            [deviceId]: { ...ds, firmware: { ...ds.firmware, recommended } },
-          },
-        }
-      })
-    } catch (error) {
-      // Best-effort on activation — a transient versions-DB outage shouldn't raise the
-      // global banner. Only an explicit "Check for Firmware Updates" reports failure.
-      if (explicit) {
-        set({
-          error: `Failed to check firmware updates: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        })
+  // Returns the recommendation too: a device that isn't activated has no state to store it
+  // in. Rejects on failure — reporting is the caller's business.
+  checkFirmwareUpdates: async (deviceId: string) => {
+    const { recommended } = await apiClient.getRecommendedFirmware(deviceId)
+    set((state) => {
+      const ds = state.deviceStates[deviceId]
+      if (!ds) return state
+      return {
+        deviceStates: {
+          ...state.deviceStates,
+          [deviceId]: { ...ds, firmware: { ...ds.firmware, recommended } },
+        },
       }
-    }
+    })
+    return recommended
   },
 
   toggleDeviceActive: async (device: DeviceInfo) => {
@@ -365,8 +361,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
       
       // Fetch sensors for this device
       await get().fetchSensors(device.device_id)
-      // Check for a firmware-update proposal (online versions DB; best-effort, non-blocking)
-      get().checkFirmwareUpdates(device.device_id)
+      // Best-effort: a versions-DB outage shouldn't make opening a camera look like it failed.
+      get().checkFirmwareUpdates(device.device_id).catch(() => {})
     }
   },
 

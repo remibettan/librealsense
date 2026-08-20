@@ -28,6 +28,7 @@ def test_is_newer_or_same_lets_unusable_versions_through():
     assert not is_newer_or_same(None, "5.17.0.9")
     assert not is_newer_or_same("5.17.0.9", None)
 
+
 # Exact device names before the wildcards they'd also match, like the real versions DB.
 _DB = [
     {"device_name": "Intel RealSense D455", "policy_type": "RECOMMENDED", "component": "FIRMWARE",
@@ -36,7 +37,7 @@ _DB = [
      "version": "5.17.0.10", "platform": "*", "link": "d4x.bin"},
     {"device_name": "Intel RealSense D4*", "policy_type": "RECOMMENDED", "component": "LIBREALSENSE",
      "version": "2.58.2", "platform": "*", "link": "sw"},
-    {"device_name": "Intel RealSense D457", "policy_type": "REQUIRED", "component": "FIRMWARE",
+    {"device_name": "Intel RealSense D457", "policy_type": "ESSENTIAL", "component": "FIRMWARE",
      "version": "9.9.9.9", "platform": "*", "link": "x"},
 ]
 
@@ -53,9 +54,9 @@ def test_pick_falls_back_to_wildcard():
 
 
 def test_pick_ignores_non_firmware_and_non_recommended():
-    # LIBREALSENSE component and REQUIRED policy must never be returned as FW recommendation
+    # LIBREALSENSE component and non-RECOMMENDED policy must never be a FW recommendation
     ver, _ = _pick_recommended_fw(_DB, "Intel RealSense D457", "Windows")
-    assert ver == "5.17.0.10"  # matches D4* FIRMWARE/RECOMMENDED, not the REQUIRED 9.9.9.9
+    assert ver == "5.17.0.10"  # matches D4* FIRMWARE/RECOMMENDED, not the ESSENTIAL 9.9.9.9
 
 
 def test_pick_matches_prefixless_reported_name():

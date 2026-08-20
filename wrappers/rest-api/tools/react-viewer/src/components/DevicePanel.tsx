@@ -202,22 +202,16 @@ export function DevicePanel() {
     setFirmwareFileName(null)
   }
 
-  // Reads firmware state through getState() rather than the deviceStates closure so the
-  // callbacks stay referentially stable — the proposal-toast effect below holds on to one.
   const startFirmwareUpdate = useCallback(
-    (device: DeviceInfo, label: string, phase: FirmwareState['phase'], run: (deviceId: string) => void) => {
-      const deviceId = device.device_id
-      const fw = useAppStore.getState().deviceStates[deviceId]?.firmware
+    (device: DeviceInfo, label: string, phase: FirmwareState['phase'], run: (deviceId: string) => Promise<void>) => {
       setFirmwareFileName(label)
       setFirmwareProgressDevice(device)
-      setFirmwareProgressState({
-        ...fw,
-        is_updating: true,
-        phase,
-        progress: 0,
-        last_error: null,
+      setFirmwareProgressState({ is_updating: true, phase, progress: 0, last_error: null })
+      // Rejected outright: no Socket.IO event will arrive, so close the modal ourselves.
+      run(device.device_id).catch((error: Error) => {
+        handleCloseFirmwareModal()
+        addToast('error', error.message)
       })
-      run(deviceId)
     },
     [],
   )
@@ -240,9 +234,15 @@ export function DevicePanel() {
   // Explicit "Check for Firmware Updates": an outdated result raises the proposal toast
   // via the effect below, so only the no-proposal outcomes need reporting here.
   const handleCheckFirmwareUpdates = async (deviceId: string) => {
-    await checkFirmwareUpdates(deviceId, true)
-    const ds = useAppStore.getState().deviceStates[deviceId]
-    const status = firmwareStatus(ds?.device.firmware_version, ds?.firmware?.recommended)
+    let recommended: string | undefined
+    try {
+      recommended = await checkFirmwareUpdates(deviceId)
+    } catch (error) {
+      addToast('error', `Failed to check firmware updates: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      return
+    }
+    const device = deviceStates[deviceId]?.device ?? devices.find((d) => d.device_id === deviceId)
+    const status = firmwareStatus(device?.firmware_version, recommended)
     if (status === 'up_to_date') addToast('success', 'Firmware is up to date.')
     else if (status === 'unknown') addToast('info', 'No firmware recommendation available for this device.')
   }

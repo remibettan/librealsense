@@ -272,25 +272,7 @@ describe('AppStore', () => {
       )
     }
 
-    it('a joined force-refresh only resolves once enumeration completed', async () => {
-      let resolved = false
-      server.use(
-        http.get('/api/v1/devices/', async () => {
-          await new Promise((resolve) => setTimeout(resolve, 20))
-          resolved = true
-          return HttpResponse.json([presentDevice])
-        })
-      )
-
-      const first = useAppStore.getState().fetchDevices(true)
-      // The post-flash caller must not be dropped — awaiting it has to mean the list is fresh.
-      await useAppStore.getState().fetchDevices(true)
-      expect(resolved).toBe(true)
-      expect(useAppStore.getState().devices.map((d) => d.device_id)).toEqual(['present-1'])
-      await first
-    })
-
-    it('a cached fetch in flight does not satisfy a force-refresh', async () => {
+    it('never drops a caller: every fetch reaches the backend', async () => {
       const seen: (string | null)[] = []
       server.use(
         http.get('/api/v1/devices/', async ({ request }) => {
@@ -304,8 +286,29 @@ describe('AppStore', () => {
       await useAppStore.getState().fetchDevices(true)
       await cached
 
-      expect(seen).toHaveLength(2)
-      expect(seen[1]).toBe('true')
+      expect(seen).toEqual([null, 'true'])
+      expect(useAppStore.getState().devices.map((d) => d.device_id)).toEqual(['present-1'])
+    })
+
+    it('ignores a response older than one already applied', async () => {
+      let call = 0
+      server.use(
+        http.get('/api/v1/devices/', async () => {
+          call += 1
+          if (call === 1) {
+            // First request is slow and returns a list the second one supersedes.
+            await new Promise((resolve) => setTimeout(resolve, 40))
+            return HttpResponse.json([goneDevice])
+          }
+          return HttpResponse.json([presentDevice])
+        })
+      )
+
+      const stale = useAppStore.getState().fetchDevices()
+      await useAppStore.getState().fetchDevices()
+      await stale
+
+      expect(useAppStore.getState().devices.map((d) => d.device_id)).toEqual(['present-1'])
     })
   })
 

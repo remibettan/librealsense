@@ -214,8 +214,8 @@ describe('API Client', () => {
   describe('Firmware', () => {
     it('fetches the recommended version for a device', async () => {
       server.use(
-        http.get('/api/v1/devices/:deviceId/firmware/', ({ params }) =>
-          HttpResponse.json({ device_id: params.deviceId, recommended: '5.17.3.10' })
+        http.get('/api/v1/devices/:deviceId/firmware/', () =>
+          HttpResponse.json({ recommended: '5.17.3.10' })
         )
       )
 

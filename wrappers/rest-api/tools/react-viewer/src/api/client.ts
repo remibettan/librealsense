@@ -99,7 +99,7 @@ class ApiClient {
   }
 
   /** The firmware version the online DB recommends for this device, if any. */
-  async getRecommendedFirmware(deviceId: string): Promise<{ device_id: string; recommended?: string }> {
+  async getRecommendedFirmware(deviceId: string): Promise<{ recommended?: string }> {
     const response = await this.client.get(`/devices/${deviceId}/firmware/`)
     return response.data
   }

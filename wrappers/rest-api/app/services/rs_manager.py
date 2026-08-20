@@ -302,7 +302,7 @@ class RealSenseManager:
         """Return the firmware version the online DB recommends for a device, if any."""
         device = self.get_device(device_id)
         recommended, _link = fw.recommended_firmware(device.name)
-        return {"device_id": device_id, "recommended": recommended}
+        return {"recommended": recommended}
 
     def update_firmware_from_recommended(self, device_id: str) -> Dict[str, Any]:
         """Download the device's recommended firmware image and flash it.
@@ -321,6 +321,9 @@ class RealSenseManager:
                 status_code=409,
                 detail=f"Device already runs firmware {device.firmware_version}; recommended is {recommended}",
             )
+        # Claim before emitting: a duplicate request must not put events on this device's
+        # channel, where they would rewrite the modal of the update already running.
+        self._claim_fw_update_slot(device_id)
         # Emit download progress under the "downloading" phase so the UI can show it
         # before the (separate) install phase begins.
         _holder, on_download = self._make_fw_progress_callback(device_id, phase="downloading")
@@ -333,8 +336,10 @@ class RealSenseManager:
                 f"firmware_update_failed_{device_id}",
                 {"device_id": device_id, "error": str(exc)},
             )
+            with self.lock:
+                self._fw_updates_in_progress.discard(device_id)
             raise
-        return self.update_firmware_from_bytes(device_id, fw_bytes)
+        return self.update_firmware_from_bytes(device_id, fw_bytes, slot_held=True)
 
     @staticmethod
     def _is_update_device(dev: rs.device) -> bool:
@@ -350,14 +355,15 @@ class RealSenseManager:
         except Exception:
             return False
 
-    def update_firmware_from_bytes(self, device_id: str, fw_bytes: bytes) -> Dict[str, Any]:
+    def update_firmware_from_bytes(self, device_id: str, fw_bytes: bytes, slot_held: bool = False) -> Dict[str, Any]:
         """Run firmware update using a user-supplied image blob.
 
         Reuses the DFU flow: check_firmware_compatibility -> enter_update_state ->
         wait for DFU device -> update_dev.update(image, on_progress) -> wait for reconnect.
         Emits the same Socket.IO progress / success / failure events as a bundled-image update.
         """
-        self._claim_fw_update_slot(device_id)
+        if not slot_held:
+            self._claim_fw_update_slot(device_id)
         try:
             self._ensure_fw_update_allowed(device_id)
             # pyrealsense2 accepts bytes-like objects; bytearray keeps memory
@@ -420,19 +426,23 @@ class RealSenseManager:
                 raise RealSenseError(status_code=500, detail=f"Firmware update failed: {exc}")
 
             updated_info = self._refresh_until_device_returns(device_id)
+            if not updated_info:
+                # Written, but a device that never came back is not a success we can report.
+                raise RealSenseError(
+                    status_code=504,
+                    detail="Firmware written, but the device did not reconnect. "
+                           "Power-cycle it and check its version.",
+                )
 
             self._emit_socket_event(
                 f"firmware_update_success_{device_id}",
-                {
-                    "device_id": device_id,
-                    "firmware_version": updated_info.firmware_version if updated_info else None,
-                },
+                {"device_id": device_id, "firmware_version": updated_info.firmware_version},
             )
 
             return {
                 "device_id": device_id,
                 "progress": progress_holder["value"],
-                "firmware_version": updated_info.firmware_version if updated_info else None,
+                "firmware_version": updated_info.firmware_version,
                 "status": "success",
             }
         except RealSenseError as exc:
