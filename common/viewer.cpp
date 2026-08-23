@@ -4111,9 +4111,9 @@ namespace rs2
                 new_objects.emplace_back( obj_id++, name, normalized_color_bbox, normalized_depth_bbox, mean_depth,
                                           hkr_depth_m, det.score,
                                           static_cast< object_type >( det.class_id ),
-                                          det.com_valid ? det.world_position.x : 0.f,
-                                          det.com_valid ? det.world_position.y : 0.f,
-                                          det.com_valid != 0 );
+                                          det.center_of_mass_valid ? det.world_position.x : 0.f,
+                                          det.center_of_mass_valid ? det.world_position.y : 0.f,
+                                          det.center_of_mass_valid != 0 );
             }
 
             std::lock_guard< std::mutex > lock( objects->mutex );

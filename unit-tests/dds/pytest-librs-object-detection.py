@@ -190,7 +190,7 @@ else:
                     check.equal( det0.top_left_y,     20 )
                     check.equal( det0.bottom_right_x, 100 )
                     check.equal( det0.bottom_right_y, 200 )
-                    check.equal( det0.com_valid, 0 )
+                    check.equal( det0.center_of_mass_valid, 0 )
                     check.equal( det0.world_position.z, 0.0 )
 
                     det1 = odf.get_detection( 1 )
@@ -221,12 +221,12 @@ else:
                     check.equal( det.bottom_right_x, 200 )
                     check.equal( det.bottom_right_y, 300 )
                     check.is_true( abs( det.depth - 2.291 ) < 1e-5 )
-                    check.equal( det.com_valid, 1 )
+                    check.equal( det.center_of_mass_valid, 1 )
                     check.is_true( abs( det.world_position.x - 1.0 ) < 1e-5 )
                     check.is_true( abs( det.world_position.y + 0.5 ) < 1e-5 )
                     check.is_true( abs( det.world_position.z - 2.0 ) < 1e-5 )
-                    check.is_true( abs( det.image_x - 321.5 ) < 1e-5 )
-                    check.is_true( abs( det.image_y - 181.25 ) < 1e-5 )
+                    check.is_true( abs( det.center_of_mass_x - 321.5 ) < 1e-5 )
+                    check.is_true( abs( det.center_of_mass_y - 181.25 ) < 1e-5 )
 
     #
     #############################################################################################

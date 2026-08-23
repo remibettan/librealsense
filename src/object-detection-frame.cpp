@@ -101,7 +101,7 @@ size_t object_detection_frame::get_detection_count() const
     return 0;
 }
 
-object_detection_frame::object_detection_entry object_detection_frame::get_detection( size_t index ) const
+object_detection_frame::decoded_object_detection object_detection_frame::get_detection( size_t index ) const
 {
     size_t count = get_detection_count(); // Validates frame as well
     if( index >= count )
@@ -111,10 +111,10 @@ object_detection_frame::object_detection_entry object_detection_frame::get_detec
     auto const * header = reinterpret_cast< const object_detection_frame_header * >( data.data() );
     auto const * entries = data.data() + FRAME_HEADER_SIZE + PAYLOAD_HEADER_SIZE;
 
-    object_detection_entry result;
+    decoded_object_detection result;
     if( header->version == VERSION_V3 )
     {
-        auto const & wire = reinterpret_cast< const object_detection_entry_v3 * >( entries )[index];
+        auto const & wire = reinterpret_cast< const object_detection_payload_entry_v3 * >( entries )[index];
         result.detection_id = wire.detection.detection_id;
         result.detection_type = wire.detection.detection_type;
         result.confidence = wire.detection.confidence;
@@ -131,7 +131,7 @@ object_detection_frame::object_detection_entry object_detection_frame::get_detec
     }
     else
     {
-        auto const & wire = reinterpret_cast< const object_detection_entry_v2 * >( entries )[index];
+        auto const & wire = reinterpret_cast< const object_detection_payload_entry_v2 * >( entries )[index];
         result.detection_id = wire.detection_id;
         result.detection_type = wire.detection_type;
         result.confidence = wire.confidence;
@@ -163,9 +163,9 @@ size_t object_detection_frame::entry_size() const
     switch( get_version() )
     {
     case VERSION_V2:
-        return sizeof( object_detection_entry_v2 );
+        return sizeof( object_detection_payload_entry_v2 );
     case VERSION_V3:
-        return sizeof( object_detection_entry_v3 );
+        return sizeof( object_detection_payload_entry_v3 );
     default:
         return 0;
     }

@@ -80,10 +80,10 @@ int main( int /*argc*/, char * /*argv*/[] ) try
                       << "  score=" << std::right << std::setw( 3 ) << det.score << "%"
                       << "  bbox=("  << det.top_left_x     << "," << det.top_left_y     << ")-"
                       <<       "("   << det.bottom_right_x << "," << det.bottom_right_y << ")";
-            if( det.com_valid )
+            if( det.center_of_mass_valid )
                 std::cout << "  world=(" << det.world_position.x << ","
                           << det.world_position.y << "," << det.world_position.z << ")m"
-                          << "  image=(" << det.image_x << "," << det.image_y << ")px";
+                          << "  image=(" << det.center_of_mass_x << "," << det.center_of_mass_y << ")px";
             else
                 std::cout << "  COM=unavailable";
             std::cout << "\n";

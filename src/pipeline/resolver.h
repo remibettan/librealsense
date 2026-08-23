@@ -151,9 +151,8 @@ namespace librealsense
                         return false;
                     };
 
-                    // The D555 USB transaction must establish its producer streams before
-                    // opening the OD consumer. Keep the legacy reverse order among all other
-                    // sensors, then open perception last.
+                    // Producer streams must be opened before the perception stream.
+                    // Keep the reverse order among all other sensors, open perception last.
                     for( auto it = _dev_to_profiles.rbegin(); it != _dev_to_profiles.rend(); it++ )
                     {
                         if( has_object_detection( it->second ) )
@@ -182,9 +181,9 @@ namespace librealsense
                         return false;
                     };
 
-                    // Start the OD consumer before its producer streams. Firmware commits the
-                    // multi-stream transaction when the producer starts; doing this in the
-                    // opposite order can leave Color inactive on the D555 USB path.
+                    // Start the perception stream before its producer streams. Firmware commits the
+                    // multi-stream transaction when the producer starts; starting in the opposite
+                    // order can leave the producer stream inactive.
                     for( auto && sensor : _results )
                         if( has_object_detection( sensor.first ) )
                             sensor.second->start( callback );

@@ -188,8 +188,8 @@ namespace librealsense
                 = j.value( "od_version", uint16_t( object_detection_frame::VERSION_V2 ) );
             bool const has_com = od_version == object_detection_frame::VERSION_V3;
 
-            size_t const entry_size = has_com ? sizeof( object_detection_frame::object_detection_entry_v3 )
-                                              : sizeof( object_detection_frame::object_detection_entry_v2 );
+            size_t const entry_size = has_com ? sizeof( object_detection_frame::object_detection_payload_entry_v3 )
+                                              : sizeof( object_detection_frame::object_detection_payload_entry_v2 );
             size_t const base_size = sizeof( object_detection_frame::object_detection_frame_header )
                                    + sizeof( object_detection_frame::object_detection_payload_header );
             size_t const total_size = base_size + n_detections * entry_size;
@@ -211,7 +211,7 @@ namespace librealsense
                 for( uint16_t i = 0; i < n_detections && i < dets_j->size(); ++i )
                 {
                     auto const & det = (*dets_j)[i];
-                    object_detection_frame::object_detection_entry_v2 common{};
+                    object_detection_frame::object_detection_payload_entry_v2 common{};
                     common.detection_id   = i;
                     common.detection_type = det.value( "class_id",    uint8_t(0) );
                     common.confidence     = det.value( "confidence",  uint8_t(0) );
@@ -223,7 +223,7 @@ namespace librealsense
 
                     if( has_com )
                     {
-                        object_detection_frame::object_detection_entry_v3 entry{};
+                        object_detection_frame::object_detection_payload_entry_v3 entry{};
                         entry.detection = common;
                         // A V3 frame can still have individual detections with no COM (firmware
                         // reported it invalid for that one); leave world/image zeroed in that case

@@ -549,8 +549,8 @@ void dds_sensor_proxy::handle_perception_data( realdds::topics::string_msg && ms
 
     uint16_t const wire_version = has_com ? object_detection_frame::VERSION_V3
                                           : object_detection_frame::VERSION_V2;
-    size_t const entry_size = has_com ? sizeof( object_detection_frame::object_detection_entry_v3 )
-                                      : sizeof( object_detection_frame::object_detection_entry_v2 );
+    size_t const entry_size = has_com ? sizeof( object_detection_frame::object_detection_payload_entry_v3 )
+                                      : sizeof( object_detection_frame::object_detection_payload_entry_v2 );
     size_t const base_size = sizeof( object_detection_frame::object_detection_frame_header )
                            + sizeof( object_detection_frame::object_detection_payload_header );
     size_t const detections_size = n_detections * entry_size;
@@ -595,7 +595,7 @@ void dds_sensor_proxy::handle_perception_data( realdds::topics::string_msg && ms
     for( uint16_t idx = 0; idx < n_detections; ++idx )
     {
         auto const & det = detections_j[idx];
-        object_detection_frame::object_detection_entry_v2 common{};
+        object_detection_frame::object_detection_payload_entry_v2 common{};
         common.detection_id = idx;
         det.nested( "class_id" ).get_ex( common.detection_type );
         det.nested( "confidence" ).get_ex( common.confidence );
@@ -607,7 +607,7 @@ void dds_sensor_proxy::handle_perception_data( realdds::topics::string_msg && ms
 
         if( has_com )
         {
-            object_detection_frame::object_detection_entry_v3 entry{};
+            object_detection_frame::object_detection_payload_entry_v3 entry{};
             entry.detection = common;
             auto const world = det.nested( "world_pos" );
             auto const image = det.nested( "image_pos" );

@@ -129,10 +129,10 @@ typedef struct rs2_object_detection
     int bottom_right_x; /**< Bottom-right corner pixel X coordinate */
     int bottom_right_y; /**< Bottom-right corner pixel Y coordinate */
     float depth;        /**< Distance to detected object in meters, as computed by firmware */
-    rs2_vector world_position; /**< COM X, Y, Z in camera coordinates, meters. Valid only when com_valid is nonzero */
-    float image_x;             /**< COM column in source-image pixels. Valid only when com_valid is nonzero */
-    float image_y;             /**< COM row in source-image pixels. Valid only when com_valid is nonzero */
-    int com_valid;             /**< Nonzero when world_position, image_x and image_y are valid */
+    rs2_vector world_position;    /**< COM X, Y, Z in camera coordinates, meters. Valid only when center_of_mass_valid is nonzero */
+    float center_of_mass_x;       /**< COM column in source-image pixels. Valid only when center_of_mass_valid is nonzero */
+    float center_of_mass_y;       /**< COM row in source-image pixels. Valid only when center_of_mass_valid is nonzero */
+    int center_of_mass_valid;     /**< Nonzero when world_position, center_of_mass_x and center_of_mass_y are valid */
 } rs2_object_detection;
 
 /** \brief Severity of the librealsense logger. */
