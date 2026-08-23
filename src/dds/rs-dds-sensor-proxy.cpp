@@ -536,13 +536,16 @@ void dds_sensor_proxy::handle_perception_data( realdds::topics::string_msg && ms
         return;
     }
     
-    bool has_com = n_detections > 0;
+    // A specific detection can lack COM independently of the others (e.g. its object is too
+    // close for a valid depth), so tag the frame V3 if any detection has it, not only if all do -
+    // otherwise one COM-less detection would discard valid COM data from every other detection.
+    bool has_com = false;
     for( uint16_t idx = 0; idx < n_detections; ++idx )
     {
         auto const & det = detections_j[idx];
-        if( ! det.nested( "world_pos" ).is_object() || ! det.nested( "image_pos" ).is_object() )
+        if( det.nested( "world_pos" ).is_object() && det.nested( "image_pos" ).is_object() )
         {
-            has_com = false;
+            has_com = true;
             break;
         }
     }
