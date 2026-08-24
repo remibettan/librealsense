@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 import logging
 import re
+import time
 from iq_helper import (find_roi_location, get_roi_from_frame, is_color_close, save_failure_snapshot,
                        WIDTH, HEIGHT, DEFAULT_CONFIGURATIONS, NIGHTLY_CONFIGURATIONS)
 
@@ -21,6 +22,9 @@ pytestmark = [
 
 NUM_FRAMES = 100 # Number of frames to check
 FRAMES_PASS_THRESHOLD =0.8 # Percentage of frames that needs to pass
+# Idle between configurations so the RGB ISP powers down and each configuration starts from a
+# cold sensor. Without it a fast restart reuses the still-powered ISP and inherits its exposure.
+CONFIG_SETTLE_SEC = 3
 DEBUG_MODE = False
 
 # expected colors (insertion order -> mapped row-major to 3x3 grid)
@@ -174,5 +178,7 @@ def test_basic_color(test_device, test_context_var):
             log.warning(f"D436 FW color-stream bug: skipping color configs fps>30: {skipped}")
         configurations = [c for c in configurations if c[1] <= 30]
 
-    for resolution, fps in configurations:
+    for i, (resolution, fps) in enumerate(configurations):
+        if i:
+            time.sleep(CONFIG_SETTLE_SEC)
         run_test(dev, ctx, resolution, fps)
