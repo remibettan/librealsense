@@ -191,18 +191,6 @@ describe('AppStore', () => {
     })
   })
 
-  describe('IMU Viewer', () => {
-    it('toggles IMU viewer expanded state', () => {
-      expect(useAppStore.getState().isIMUViewerExpanded).toBe(false)
-      
-      useAppStore.getState().toggleIMUViewer()
-      expect(useAppStore.getState().isIMUViewerExpanded).toBe(true)
-      
-      useAppStore.getState().toggleIMUViewer()
-      expect(useAppStore.getState().isIMUViewerExpanded).toBe(false)
-    })
-  })
-
   describe('Device States', () => {
     it('stores device state by device_id', () => {
       const device = createMockDevice()

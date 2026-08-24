@@ -20,7 +20,6 @@ export function resetStore() {
     chatMessages: [],
     pendingSettings: null,
     imuHistory: { accel: [], gyro: [] },
-    isIMUViewerExpanded: false,
   })
 }
 

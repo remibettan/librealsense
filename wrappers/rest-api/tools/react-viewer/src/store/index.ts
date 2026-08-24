@@ -176,8 +176,6 @@ interface AppState {
   // UI state
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => Promise<void>
-  isIMUViewerExpanded: boolean
-  toggleIMUViewer: () => void
 
   // Chat/AI Assistant state
   isChatOpen: boolean
@@ -941,8 +939,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
       })
     }
   },
-  isIMUViewerExpanded: false,
-  toggleIMUViewer: () => set((state) => ({ isIMUViewerExpanded: !state.isIMUViewerExpanded })),
 
   // Chat/AI Assistant state
   isChatOpen: false,
