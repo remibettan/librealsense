@@ -910,7 +910,7 @@ namespace rs2
                         static_cast<int>(formats_chars.size())))
                     {
                         // Color format can flip raw (RGB8) <-> ISP mode; reconcile the other streams.
-                        if (is_dual_color_subdevice() && stream_enabled[f.first])
+                        if (is_dual_color_subdevice() && stream_enabled.count(f.first) && stream_enabled.at(f.first))
                             enforce_dual_color_ir_exclusion(f.first);
                     }
                     ImGui::PopStyleColor();
@@ -1084,7 +1084,7 @@ namespace rs2
                     if (ImGui::Checkbox(label.c_str(), &stream_enabled[f.first]))
                     {
                         prev_stream_enabled = tmp;
-                        if (stream_enabled[f.first] && is_dual_color_subdevice())
+                        if (is_dual_color_subdevice() && stream_enabled.count(f.first) && stream_enabled.at(f.first))
                             enforce_dual_color_ir_exclusion(f.first);
                     }
                     if (mode_locked) ImGui::EndDisabled();
@@ -1123,7 +1123,7 @@ namespace rs2
                         static_cast<int>(formats_chars.size())))
                     {
                         // Color format can flip raw (RGB8) <-> ISP mode; reconcile the other streams.
-                        if (is_dual_color_subdevice() && stream_enabled[f.first])
+                        if (is_dual_color_subdevice() && stream_enabled.count(f.first) && stream_enabled.at(f.first))
                             enforce_dual_color_ir_exclusion(f.first);
                     }
                     ImGui::PopStyleColor();
@@ -1648,19 +1648,21 @@ namespace rs2
         return fit->second[idx] == RS2_FORMAT_RGB8;
     }
 
+    rs2_stream subdevice_model::stream_type_of(int unique_id) const
+    {
+        for (auto&& p : profiles) if (p.unique_id() == unique_id) return p.stream_type();
+        return RS2_STREAM_ANY;
+    }
+
+    int subdevice_model::stream_index_of(int unique_id) const
+    {
+        for (auto&& p : profiles) if (p.unique_id() == unique_id) return p.stream_index();
+        return 0;
+    }
+
     void subdevice_model::enforce_dual_color_ir_exclusion(int changed_unique_id)
     {
         // Caller gates this on is_dual_color_subdevice(). Reconciles the single-mode invariant.
-        auto type_of  = [this](int uid) -> rs2_stream
-        {
-            for (auto&& p : profiles) if (p.unique_id() == uid) return p.stream_type();
-            return RS2_STREAM_ANY;
-        };
-        auto index_of = [this](int uid) -> int
-        {
-            for (auto&& p : profiles) if (p.unique_id() == uid) return p.stream_index();
-            return 0;
-        };
         auto set_format = [this](int uid, rs2_format tgt)
         {
             auto fit = format_values.find(uid);
@@ -1668,10 +1670,10 @@ namespace rs2
             for (int i = 0; i < (int)fit->second.size(); ++i)
                 if (fit->second[i] == tgt) { ui.selected_format_id[uid] = i; return; }
         };
-        auto is_color = [&](int uid) { return type_of(uid) == RS2_STREAM_COLOR; };
-        auto is_ir    = [&](int uid) { return type_of(uid) == RS2_STREAM_INFRARED; };
+        auto is_color = [this](int uid) { return stream_type_of(uid) == RS2_STREAM_COLOR; };
+        auto is_ir    = [this](int uid) { return stream_type_of(uid) == RS2_STREAM_INFRARED; };
 
-        rs2_stream ct = type_of(changed_unique_id);
+        rs2_stream ct = stream_type_of(changed_unique_id);
         if (ct != RS2_STREAM_COLOR && ct != RS2_STREAM_INFRARED)
             return;   // depth etc. - no mode effect
 
@@ -1695,7 +1697,7 @@ namespace rs2
             for (auto& o : stream_enabled)
             {
                 if (o.first == changed_unique_id || !o.second) continue;
-                if (is_color(o.first) && ( color_uid_is_raw(o.first) || index_of(o.first) >= 1 ))
+                if (is_color(o.first) && ( color_uid_is_raw(o.first) || stream_index_of(o.first) >= 1 ))
                     o.second = false;
             }
         }
@@ -1705,7 +1707,7 @@ namespace rs2
             for (auto& o : stream_enabled)
             {
                 if (o.first == changed_unique_id || !o.second) continue;
-                if (is_color(o.first) && index_of(o.first) >= 1)
+                if (is_color(o.first) && stream_index_of(o.first) >= 1)
                     o.second = false;
             }
         }
@@ -1716,32 +1718,21 @@ namespace rs2
         if (!is_dual_color_subdevice())
             return false;
 
-        auto type_of  = [this](int uid) -> rs2_stream
-        {
-            for (auto&& p : profiles) if (p.unique_id() == uid) return p.stream_type();
-            return RS2_STREAM_ANY;
-        };
-        auto index_of = [this](int uid) -> int
-        {
-            for (auto&& p : profiles) if (p.unique_id() == uid) return p.stream_index();
-            return 0;
-        };
-
         bool raw_active = false, ir_active = false, isp_color_active = false;
         for (auto&& kv : stream_enabled)
         {
             if (!kv.second) continue;
-            rs2_stream t = type_of(kv.first);
+            rs2_stream t = stream_type_of(kv.first);
             if (t == RS2_STREAM_COLOR)
                 ( color_uid_is_raw(kv.first) ? raw_active : isp_color_active ) = true;
             else if (t == RS2_STREAM_INFRARED)
                 ir_active = true;
         }
 
-        rs2_stream t = type_of(unique_id);
+        rs2_stream t = stream_type_of(unique_id);
         if (t == RS2_STREAM_INFRARED)
             return raw_active;                              // IR unavailable while raw color streams
-        if (t == RS2_STREAM_COLOR && index_of(unique_id) >= 1)
+        if (t == RS2_STREAM_COLOR && stream_index_of(unique_id) >= 1)
             return ir_active || isp_color_active;           // Color 1 is raw-only
         return false;                                       // depth and Color 0 (mode chooser) never lock
     }

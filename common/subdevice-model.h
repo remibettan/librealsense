@@ -280,6 +280,8 @@ namespace rs2
         //   ISP / stereo   : color in YUYV/BGR8/RGBA8/BGRA8 (FW-processed). Coexists with IR1/IR2;
         //                    the raw-only Color 1 is unavailable.
         // Depth is a separate node and coexists with either mode.
+        rs2_stream stream_type_of(int unique_id) const;   // profile stream type for a unique id (ANY if not found)
+        int        stream_index_of(int unique_id) const;  // profile stream index for a unique id (0 if not found)
         bool color_uid_is_raw(int unique_id) const;   // color stream currently in the raw RGB8 format
         // Reconcile the single-mode invariant after `changed_unique_id` toggled or changed format:
         // uncheck streams that can't coexist with it and couple the two color pins to the same format.
