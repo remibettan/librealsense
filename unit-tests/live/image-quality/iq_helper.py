@@ -246,6 +246,8 @@ def make_depth_filter_chain():
 #        hue is undefined and HSV S is dominated by sensor noise.
 TOLERANCE = {'hue': 10, 'sat': 70, 'val': 70, 'rgb': 70}
 ACHROMATIC_S = 40       # expected S below this → treat as gray/white/black
+ACHROMATIC_V = 50       # hue is meaningless this dark: at V=30 a 6-count channel spread
+                        # reads S=51, so compare dark patches per-channel instead
 
 
 def is_color_close(actual, expected):
@@ -254,7 +256,7 @@ def is_color_close(actual, expected):
         cv2.cvtColor(np.uint8([[[expected[2], expected[1], expected[0]]]]), cv2.COLOR_BGR2HSV)[0, 0])
 
     # Gray/black/white have no real hue, so compare RGB directly instead of HSV.
-    if expected_s < ACHROMATIC_S:
+    if expected_s < ACHROMATIC_S or expected_v < ACHROMATIC_V:
         r_diff = abs(actual[0] - expected[0])
         g_diff = abs(actual[1] - expected[1])
         b_diff = abs(actual[2] - expected[2])
