@@ -1724,7 +1724,10 @@ namespace rs2
             if (!kv.second) continue;
             rs2_stream t = stream_type_of(kv.first);
             if (t == RS2_STREAM_COLOR)
-                ( color_uid_is_raw(kv.first) ? raw_active : isp_color_active ) = true;
+            {
+                if (color_uid_is_raw(kv.first)) raw_active = true;
+                else                            isp_color_active = true;
+            }
             else if (t == RS2_STREAM_INFRARED)
                 ir_active = true;
         }
