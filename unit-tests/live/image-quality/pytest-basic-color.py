@@ -25,6 +25,10 @@ FRAMES_PASS_THRESHOLD =0.8 # Percentage of frames that needs to pass
 # Idle between configurations so the RGB ISP powers down and each configuration starts from a
 # cold sensor. Without it a fast restart reuses the still-powered ISP and inherits its exposure.
 CONFIG_SETTLE_SEC = 3
+# Auto-exposure needs wall-clock time, not a frame count: 60 frames is 1s at 60fps but 12s at
+# 5fps. Wait for both a minimum frame count and a minimum duration.
+WARMUP_SEC = 2.0
+WARMUP_MIN_FRAMES = 30
 DEBUG_MODE = False
 
 # expected colors (insertion order -> mapped row-major to 3x3 grid)
@@ -99,8 +103,12 @@ def run_test(dev, ctx, resolution, fps):
         log.info(f"Configuration {resolution[0]}x{resolution[1]}@{fps}fps is not supported by the device")
         return
     pipeline_profile = pipeline.start(cfg)
-    for i in range(60):  # skip initial frames
+    # let auto-exposure settle before sampling
+    warmup_start = time.time()
+    warmup_frames = 0
+    while warmup_frames < WARMUP_MIN_FRAMES or time.time() - warmup_start < WARMUP_SEC:
         pipeline.wait_for_frames()
+        warmup_frames += 1
     last_frame_bgr = None
     last_roi = None
     try:
