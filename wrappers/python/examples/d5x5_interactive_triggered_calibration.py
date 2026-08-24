@@ -29,6 +29,7 @@ The health value returned alongside the RUN result is `rect_health` in pixels;
 the firmware's pass gate is `rect_health < 0.4 px`.
 """
 
+import struct
 import sys
 import time
 import zlib
@@ -40,6 +41,26 @@ import numpy as np
 # Firmware pass threshold for `rect_health` in pixels.
 # Mirrors `rect_health_pass_threshold_px` in src/calibration-engine-interface.h.
 RECT_HEALTH_PASS_THRESHOLD_PX = 0.4
+
+# Raw HW-monitor opcode for GET_CALIB_STATUS (ds::GET_CALIB_STATUS in
+# src/ds/d500/d500-private.h). Used to read the metrics the SDK does not expose.
+GET_CALIB_STATUS = 0xB9
+
+# Field order of `librealsense::calibration_health_metrics`
+# (src/calibration-engine-interface.h). The struct is `#pragma pack(1)`,
+# five little-endian float32 at offset 3 of the GET_CALIB_STATUS payload.
+HEALTH_FIELDS = (
+    "coverage_safe_for_depth",
+    "rect_health",
+    "rect_improvement",
+    "scale_health",
+    "scale_improvement",
+)
+
+# Payload size once the 4-byte opcode echo is stripped: 3-byte header
+# (state, progress, result) + 20-byte health block + 512-byte calibration table.
+HEALTH_PAYLOAD_SIZE = 535
+HEALTH_OFFSET = 3
 
 # Device names of the D5x5 family that expose the interactive flow.
 # D585S and the legacy D585 stay on the older triggered-calibration path
@@ -92,6 +113,31 @@ def stream_and_report_fill_rate(dev, label):
         pipe.stop()
     print("[{}] depth fill rate = {:.2f}%".format(label, rate))
     return rate
+
+
+def read_full_health(dev):
+    """Read the full `calibration_health_metrics` struct over the raw HW monitor.
+
+    `run_on_chip_calibration` reports only `rect_health` through its `health`
+    out-param; firmware returns all five metrics in the GET_CALIB_STATUS reply.
+
+    Only valid while firmware is parked at HEALTH_CHECK (or COMPLETE) — that is,
+    after a RUN that reported success and before COMMIT/CANCEL. At IDLE/PROCESS
+    the reply carries only the 3-byte header and this returns None. Note the SDK
+    cancels a *failed* RUN back to IDLE before returning, so there is no health
+    payload left to read on that path.
+
+    The offsets below mirror `interactive_calibration_answer`; there is no
+    version field on the wire, so a firmware layout change cannot be detected
+    here beyond the total size check.
+    """
+    dbg = dev.as_debug_protocol()
+    reply = bytes(dbg.send_and_receive_raw_data(dbg.build_command(GET_CALIB_STATUS)))
+    payload = reply[4:]  # strip the opcode echo the HW monitor prepends
+    if len(payload) != HEALTH_PAYLOAD_SIZE:
+        return None
+    values = struct.unpack_from("<5f", payload, HEALTH_OFFSET)
+    return dict(zip(HEALTH_FIELDS, values))
 
 
 def calibration_table_crc(ac_dev):
@@ -169,6 +215,15 @@ def main():
         "PASS <" if passed else "FAIL >=",
         RECT_HEALTH_PASS_THRESHOLD_PX,
     ))
+
+    # Everything except `rect_health` is informational today, but firmware
+    # reports it and the pass gate for coverage/scale is still open (spec 5.5).
+    metrics = read_full_health(dev)
+    if metrics is None:
+        print("  (full health metrics unavailable - firmware not at HEALTH_CHECK)")
+    else:
+        for name in HEALTH_FIELDS:
+            print("  {:<24} = {:.6f}".format(name, metrics[name]))
 
     # ------------------------------------------------------------------
     # Phase 2 (optional): TRY NEW / TRY OLD live preview
