@@ -4069,9 +4069,6 @@ namespace rs2
                 // returns 0 (XU command not supported or device not ready).
                 // Checked per-detection intentionally: firmware could return 0 for individual
                 // detections (e.g. out-of-range) even when HKR COM is otherwise working.
-                // Only the distance estimate is used from it (mean_body_depth): its world_pos
-                // is a cruder histogram-based estimate than firmware COM, and surfacing it as
-                // X/Y would make the two sources indistinguishable in the debug display below.
                 // Remove once HKR COM is fully implemented and reliable on all devices.
                 if( hkr_depth_m == 0.f )
                 {

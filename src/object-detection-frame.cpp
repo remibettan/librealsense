@@ -112,35 +112,20 @@ object_detection_frame::decoded_object_detection object_detection_frame::get_det
     auto const * entries = data.data() + FRAME_HEADER_SIZE + PAYLOAD_HEADER_SIZE;
 
     decoded_object_detection result;
-    if( header->version == VERSION_V3 )
-    {
-        auto const & wire = reinterpret_cast< const object_detection_payload_entry_v3 * >( entries )[index];
-        result.detection_id = wire.detection.detection_id;
-        result.detection_type = wire.detection.detection_type;
-        result.confidence = wire.detection.confidence;
-        result.top_left_x = wire.detection.top_left_x;
-        result.top_left_y = wire.detection.top_left_y;
-        result.bottom_right_x = wire.detection.bottom_right_x;
-        result.bottom_right_y = wire.detection.bottom_right_y;
-        result.distance = wire.detection.distance;
-        result.world_position = { wire.world_x, wire.world_y, wire.world_z };
-        result.image_x = wire.image_x;
-        result.image_y = wire.image_y;
-        // world_z is never negative; firmware uses exactly 0 to mean COM wasn't calculated.
-        result.com_valid = wire.world_z > 0.f;
-    }
-    else
-    {
-        auto const & wire = reinterpret_cast< const object_detection_payload_entry_v2 * >( entries )[index];
-        result.detection_id = wire.detection_id;
-        result.detection_type = wire.detection_type;
-        result.confidence = wire.confidence;
-        result.top_left_x = wire.top_left_x;
-        result.top_left_y = wire.top_left_y;
-        result.bottom_right_x = wire.bottom_right_x;
-        result.bottom_right_y = wire.bottom_right_y;
-        result.distance = wire.distance;
-    }
+    auto const & wire = reinterpret_cast< const object_detection_payload_entry_v3 * >( entries )[index];
+    result.detection_id = wire.detection.detection_id;
+    result.detection_type = wire.detection.detection_type;
+    result.confidence = wire.detection.confidence;
+    result.top_left_x = wire.detection.top_left_x;
+    result.top_left_y = wire.detection.top_left_y;
+    result.bottom_right_x = wire.detection.bottom_right_x;
+    result.bottom_right_y = wire.detection.bottom_right_y;
+    result.distance = wire.detection.distance;
+    result.world_position = { wire.world_x, wire.world_y, wire.world_z };
+    result.image_x = wire.image_x;
+    result.image_y = wire.image_y;
+    // world_z is never negative; firmware uses exactly 0 to mean COM wasn't calculated.
+    result.com_valid = wire.world_z > 0.f;
     return result;
 }
 
@@ -160,15 +145,7 @@ uint16_t object_detection_frame::get_version() const
 
 size_t object_detection_frame::entry_size() const
 {
-    switch( get_version() )
-    {
-    case VERSION_V2:
-        return sizeof( object_detection_payload_entry_v2 );
-    case VERSION_V3:
-        return sizeof( object_detection_payload_entry_v3 );
-    default:
-        return 0;
-    }
+    return get_version() == VERSION_V3 ? sizeof( object_detection_payload_entry_v3 ) : 0;
 }
 
 }  // namespace librealsense

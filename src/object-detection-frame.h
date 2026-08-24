@@ -16,12 +16,12 @@ class object_detection_frame : public perception_frame
 {
 public:
     // Frames received over the object detection stream are binary blobs laid out as a frame header,
-    // a payload header, and an array of versioned detection entries (see object_detection_payload_entry_v2/v3).
+    // a payload header, and an array of detection entries (see object_detection_payload_entry_v3).
 
     static constexpr uint32_t MAGIC_NUMBER = 0x5445444F;  // ASCII "ODET" as a little-endian uint32
     static constexpr uint32_t MAX_DETECTIONS = 64;
-    static constexpr uint16_t VERSION_V2 = 0x0200;
-    static constexpr uint16_t VERSION_V3 = 0x0300;  // Adds center-of-mass world/image coordinates
+    // Adds center-of-mass world/image coordinates. The pre-COM v2 wire format (0x0200) is no longer supported.
+    static constexpr uint16_t VERSION_V3 = 0x0300;
 
     enum class source : uint8_t
     {
@@ -88,7 +88,7 @@ public:
     object_detection_frame & operator=( object_detection_frame && other );
 
     // Decoded detection. COM fields (world_position, image_x/y) are populated only when
-    // com_valid is set, which requires a V3 frame with a firmware-reported valid center of mass.
+    // com_valid is set, which requires a firmware-reported valid center of mass.
     struct decoded_object_detection
     {
         uint16_t detection_id = 0;
@@ -108,11 +108,11 @@ public:
     size_t get_detection_count() const;
     decoded_object_detection get_detection( size_t index ) const;
     object_detection_payload_header get_payload_header() const;
-    uint16_t get_version() const;
 
 private:
     bool validate() const;
     bool validate_payload() const;
+    uint16_t get_version() const;
     size_t entry_size() const;
 
     mutable std::atomic_bool _validated{ false };

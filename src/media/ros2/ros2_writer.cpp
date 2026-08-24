@@ -264,7 +264,6 @@ namespace librealsense
             json << "],"
                  << "\"source_frame_id\":" << payload.source_frame_id << ","
                  << "\"version\":1,"
-                 << "\"od_version\":"      << od->get_version() << ","
                  << "\"timestamp_us\":"    << (payload.timestamp_ms * MILLISEC_TO_MICROSEC)
                  << "}";
 
