@@ -614,11 +614,15 @@ void dds_sensor_proxy::handle_perception_data( realdds::topics::string_msg && ms
             entry.detection = common;
             auto const world = det.nested( "world_pos" );
             auto const image = det.nested( "image_pos" );
-            world.nested( "x" ).get_ex( entry.world_x );
-            world.nested( "y" ).get_ex( entry.world_y );
-            world.nested( "z" ).get_ex( entry.world_z );
-            image.nested( "x" ).get_ex( entry.image_x );
-            image.nested( "y" ).get_ex( entry.image_y );
+            if( world.is_object() && image.is_object() )
+            {
+                world.nested( "x" ).get_ex( entry.world_x );
+                world.nested( "y" ).get_ex( entry.world_y );
+                world.nested( "z" ).get_ex( entry.world_z );
+                image.nested( "x" ).get_ex( entry.image_x );
+                image.nested( "y" ).get_ex( entry.image_y );
+            }
+            // else leave world/image at entry{}'s zero-init - world_z == 0 correctly marks this entry COM-invalid downstream.
             memcpy( entries + idx * entry_size, &entry, sizeof( entry ) );
         }
         else
