@@ -2264,11 +2264,19 @@ namespace rs2
                     if( fabs(object.mean_depth) > 0.f )
                     {
                         ImGui::PushFont( font2 );
-                        std::string str = rsutils::string::from() << std::setprecision( 2 ) << object.mean_depth << " m";
+                        std::string const depth_only_str = rsutils::string::from() << std::setprecision( 2 ) << object.mean_depth << " m";
+                        std::string str = depth_only_str;
                         if( object.com_valid )
                             str += rsutils::string::from() << " (X:" << std::setprecision( 2 ) << object.world_x
                                                             << ", Y:" << std::setprecision( 2 ) << object.world_y << ")";
                         auto size = ImGui::CalcTextSize( str.c_str() );
+                        // The X/Y suffix often doesn't fit narrow/distant boxes - fall back to distance-only
+                        // rather than showing nothing.
+                        if( ! ( size.y < h && size.x < bbox.w ) && str != depth_only_str )
+                        {
+                            str = depth_only_str;
+                            size = ImGui::CalcTextSize( str.c_str() );
+                        }
                         if( size.y < h  &&  size.x < bbox.w )
                         {
                             ImGui::GetWindowDrawList()->AddRectFilled(
@@ -4061,6 +4069,9 @@ namespace rs2
                 // returns 0 (XU command not supported or device not ready).
                 // Checked per-detection intentionally: firmware could return 0 for individual
                 // detections (e.g. out-of-range) even when HKR COM is otherwise working.
+                // Only the distance estimate is used from it (mean_body_depth): its world_pos
+                // is a cruder histogram-based estimate than firmware COM, and surfacing it as
+                // X/Y would make the two sources indistinguishable in the debug display below.
                 // Remove once HKR COM is fully implemented and reliable on all devices.
                 if( hkr_depth_m == 0.f )
                 {
