@@ -36,20 +36,10 @@ namespace librealsense
         , d500_device( dev_info )
         , _object_detection_stream( new stream( RS2_STREAM_OBJECT_DETECTION ) )
     {
-        // D500 UVC descriptors expose OD through the occupancy video function.
-        // The control interface number varies with optional CDC functions.
-        // D555 exposes OD on MI 9.  Keep it first: MI 11 can also be a valid
-        // video-control interface on the same device, but belongs to another
-        // function and advertises ordinary image profiles rather than the
-        // fixed-size OD payload.  Other D500 layouts may shift the OD function.
-        static const uint32_t od_stream_mis[] = { 9, 11, 7 };
-        std::vector< platform::uvc_device_info > od_devs_info;
-        for( auto mi : od_stream_mis )
-        {
-            od_devs_info = filter_by_mi( dev_info->get_group().uvc_devices, mi );
-            if( ! od_devs_info.empty() )
-                break;
-        }
+        // OD VideoControl is MI 9 on all currently supported layouts (D555/D555e,
+        // D585 0x0C08 and legacy 0x0B6A) - confirmed with the HKR firmware team.
+        constexpr uint32_t od_control_mi = 9;
+        auto od_devs_info = filter_by_mi( dev_info->get_group().uvc_devices, od_control_mi );
 
         // Skip if the device does not expose the stream; the rest of the device enumerates normally.
         if( od_devs_info.empty() )

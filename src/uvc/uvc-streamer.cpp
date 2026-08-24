@@ -26,6 +26,7 @@ namespace librealsense
             _read_buff_length = UVC_PAYLOAD_MAX_HEADER_LENGTH + _context.control->dwMaxVideoFrameSize;
             // Compressed streams have a variable payload length. Perception stream does too.
             // Scope the exception to perception interface so regular Y8 images retain strict frame-size validation.
+            // Streaming MI is control MI + 1 (control MI 9, confirmed with the HKR firmware team).
             constexpr uint8_t perception_streaming_mi = 10;
             _allow_variable_length_payload
                 = val_in_range( _context.profile.format, { 0x4d4a5047U, 0x5a313648U } )  // MJPEG, Z16H

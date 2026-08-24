@@ -1550,17 +1550,10 @@ namespace librealsense
                         // Relax the required frame size for compressed formats, i.e. MJPG, Z16H
                         bool compressed_format = val_in_range(_profile.format, { 0x4d4a5047U , 0x5a313648U});
 
-                        // Perception stream also uses a variable-length payload. Kept out of
-                        // compressed_format (which also drives acquire_metadata's D4XX metadata-appendix
-                        // heuristic below) since the OD payload has no such trailing metadata block;
-                        // routing it through compressed_format would make that heuristic compute an
-                        // out-of-bounds pointer for short OD frames.
-                        constexpr uint8_t perception_mi = 9;
-                        bool perception_variable_length = _info.mi == perception_mi;
-
-                        // Compressed and kernel-reported variable-size formats deliver frames shorter than the buffer, so the size check doesn't apply
-                        bool skip_partial_frame_check
-                            = compressed_format || _variable_frame_size || perception_variable_length;
+                        // Compressed and kernel-reported variable-size formats deliver frames shorter than the buffer, so the size check doesn't apply.
+                        // The perception (object detection) stream is covered here too: its UVC format is advertised with bVariableSize = 1,
+                        // which uvcvideo reports as V4L2_FMT_FLAG_COMPRESSED, so _variable_frame_size already covers it - confirmed with the HKR firmware team.
+                        bool skip_partial_frame_check = compressed_format || _variable_frame_size;
 
                         // METADATA STREAM
                         // Read metadata. Metadata node performs a blocking call to ensure video and metadata sync
