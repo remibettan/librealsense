@@ -102,15 +102,16 @@ def run_test(dev, ctx, resolution, fps):
         log.info(f"Configuration {resolution[0]}x{resolution[1]}@{fps}fps is not supported by the device")
         return
     pipeline_profile = pipeline.start(cfg)
-    # let auto-exposure settle before sampling
-    warmup_start = time.time()
-    warmup_frames = 0
-    while warmup_frames < WARMUP_MIN_FRAMES or time.time() - warmup_start < WARMUP_SEC:
-        pipeline.wait_for_frames()
-        warmup_frames += 1
     last_frame_bgr = None
     last_roi = None
     try:
+        # let auto-exposure settle before sampling
+        warmup_start = time.time()
+        warmup_frames = 0
+        while warmup_frames < WARMUP_MIN_FRAMES or time.time() - warmup_start < WARMUP_SEC:
+            pipeline.wait_for_frames()
+            warmup_frames += 1
+
         # find region of interest (page) and get the transformation matrix
         find_roi_location(pipeline, (0, 1, 2, 3), DEBUG_MODE) # markers in the lab are 0,1,2,3
 
