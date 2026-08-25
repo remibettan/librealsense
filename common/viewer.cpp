@@ -2255,6 +2255,8 @@ namespace rs2
                         a = 0.75f * (max_depth - usable_depth) / depth_range + 0.25f;
                         frame_color = get_color( object ); // Each face gets a unique color, so that it's easier to identify them across frames
                     }
+                    else if( object.com_from_viewer )
+                        frame_color = colors[5].first; // Yellow marks COM from the viewer's own fallback rather than firmware.
 
                     // Don't draw text in boxes that are too small...
                     auto h = bbox.h;
@@ -2264,28 +2266,17 @@ namespace rs2
                     if( fabs(object.mean_depth) > 0.f )
                     {
                         ImGui::PushFont( font2 );
-                        std::string const depth_only_str = rsutils::string::from() << std::setprecision( 2 ) << object.mean_depth << " m";
-                        std::string str = depth_only_str;
-                        if( object.com_valid )
-                            str += rsutils::string::from() << " (X:" << std::setprecision( 2 ) << object.world_x
-                                                            << ", Y:" << std::setprecision( 2 ) << object.world_y << ")";
-                        auto size = ImGui::CalcTextSize( str.c_str() );
-                        // The X/Y suffix often doesn't fit narrow/distant boxes - fall back to distance-only
-                        // rather than showing nothing.
-                        if( ! ( size.y < h && size.x < bbox.w ) && str != depth_only_str )
-                        {
-                            str = depth_only_str;
-                            size = ImGui::CalcTextSize( str.c_str() );
-                        }
-                        if( size.y < h  &&  size.x < bbox.w )
+                        std::string const depth_str = rsutils::string::from() << std::setprecision( 2 ) << object.mean_depth << " m";
+                        auto const depth_size = ImGui::CalcTextSize( depth_str.c_str() );
+                        if( depth_size.y < h && depth_size.x < bbox.w )
                         {
                             ImGui::GetWindowDrawList()->AddRectFilled(
                                 { bbox.x + 1, bbox.y + 1 },
-                                { bbox.x + size.x + 20, bbox.y + size.y + 6 },
+                                { bbox.x + depth_size.x + 20, bbox.y + depth_size.y + 6 },
                                 bg );
                             ImGui::SetCursorScreenPos( { bbox.x + 10, bbox.y + 3 } );
-                            ImGui::Text("%s",  str.c_str() );
-                            h -= size.y;
+                            ImGui::Text( "%s", depth_str.c_str() );
+                            h -= depth_size.y;
                         }
                         ImGui::PopFont();
                     }
@@ -4064,6 +4055,8 @@ namespace rs2
 
                 float const hkr_depth_m = det.depth;
                 float viewer_depth_m = 0.f;
+                com::person_center_of_mass com_result{};
+                bool viewer_com_valid = false;
 
                 // TODO: temporary fallback — viewer-side COM runs only when HKR firmware
                 // returns 0 (XU command not supported or device not ready).
@@ -4106,22 +4099,24 @@ namespace rs2
                             shift_y = depth_px[1] - center_px[1] * depth_scale_y;
                         }
                     }
-                    com::person_center_of_mass com_result{};
                     com::center_of_mass_calculator::calculate( com_raw, com_depth8u, com_bbox, com_center,
                                                                &com_intrin, com_result, { shift_x, shift_y } );
                     if( com_result.mean_body_depth > 0.f )
+                    {
                         viewer_depth_m = com_result.mean_body_depth / 1000.f;
+                        viewer_com_valid = true;
+                    }
                 }
 
                 float const mean_depth = hkr_depth_m > 0.f ? hkr_depth_m : viewer_depth_m;
+                // viewer_com_valid is only ever set inside the hkr_depth_m==0.f branch above, so this
+                // is exactly "mean_depth came from the viewer fallback rather than firmware".
+                bool const com_from_viewer = viewer_com_valid;
 
                 std::string name = object_type_to_string( static_cast< object_type >( det.class_id ) );
                 new_objects.emplace_back( obj_id++, name, normalized_color_bbox, normalized_depth_bbox, mean_depth,
                                           hkr_depth_m, det.score,
-                                          static_cast< object_type >( det.class_id ),
-                                          det.center_of_mass_valid ? det.world_position.x : 0.f,
-                                          det.center_of_mass_valid ? det.world_position.y : 0.f,
-                                          det.center_of_mass_valid != 0 );
+                                          static_cast< object_type >( det.class_id ), com_from_viewer );
             }
 
             std::lock_guard< std::mutex > lock( objects->mutex );

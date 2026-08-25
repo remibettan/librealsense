@@ -24,24 +24,20 @@ struct object_in_frame
     std::string name;
     float mean_depth;
     float metadata_depth;         // distance reported by the detection model (meters); 0 if unavailable
-    float world_x, world_y;        // COM X, Y in camera coordinates (meters); valid only when com_valid (debug display)
-    bool  com_valid = false;       // true when world_x/world_y (and mean_depth's source) came from firmware COM
+    bool  com_from_viewer = false; // true when COM came from the viewer-side histogram fallback rather than firmware (box color)
     int   score;                  // detection confidence, 0-100
     size_t id;
     object_type type = object_type::other;
 
     object_in_frame( size_t _id, std::string const & _name, rs2::rect _bbox_color, rs2::rect _bbox_depth, float _depth,
                      float _metadata_depth, int _score,
-                     object_type _type = object_type::other, float _world_x = 0.f, float _world_y = 0.f,
-                     bool _com_valid = false )
+                     object_type _type = object_type::other, bool _com_from_viewer = false )
         : normalized_color_bbox( _bbox_color )
         , normalized_depth_bbox( _bbox_depth )
         , name( _name )
         , mean_depth( _depth )
         , metadata_depth( _metadata_depth )
-        , world_x( _world_x )
-        , world_y( _world_y )
-        , com_valid( _com_valid )
+        , com_from_viewer( _com_from_viewer )
         , score( _score )
         , id( _id )
         , type( _type )
