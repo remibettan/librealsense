@@ -22,10 +22,10 @@ pytestmark = [
 
 NUM_FRAMES = 100 # Number of frames to check
 FRAMES_PASS_THRESHOLD =0.8 # Percentage of frames that needs to pass
-# Auto-exposure needs wall-clock time, not a frame count: 60 frames is 1s at 60fps but 12s at
-# 5fps. Wait for both a minimum frame count and a minimum duration.
-WARMUP_SEC = 2.0
-WARMUP_MIN_FRAMES = 30
+# Auto-exposure settles in a few frames, but a frame count alone scales badly: 60 frames is 1s
+# at 60fps and 12s at 5fps. Gate on both a frame count and a duration.
+WARMUP_SEC = 1.0
+WARMUP_MIN_FRAMES = 15
 DEBUG_MODE = False
 
 # expected colors (insertion order -> mapped row-major to 3x3 grid)
