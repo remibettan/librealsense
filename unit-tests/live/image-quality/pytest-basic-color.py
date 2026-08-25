@@ -22,9 +22,6 @@ pytestmark = [
 
 NUM_FRAMES = 100 # Number of frames to check
 FRAMES_PASS_THRESHOLD =0.8 # Percentage of frames that needs to pass
-# Idle between configurations so the RGB ISP powers down and each configuration starts from a
-# cold sensor. Without it a fast restart reuses the still-powered ISP and inherits its exposure.
-CONFIG_SETTLE_SEC = 3
 # Auto-exposure needs wall-clock time, not a frame count: 60 frames is 1s at 60fps but 12s at
 # 5fps. Wait for both a minimum frame count and a minimum duration.
 WARMUP_SEC = 2.0
@@ -188,7 +185,5 @@ def test_basic_color(test_device, test_context_var):
             log.warning(f"D436 FW color-stream bug: skipping color configs fps>30: {skipped}")
         configurations = [c for c in configurations if c[1] <= 30]
 
-    for i, (resolution, fps) in enumerate(configurations):
-        if i:
-            time.sleep(CONFIG_SETTLE_SEC)
+    for resolution, fps in configurations:
         run_test(dev, ctx, resolution, fps)
