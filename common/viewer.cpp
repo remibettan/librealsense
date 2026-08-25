@@ -4053,8 +4053,6 @@ namespace rs2
 
                 float const hkr_depth_m = det.depth;
                 float viewer_depth_m = 0.f;
-                com::person_center_of_mass com_result{};
-                bool viewer_com_valid = false;
 
                 // TODO: temporary fallback — viewer-side COM runs only when HKR firmware
                 // returns 0 (XU command not supported or device not ready).
@@ -4097,13 +4095,11 @@ namespace rs2
                             shift_y = depth_px[1] - center_px[1] * depth_scale_y;
                         }
                     }
+                    com::person_center_of_mass com_result{};
                     com::center_of_mass_calculator::calculate( com_raw, com_depth8u, com_bbox, com_center,
                                                                &com_intrin, com_result, { shift_x, shift_y } );
                     if( com_result.mean_body_depth > 0.f )
-                    {
                         viewer_depth_m = com_result.mean_body_depth / 1000.f;
-                        viewer_com_valid = true;
-                    }
                 }
 
                 float const mean_depth = hkr_depth_m > 0.f ? hkr_depth_m : viewer_depth_m;
