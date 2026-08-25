@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <vector>
 #include "sensor.h"
 #include "types.h"
 #include "stream.h"
@@ -146,20 +147,19 @@ namespace librealsense
 
                     // Producer streams must be opened before the perception stream.
                     // Keep the reverse order among all other sensors, open perception last.
+                    std::vector< int > od_sensor_indices;
                     for( auto it = _dev_to_profiles.rbegin(); it != _dev_to_profiles.rend(); it++ )
                     {
                         if( has_object_detection( it->second ) )
+                        {
+                            od_sensor_indices.push_back( it->first );
                             continue;
+                        }
                         auto && sub = _results.at( it->first );
                         sub->open( it->second );
                     }
-                    for( auto it = _dev_to_profiles.rbegin(); it != _dev_to_profiles.rend(); it++ )
-                    {
-                        if( ! has_object_detection( it->second ) )
-                            continue;
-                        auto && sub = _results.at( it->first );
-                        sub->open( it->second );
-                    }
+                    for( auto sensor_index : od_sensor_indices )
+                        _results.at( sensor_index )->open( _dev_to_profiles.at( sensor_index ) );
                 }
 
                 template<class T>
@@ -168,12 +168,18 @@ namespace librealsense
                     // Same order as open(): producers first, perception last. On USB the pipe is
                     // established at open(); on DDS only at start() - a fixed order (rather than
                     // reversing between open() and start()) is what's actually correct for both.
+                    std::vector< int > od_sensor_indices;
                     for( auto && sensor : _results )
-                        if( ! has_object_detection( _dev_to_profiles.at( sensor.first ) ) )
-                            sensor.second->start( callback );
-                    for( auto && sensor : _results )
+                    {
                         if( has_object_detection( _dev_to_profiles.at( sensor.first ) ) )
-                            sensor.second->start( callback );
+                        {
+                            od_sensor_indices.push_back( sensor.first );
+                            continue;
+                        }
+                        sensor.second->start( callback );
+                    }
+                    for( auto sensor_index : od_sensor_indices )
+                        _results.at( sensor_index )->start( callback );
                 }
 
                 template< class T >
