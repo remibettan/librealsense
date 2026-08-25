@@ -30,9 +30,8 @@ DEBUG_MODE = False
 
 # expected colors (insertion order -> mapped row-major to 3x3 grid)
 expected_colors = {
-    # Means measured on the image-quality bench (D435 + D455) over 17 firmware-clean nightly runs,
-    # 158 fully-passing configurations. The previous values were ~50 counts brighter than this
-    # bench reads, which spent most of the tolerance budget before any real deviation.
+    # Means measured on the image-quality bench across D435 and D455, 158 fully-passing
+    # configurations. Re-measure if the bench lighting or the colour chart changes.
     "red":   (126, 50, 50),
     "green": (39, 84, 59),
     "blue":  (13, 67, 97),
