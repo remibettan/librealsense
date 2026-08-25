@@ -30,17 +30,16 @@ DEBUG_MODE = False
 
 # expected colors (insertion order -> mapped row-major to 3x3 grid)
 expected_colors = {
-    # Means measured on the image-quality bench across D435 and D455, 158 fully-passing
-    # configurations. Re-measure if the bench lighting or the colour chart changes.
-    "red":   (126, 50, 50),
-    "green": (39, 84, 59),
-    "blue":  (13, 67, 97),
-    "black": (30, 30, 24),
-    "white": (132, 131, 132),
-    "gray":  (84, 88, 88),
-    "purple": (45, 49, 71),
-    "orange": (130, 60, 48),
-    "yellow": (144, 126, 51),
+    # All expected values are empirical means across 10 camera instances
+    "red":   (175, 77, 82),
+    "green": (64, 123, 95),
+    "blue":  (26, 104, 146),
+    "black": (50, 50, 46),
+    "white": (183, 184, 186),
+    "gray":  (121, 129, 130),
+    "purple": (69, 77, 109),
+    "orange": (182, 94, 83),
+    "yellow": (199, 178, 85),
 }
 # list of color names in insertion order -> used left->right, top->bottom
 color_names = list(expected_colors.keys())
