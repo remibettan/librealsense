@@ -536,7 +536,7 @@ void dds_sensor_proxy::handle_perception_data( realdds::topics::string_msg && ms
         return;
     }
     
-    size_t const entry_size = sizeof( object_detection_frame::object_detection_payload_entry_v3 );
+    size_t const entry_size = sizeof( object_detection_frame::object_detection_payload_entry );
     size_t const base_size = sizeof( object_detection_frame::object_detection_frame_header )
                            + sizeof( object_detection_frame::object_detection_payload_header );
     size_t const detections_size = n_detections * entry_size;
@@ -581,15 +581,15 @@ void dds_sensor_proxy::handle_perception_data( realdds::topics::string_msg && ms
     for( uint16_t idx = 0; idx < n_detections; ++idx )
     {
         auto const & det = detections_j[idx];
-        object_detection_frame::object_detection_payload_entry_v3 entry{};
-        entry.detection.detection_id = idx;
-        det.nested( "class_id" ).get_ex( entry.detection.detection_type );
-        det.nested( "confidence" ).get_ex( entry.detection.confidence );
-        det.nested( "x1" ).get_ex( entry.detection.top_left_x );
-        det.nested( "y1" ).get_ex( entry.detection.top_left_y );
-        det.nested( "x2" ).get_ex( entry.detection.bottom_right_x );
-        det.nested( "y2" ).get_ex( entry.detection.bottom_right_y );
-        det.nested( "distance" ).get_ex( entry.detection.distance );
+        object_detection_frame::object_detection_payload_entry entry{};
+        entry.detection_id = idx;
+        det.nested( "class_id" ).get_ex( entry.detection_type );
+        det.nested( "confidence" ).get_ex( entry.confidence );
+        det.nested( "x1" ).get_ex( entry.top_left_x );
+        det.nested( "y1" ).get_ex( entry.top_left_y );
+        det.nested( "x2" ).get_ex( entry.bottom_right_x );
+        det.nested( "y2" ).get_ex( entry.bottom_right_y );
+        det.nested( "distance" ).get_ex( entry.distance );
 
         auto const world = det.nested( "world_pos" );
         auto const image = det.nested( "image_pos" );

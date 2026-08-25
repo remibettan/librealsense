@@ -16,7 +16,7 @@ class object_detection_frame : public perception_frame
 {
 public:
     // Frames received over the object detection stream are binary blobs laid out as a frame header,
-    // a payload header, and an array of detection entries (see object_detection_payload_entry_v3).
+    // a payload header, and an array of detection entries (see object_detection_payload_entry).
 
     static constexpr uint32_t MAGIC_NUMBER = 0x5445444F;  // ASCII "ODET" as a little-endian uint32
     static constexpr uint32_t MAX_DETECTIONS = 64;
@@ -50,7 +50,7 @@ public:
         uint32_t source_frame_id;  // ID of the frame detection was calculated on
     };
 
-    struct object_detection_payload_entry_v2
+    struct object_detection_payload_entry
     {
         uint16_t detection_id;    // For detection/tracking traceability
         uint8_t detection_type;   // 0 = person
@@ -60,16 +60,11 @@ public:
         uint16_t bottom_right_x;  // Bounding box bottom-right X [pixels]
         uint16_t bottom_right_y;  // Bounding box bottom-right Y [pixels]
         float distance;           // Object distance from camera [meters]
-    };
-
-    struct object_detection_payload_entry_v3
-    {
-        object_detection_payload_entry_v2 detection;
-        float world_x;             // Camera coordinate [meters]
-        float world_y;             // Camera coordinate [meters]
-        float world_z;             // Optical-axis coordinate [meters]
-        float image_x;             // COM column [source-image pixels]
-        float image_y;             // COM row [source-image pixels]
+        float world_x;            // Camera coordinate [meters]
+        float world_y;            // Camera coordinate [meters]
+        float world_z;            // Optical-axis coordinate [meters]
+        float image_x;            // COM column [source-image pixels]
+        float image_y;            // COM row [source-image pixels]
     };
 #pragma pack( pop )
 
@@ -79,8 +74,7 @@ public:
 
     static_assert( FRAME_HEADER_SIZE == 20, "Object Detection frame header ABI must be 20 bytes" );
     static_assert( PAYLOAD_HEADER_SIZE == 23, "Object Detection payload header ABI must be 23 bytes" );
-    static_assert( sizeof( object_detection_payload_entry_v2 ) == 16, "Object Detection v2 entry ABI must be 16 bytes" );
-    static_assert( sizeof( object_detection_payload_entry_v3 ) == 36, "Object Detection v3 entry ABI must be 36 bytes" );
+    static_assert( sizeof( object_detection_payload_entry ) == 36, "Object Detection payload entry ABI must be 36 bytes" );
     static_assert( MIN_FRAME_SIZE == 43, "Object Detection minimum frame ABI must be 43 bytes" );
 
     object_detection_frame() = default;
@@ -108,11 +102,11 @@ public:
     size_t get_detection_count() const;
     decoded_object_detection get_detection( size_t index ) const;
     object_detection_payload_header get_payload_header() const;
+    uint16_t get_version() const;
 
 private:
     bool validate() const;
     bool validate_payload() const;
-    uint16_t get_version() const;
     size_t entry_size() const;
 
     mutable std::atomic_bool _validated{ false };

@@ -143,13 +143,6 @@ namespace librealsense
                     // As a workaround for pipeline API usage, we use the assumption that depth sensor is first in the map if it is added to the configuration,
                     // When we reverse iterate it, the depth sensor opening will be last This should not affect other stream
                     // which are capable of being opened decoupled from other sensors
-                    auto has_object_detection = []( stream_profiles const & profiles )
-                    {
-                        for( auto const & profile : profiles )
-                            if( profile->get_stream_type() == RS2_STREAM_OBJECT_DETECTION )
-                                return true;
-                        return false;
-                    };
 
                     // Producer streams must be opened before the perception stream.
                     // Keep the reverse order among all other sensors, open perception last.
@@ -172,24 +165,15 @@ namespace librealsense
                 template<class T>
                 void start(T callback)
                 {
-                    auto has_object_detection = [this]( int sensor_index )
-                    {
-                        auto const & profiles = _dev_to_profiles.at( sensor_index );
-                        for( auto const & profile : profiles )
-                            if( profile->get_stream_type() == RS2_STREAM_OBJECT_DETECTION )
-                                return true;
-                        return false;
-                    };
-
-                    // Start the perception stream before its producer streams. Firmware commits the
-                    // multi-stream transaction when the producer starts; starting in the opposite
-                    // order can leave the producer stream inactive.
+                    // Same order as open(): producers first, perception last. On USB the pipe is
+                    // established at open(); on DDS only at start() - a fixed order (rather than
+                    // reversing between open() and start()) is what's actually correct for both.
                     for( auto && sensor : _results )
-                        if( has_object_detection( sensor.first ) )
+                        if( ! has_object_detection( _dev_to_profiles.at( sensor.first ) ) )
                             sensor.second->start( callback );
-                    for (auto&& sensor : _results)
-                        if( ! has_object_detection( sensor.first ) )
-                            sensor.second->start(callback);
+                    for( auto && sensor : _results )
+                        if( has_object_detection( _dev_to_profiles.at( sensor.first ) ) )
+                            sensor.second->start( callback );
                 }
 
                 template< class T >
@@ -227,6 +211,14 @@ namespace librealsense
                 }
             private:
                 friend class config;
+
+                static bool has_object_detection( stream_profiles const & profiles )
+                {
+                    for( auto const & profile : profiles )
+                        if( profile->get_stream_type() == RS2_STREAM_OBJECT_DETECTION )
+                            return true;
+                    return false;
+                }
 
                 std::map<index_type, std::shared_ptr<stream_profile_interface>> _profiles;
                 std::map<index_type, sensor_interface*> _devices;

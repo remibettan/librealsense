@@ -1550,9 +1550,8 @@ namespace librealsense
                         // Relax the required frame size for compressed formats, i.e. MJPG, Z16H
                         bool compressed_format = val_in_range(_profile.format, { 0x4d4a5047U , 0x5a313648U});
 
-                        // Compressed and kernel-reported variable-size formats deliver frames shorter than the buffer, so the size check doesn't apply.
-                        // The perception (object detection) stream is covered here too: its UVC format is advertised with bVariableSize = 1,
-                        // which uvcvideo reports as V4L2_FMT_FLAG_COMPRESSED, so _variable_frame_size already covers it - confirmed with the HKR firmware team.
+                        // Compressed and kernel-reported variable-size formats deliver frames shorter than the buffer,
+                        // so the size check doesn't apply - this covers the perception stream too.
                         bool skip_partial_frame_check = compressed_format || _variable_frame_size;
 
                         // METADATA STREAM

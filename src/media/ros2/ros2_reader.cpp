@@ -182,7 +182,7 @@ namespace librealsense
             auto n_detections = j.value( "number_of_detections", uint16_t(0) );
             auto dets_j = j.find( "detections" );
 
-            size_t const entry_size = sizeof( object_detection_frame::object_detection_payload_entry_v3 );
+            size_t const entry_size = sizeof( object_detection_frame::object_detection_payload_entry );
             size_t const base_size = sizeof( object_detection_frame::object_detection_frame_header )
                                    + sizeof( object_detection_frame::object_detection_payload_header );
             size_t const total_size = base_size + n_detections * entry_size;
@@ -204,15 +204,15 @@ namespace librealsense
                 for( uint16_t i = 0; i < n_detections && i < dets_j->size(); ++i )
                 {
                     auto const & det = (*dets_j)[i];
-                    object_detection_frame::object_detection_payload_entry_v3 entry{};
-                    entry.detection.detection_id   = i;
-                    entry.detection.detection_type = det.value( "class_id",    uint8_t(0) );
-                    entry.detection.confidence     = det.value( "confidence",  uint8_t(0) );
-                    entry.detection.top_left_x     = det.value( "x1",          uint16_t(0) );
-                    entry.detection.top_left_y     = det.value( "y1",          uint16_t(0) );
-                    entry.detection.bottom_right_x = det.value( "x2",          uint16_t(0) );
-                    entry.detection.bottom_right_y = det.value( "y2",          uint16_t(0) );
-                    entry.detection.distance       = det.value( "distance",    0.0f );
+                    object_detection_frame::object_detection_payload_entry entry{};
+                    entry.detection_id   = i;
+                    entry.detection_type = det.value( "class_id",    uint8_t(0) );
+                    entry.confidence     = det.value( "confidence",  uint8_t(0) );
+                    entry.top_left_x     = det.value( "x1",          uint16_t(0) );
+                    entry.top_left_y     = det.value( "y1",          uint16_t(0) );
+                    entry.bottom_right_x = det.value( "x2",          uint16_t(0) );
+                    entry.bottom_right_y = det.value( "y2",          uint16_t(0) );
+                    entry.distance       = det.value( "distance",    0.0f );
 
                     // A frame can have individual detections with no COM (firmware reported it invalid
                     // for that one); leave world/image zeroed in that case rather than assuming the keys
@@ -234,7 +234,7 @@ namespace librealsense
 
             // Fill header so object_detection_frame::validate() passes
             header->magic_number = object_detection_frame::MAGIC_NUMBER;
-            header->version      = object_detection_frame::VERSION_V3;
+            header->version      = j.value( "od_version", uint16_t( object_detection_frame::VERSION_V3 ) );
             header->data_type    = static_cast< uint8_t >( perception_frame::type::OBJECT_DETECTION );
             header->flags        = 0;
             header->spare        = 0;

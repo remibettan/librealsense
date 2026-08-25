@@ -2255,8 +2255,6 @@ namespace rs2
                         a = 0.75f * (max_depth - usable_depth) / depth_range + 0.25f;
                         frame_color = get_color( object ); // Each face gets a unique color, so that it's easier to identify them across frames
                     }
-                    else if( object.com_from_viewer )
-                        frame_color = colors[5].first; // Yellow marks COM from the viewer's own fallback rather than firmware.
 
                     // Don't draw text in boxes that are too small...
                     auto h = bbox.h;
@@ -4109,14 +4107,11 @@ namespace rs2
                 }
 
                 float const mean_depth = hkr_depth_m > 0.f ? hkr_depth_m : viewer_depth_m;
-                // viewer_com_valid is only ever set inside the hkr_depth_m==0.f branch above, so this
-                // is exactly "mean_depth came from the viewer fallback rather than firmware".
-                bool const com_from_viewer = viewer_com_valid;
 
                 std::string name = object_type_to_string( static_cast< object_type >( det.class_id ) );
                 new_objects.emplace_back( obj_id++, name, normalized_color_bbox, normalized_depth_bbox, mean_depth,
                                           hkr_depth_m, det.score,
-                                          static_cast< object_type >( det.class_id ), com_from_viewer );
+                                          static_cast< object_type >( det.class_id ) );
             }
 
             std::lock_guard< std::mutex > lock( objects->mutex );
