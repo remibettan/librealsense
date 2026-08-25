@@ -8,6 +8,7 @@
 #include "proc/color-formats-converter.h"  // m420_converter, nv12_converter
 #include <src/proc/identity-processing-block.h>
 #include <src/uvc-sensor.h>
+#include <src/platform/uvc-option.h>
 #include <src/metadata-parser.h>
 #include <src/ds/ds-color-common.h>
 
@@ -69,6 +70,24 @@ namespace librealsense
 
         register_color_extrinsics();
         register_color_metadata();
+        register_ae_policy_option();
+    }
+    void d500_dual_color::register_ae_policy_option()
+    {
+
+        // IR imagers feed both RGB and depth at once, so AE has to be arbitrated between the IPU (color priority) and the SDP (depth priority).
+        auto options_map = std::map< float, std::string >{ { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_AUTO ), "Auto" },
+                                                           { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_DEPTH_PRIORITY ), "Depth Priority" },
+                                                           { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_COLOR_PRIORITY ), "Color Priority" },
+                                                           { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_HYBRID ), "Hybrid" } };
+        get_depth_sensor().register_option( RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE,
+                                            std::make_shared< uvc_xu_option< uint8_t > >( get_raw_depth_sensor(),
+                                                                                          ds::depth_xu,
+                                                                                          ds::d500_xu_id::COLORED_IR_AE_POLICY,
+                                                                                          "Auto exposure policy for sensor with both color and depth streams",
+                                                                                          options_map,
+                                                                                          false ) ); // Not settable while streaming
+                                                
     }
 
     void d500_dual_color::register_color_metadata()
