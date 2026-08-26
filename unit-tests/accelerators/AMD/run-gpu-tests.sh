@@ -12,10 +12,16 @@
 # binaries are the same and each test SKIPs when no GPU is visible to the
 # runtime probe (rsutils::rs2_is_gpu_available).
 #
+# Requires a static build (-DBUILD_SHARED_LIBS=OFF). The three tests carry
+# `//#cmake: static!` and #include internal src/proc/cuda/*.cuh headers whose
+# symbols are visibility=hidden in the shared-library ABI, so
+# unit-tests/CMakeLists.txt gates them behind `if(NOT BUILD_SHARED_LIBS)` and
+# they are simply absent from a shared build.
+#
 # Usage:
-#   ./unit-tests/run-gpu-tests.sh                  # auto-detect build dir
-#   ./unit-tests/run-gpu-tests.sh build_rocm       # explicit build dir
-#   ./unit-tests/run-gpu-tests.sh --filter "small" # pass extra args to Catch2
+#   ./unit-tests/accelerators/AMD/run-gpu-tests.sh                  # auto-detect build dir
+#   ./unit-tests/accelerators/AMD/run-gpu-tests.sh build_rocm       # explicit build dir
+#   ./unit-tests/accelerators/AMD/run-gpu-tests.sh --filter "small" # pass extra args to Catch2
 #
 # Exit code: 0 if every selected test passes (or is skipped), non-zero on
 # the first failure.
@@ -70,10 +76,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Script lives at unit-tests/accelerators/AMD/; the repo root is three levels up.
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
+# Sentinel used for both auto-detection and the missing-binary hint below.
+SENTINEL_BIN="Release/test-algo-projection-distortion"
+
 if [[ -z "$BUILD_DIR" ]]; then
     # Prefer the AMD HIP build dir if it exists, then a generic build/.
     for candidate in build_rocm build_hip build; do
-        if [[ -d "$REPO_ROOT/$candidate/unit-tests/build/algo/projection" ]]; then
+        if [[ -x "$REPO_ROOT/$candidate/$SENTINEL_BIN" ]]; then
             BUILD_DIR="$REPO_ROOT/$candidate"
             break
         fi
@@ -82,10 +91,13 @@ fi
 
 if [[ -z "$BUILD_DIR" ]]; then
     cat >&2 <<EOF
-ERROR: could not auto-detect a build directory.
-Looked for build_rocm/, build_hip/, build/ under $REPO_ROOT.
+ERROR: could not auto-detect a build directory containing the GPU test binaries.
+Looked for $SENTINEL_BIN under build_rocm/, build_hip/, build/ in $REPO_ROOT.
 Pass the build directory explicitly:
     $0 path/to/build_dir
+Note: these tests only exist in a static build. Configure with
+    -DBUILD_UNIT_TESTS=ON -DBUILD_SHARED_LIBS=OFF
+and rebuild -- see the file header for details.
 EOF
     exit 2
 fi
@@ -93,10 +105,30 @@ fi
 # Make BUILD_DIR absolute regardless of how the user supplied it.
 BUILD_DIR="$(cd "$BUILD_DIR" && pwd)"
 
-TEST_BIN_DIR="$BUILD_DIR/unit-tests/build/algo/projection"
+# librealsense outputs every executable target to <build>/Release/ by default
+# (see CMake/global_config.cmake: OUTPUT_DIR = ${CMAKE_BINARY_DIR}/Release).
+# The per-test tree under unit-tests/build/algo/projection/*/CMakeFiles/ only
+# holds intermediate object files, not the linked binaries.
+TEST_BIN_DIR="$BUILD_DIR/Release"
 if [[ ! -d "$TEST_BIN_DIR" ]]; then
     echo "ERROR: $TEST_BIN_DIR does not exist." >&2
     echo "Did you configure with -DBUILD_UNIT_TESTS=ON and build the project?" >&2
+    exit 2
+fi
+
+# Fail fast with a specific hint when the binaries are absent: the most common
+# cause is a shared build, in which case the three tests are gated out entirely
+# by unit-tests/CMakeLists.txt and never produced -- reporting three MISSING
+# lines below would hide the real reason.
+if [[ ! -x "$TEST_BIN_DIR/test-algo-projection-distortion" ]]; then
+    cat >&2 <<EOF
+ERROR: expected test binaries not found under $TEST_BIN_DIR.
+These tests are gated behind 'if(NOT BUILD_SHARED_LIBS)' in unit-tests/CMakeLists.txt
+(they carry //#cmake: static! and reference internal src/proc/cuda/*.cuh symbols
+whose visibility is hidden in the shared-library ABI). Reconfigure with
+    -DBUILD_UNIT_TESTS=ON -DBUILD_SHARED_LIBS=OFF
+and rebuild.
+EOF
     exit 2
 fi
 
