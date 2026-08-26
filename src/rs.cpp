@@ -3057,13 +3057,16 @@ rs2_processing_block* rs2_create_decimation_filter_block(rs2_error** error) BEGI
 }
 NOARGS_HANDLE_EXCEPTIONS_AND_RETURN(nullptr)
 
-rs2_processing_block* rs2_create_rotation_filter_block( rs2_streams_list streams_to_rotate, rs2_error ** error ) BEGIN_API_CALL
+rs2_processing_block* rs2_create_rotation_filter_block( const rs2_stream * streams_to_rotate, int stream_count, rs2_error ** error ) BEGIN_API_CALL
 {
-    auto block = std::make_shared< librealsense::rotation_filter >( streams_to_rotate.list );
+    VALIDATE_NOT_NULL( streams_to_rotate );
+    VALIDATE_LE( 0, stream_count );
+    std::vector< rs2_stream > streams( streams_to_rotate, streams_to_rotate + stream_count );
+    auto block = std::make_shared< librealsense::rotation_filter >( std::move( streams ) );
 
     return new rs2_processing_block{ block };
 }
-NOARGS_HANDLE_EXCEPTIONS_AND_RETURN( nullptr )
+HANDLE_EXCEPTIONS_AND_RETURN( nullptr, streams_to_rotate, stream_count )
 
 rs2_processing_block* rs2_create_temporal_filter_block(rs2_error** error) BEGIN_API_CALL
 {
