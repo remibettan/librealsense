@@ -74,7 +74,7 @@ namespace librealsense
     class ds_thermal_monitor;
     class ds_devices_common;
     class d500_info;
-    class d500_mipi_dfu_adapter;
+    class d500_mipi_device;
 
     namespace platform {
         struct backend_device_group;
@@ -129,7 +129,7 @@ namespace librealsense
         bool check_fw_compatibility( const std::vector<uint8_t>& image ) const override { return true; };
         std::string get_opcode_string(int opcode) const override;
 
-        // Runtime opt-in for update_device_interface on GMSL only (see d500_mipi_dfu_adapter).
+        // Runtime opt-in for update_device_interface on GMSL only (see d500_mipi_device).
         bool extend_to( rs2_extension extension_type, void ** ptr ) override;
 
     protected:
@@ -186,6 +186,6 @@ namespace librealsense
         bool _is_mipi_device = false;
 
         // Populated in init() only when _is_mipi_device is true.
-        std::unique_ptr< d500_mipi_dfu_adapter > _mipi_dfu_adapter;
+        std::unique_ptr< d500_mipi_device > _mipi_device;
     };
 }

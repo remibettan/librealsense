@@ -7,7 +7,7 @@
 #include <src/platform/platform-utils.h>
 
 #include "d500-device.h"
-#include "d500-mipi-dfu-adapter.h"
+#include "d500-mipi-device.h"
 #include "d500-private.h"
 #include "d500-options.h"
 #include "d500-info.h"
@@ -404,9 +404,9 @@ namespace librealsense
 
     bool d500_device::extend_to( rs2_extension extension_type, void ** ptr )
     {
-        if( extension_type == RS2_EXTENSION_UPDATE_DEVICE && _mipi_dfu_adapter && ptr )
+        if( extension_type == RS2_EXTENSION_UPDATE_DEVICE && _mipi_device && ptr )
         {
-            *ptr = static_cast< update_device_interface * >( _mipi_dfu_adapter.get() );
+            *ptr = static_cast< update_device_interface * >( _mipi_device.get() );
             return true;
         }
         return false;
@@ -731,7 +731,7 @@ namespace librealsense
         if( _is_mipi_device )
         {
             register_info( RS2_CAMERA_INFO_DFU_DEVICE_PATH, group.uvc_devices.front().dfu_device_path );
-            _mipi_dfu_adapter = std::make_unique< d500_mipi_dfu_adapter >(
+            _mipi_device = std::make_unique< d500_mipi_device >(
                 group.uvc_devices.front().dfu_device_path,
                 _ds_device_common,
                 _hw_monitor );
