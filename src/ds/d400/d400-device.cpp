@@ -781,7 +781,10 @@ namespace librealsense
                 // CSI passthrough. Expose each as a color stream - crop the transport padding
                 // (1612 -> 1288 px) and demosaic RGGB -> RGB8. The per-imager stream index (0/1) is
                 // carried through from the source profile, mirroring the IR1/IR2 split.
-                if( _pid == RS401_GMSL_PID )
+                // Only firmware that ships the RAW8 CSI passthrough supports this. On older firmware
+                // the imagers expose the ISP color path only, so the raw color streams are not
+                // registered and a raw dual-RGB request has no matching profile to resolve.
+                if( _pid == RS401_GMSL_PID && _fw_version >= firmware_version( "5.17.4.13" ) )
                 {
                     // Route the two identical BGGR color pins to Color 0 / Color 1 (ascending pin order).
                     raw_depth_sensor->set_stream_id_resolver( resolve_d401_color_stream );

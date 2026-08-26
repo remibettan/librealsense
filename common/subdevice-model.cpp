@@ -13,6 +13,7 @@
 #include "metadata-helper.h"
 #include "subdevice-model.h"
 #include <rsutils/accelerators/gpu.h>
+#include <rsutils/version.h>
 
 namespace rs2
 {
@@ -1614,6 +1615,13 @@ namespace rs2
         // sensors, 2 colors + stereo on one sensor) would, and it has no such imager conflict.
         if (!dev.supports(RS2_CAMERA_INFO_PRODUCT_ID)
             || std::string(dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID)) != "ABCC")   // RS401_GMSL_PID
+            return false;
+
+        // Raw dual-RGB is only exposed by firmware that ships the RAW8 CSI passthrough. On older
+        // firmware the device offers the ISP color path only (a single color stream), so present it
+        // as a plain color subdevice: no Color 1 stream, no raw color format, no color<->IR gating.
+        if (!dev.supports(RS2_CAMERA_INFO_FIRMWARE_VERSION)
+            || rsutils::version(dev.get_info(RS2_CAMERA_INFO_FIRMWARE_VERSION)) < rsutils::version("5.17.4.13"))
             return false;
 
         // Structural sanity: this subdevice actually exposes the dual-RGB config (two color streams
