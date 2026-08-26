@@ -124,3 +124,18 @@ TEST_CASE("cuda_yuy2_to_rgb8_single_super_pixel")
 }
 
 #endif // RS2_USE_CUDA
+
+// Fallback when the build has neither CUDA nor HIP enabled: the whole body
+// above is compiled out, and without a single passing assertion Catch2
+// exits non-zero (2 for zero test cases, 4 for one-case-all-skipped), which
+// the LibCI runner reads as a failure. Register a single SUCCEED so the
+// binary exits 0 with a message that names the missing configure flag.
+#ifndef RS2_USE_CUDA
+TEST_CASE("gpu acceleration not compiled in")
+{
+    SUCCEED("This test requires -DBUILD_WITH_CUDA=ON or -DBUILD_WITH_HIP=ON "
+            "to exercise any GPU kernels; compiled with neither -- nothing to "
+            "test, reporting a stand-in pass so CI does not read the build "
+            "config choice as a test failure.");
+}
+#endif
