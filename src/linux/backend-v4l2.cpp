@@ -354,7 +354,14 @@ namespace librealsense
             else
             {
                 //_length += (V4L2_BUF_TYPE_VIDEO_CAPTURE==type) ? MAX_META_DATA_SIZE : 0;
+#ifdef RS2_USE_CUDA_ZEROCOPY
+                // USERPTR path: allocate the capture buffer in GPU-visible (CUDA host-mapped)
+                // memory so a zero-copy frame aliasing it stays GPU-resident, matching the MMAP
+                // path (rs_v4l2_zc_register) and the RSUSB path (frame_data_allocator).
+                _start = static_cast<uint8_t*>(rs_frame_zc_alloc( _length ));
+#else
                 _start = static_cast<uint8_t*>(malloc( _length));
+#endif
                 if (!_start) throw linux_backend_exception("User_p allocation failed!");
                 memset(_start, 0, _length);
             }
@@ -395,7 +402,11 @@ namespace librealsense
             }
             else
             {
+#ifdef RS2_USE_CUDA_ZEROCOPY
+               rs_frame_zc_free( _start );
+#else
                free(_start);
+#endif
             }
         }
 
