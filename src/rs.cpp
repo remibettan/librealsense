@@ -3059,9 +3059,15 @@ NOARGS_HANDLE_EXCEPTIONS_AND_RETURN(nullptr)
 
 rs2_processing_block* rs2_create_rotation_filter_block( const rs2_stream * streams_to_rotate, int stream_count, rs2_error ** error ) BEGIN_API_CALL
 {
-    VALIDATE_NOT_NULL( streams_to_rotate );
     VALIDATE_LE( 0, stream_count );
-    std::vector< rs2_stream > streams( streams_to_rotate, streams_to_rotate + stream_count );
+
+    std::vector< rs2_stream > streams;
+    if( stream_count > 0 )
+    {
+        VALIDATE_NOT_NULL( streams_to_rotate );
+        streams.assign( streams_to_rotate, streams_to_rotate + stream_count );
+    }
+
     auto block = std::make_shared< librealsense::rotation_filter >( std::move( streams ) );
 
     return new rs2_processing_block{ block };
