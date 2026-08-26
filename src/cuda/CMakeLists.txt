@@ -4,14 +4,21 @@
 if(BUILD_WITH_HIP)
     set(RS_GPU_CONVERSION_SOURCE "${CMAKE_CURRENT_LIST_DIR}/cuda-conversion.hip")
     set(RS_GPU_POINTCLOUD_SOURCE "${CMAKE_CURRENT_LIST_DIR}/cuda-pointcloud.hip")
+    # cuda-rggb.cu has __global__/__device__ kernel code (the D401 GMSL dual-RGB debayer +
+    # remap kernels), same as conversion/pointcloud above, so it needs the same ".hip"
+    # sibling + LANGUAGE HIP treatment -- NOT the LANGUAGE CXX / "-x c++" trick used for the
+    # kernel-free cuda-frame-memory.cu below (that trick can't parse __global__/<<<>>>).
+    set(RS_GPU_RGGB_SOURCE "${CMAKE_CURRENT_LIST_DIR}/cuda-rggb.hip")
     set_source_files_properties(
         "${RS_GPU_CONVERSION_SOURCE}"
         "${RS_GPU_POINTCLOUD_SOURCE}"
+        "${RS_GPU_RGGB_SOURCE}"
         PROPERTIES LANGUAGE HIP
     )
 else()
     set(RS_GPU_CONVERSION_SOURCE "${CMAKE_CURRENT_LIST_DIR}/cuda-conversion.cu")
     set(RS_GPU_POINTCLOUD_SOURCE "${CMAKE_CURRENT_LIST_DIR}/cuda-pointcloud.cu")
+    set(RS_GPU_RGGB_SOURCE "${CMAKE_CURRENT_LIST_DIR}/cuda-rggb.cu")
 endif()
 
 # cuda-frame-memory.cu has no __global__/__device__ kernel code -- it is host-only runtime
@@ -52,7 +59,7 @@ target_sources(${LRS_TARGET}
         "${RS_GPU_POINTCLOUD_SOURCE}"
         "${CMAKE_CURRENT_LIST_DIR}/cuda-pointcloud.cuh"
         "${CMAKE_CURRENT_LIST_DIR}/cuda-compat.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cuda-rggb.cu"
+        "${RS_GPU_RGGB_SOURCE}"
         "${CMAKE_CURRENT_LIST_DIR}/cuda-rggb.cuh"
         "${CMAKE_CURRENT_LIST_DIR}/rscuda_utils.cuh"
         ${RS_GPU_EXTRA_SOURCES}
