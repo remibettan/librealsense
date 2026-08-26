@@ -357,10 +357,11 @@ namespace librealsense
 #ifdef RS2_USE_CUDA_ZEROCOPY
                 // USERPTR: GPU-visible buffer so a zero-copy frame aliasing it stays GPU-resident (as MMAP/RSUSB do).
                 _start = static_cast<uint8_t*>(rs_frame_zc_alloc( _length ));
+                if (!_start) throw linux_backend_exception("rs_frame_zc_alloc for USERPTR buffer failed!");
 #else
                 _start = static_cast<uint8_t*>(malloc( _length));
-#endif
                 if (!_start) throw linux_backend_exception("User_p allocation failed!");
+#endif
                 memset(_start, 0, _length);
             }
         }
