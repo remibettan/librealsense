@@ -2,7 +2,10 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #pragma once
-#ifdef RS2_USE_CUDA
+// Guarded on either macro (not just RS2_USE_CUDA) so this compiles under HIP regardless of
+// whether global_config.cmake's BUILD_WITH_HIP branch also defines RS2_USE_CUDA (today, for
+// back-compat) or drops it in favor of RS2_USE_HIP alone.
+#if defined(RS2_USE_CUDA) || defined(RS2_USE_HIP)
 
 #include <stdexcept>
 #include <string>
@@ -189,4 +192,4 @@ namespace rscuda
         to_point[2] = extrin->rotation[2] * from_point[0] + extrin->rotation[5] * from_point[1] + extrin->rotation[8] * from_point[2] + extrin->translation[2];
     }
 }
-#endif //RS2_USE_CUDA
+#endif //RS2_USE_CUDA || RS2_USE_HIP

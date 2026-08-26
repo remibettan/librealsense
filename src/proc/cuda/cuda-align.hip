@@ -1,7 +1,11 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-#ifdef RS2_USE_CUDA
+// Guard on either macro (not just RS2_USE_CUDA) so this file keeps compiling under HIP
+// regardless of whether global_config.cmake's BUILD_WITH_HIP branch also defines
+// RS2_USE_CUDA (today, for back-compat with other RS2_USE_CUDA-only guards) or drops it
+// in favor of RS2_USE_HIP alone -- either way this file must still compile under HIP.
+#if defined(RS2_USE_CUDA) || defined(RS2_USE_HIP)
 
 #include "cuda-align.cuh"
 #include "../../../include/librealsense2/rsutil.h"
@@ -231,4 +235,4 @@ void align_cuda_helper::align_depth_to_other(unsigned char* h_aligned_out, const
     RS_CUDA_CHECK(hipMemcpy(h_aligned_out, _d_aligned_out.get(), aligned_pixel_count * 2, hipMemcpyDeviceToHost));
 }
 
-#endif //RS2_USE_CUDA
+#endif // RS2_USE_CUDA || RS2_USE_HIP

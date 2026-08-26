@@ -4,7 +4,11 @@
 // This file is partly based on Mehran Maghoumi's work:
 // https://github.com/Maghoumi/culibrealsense
 
-#ifdef RS2_USE_CUDA
+// Guard on either macro (not just RS2_USE_CUDA) so this file keeps compiling under HIP
+// regardless of whether global_config.cmake's BUILD_WITH_HIP branch also defines
+// RS2_USE_CUDA (today, for back-compat with other RS2_USE_CUDA-only guards) or drops it
+// in favor of RS2_USE_HIP alone -- either way this file must still compile under HIP.
+#if defined(RS2_USE_CUDA) || defined(RS2_USE_HIP)
 
 #include "cuda-conversion.cuh"
 #include <iostream>

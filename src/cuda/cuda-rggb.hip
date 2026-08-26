@@ -1,7 +1,11 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-#ifdef RS2_USE_CUDA
+// Guard on either macro (not just RS2_USE_CUDA) so this file keeps compiling under HIP
+// regardless of whether global_config.cmake's BUILD_WITH_HIP branch also defines
+// RS2_USE_CUDA (today, for back-compat with other RS2_USE_CUDA-only guards) or drops it
+// in favor of RS2_USE_HIP alone -- either way this file must still compile under HIP.
+#if defined(RS2_USE_CUDA) || defined(RS2_USE_HIP)
 
 #include "cuda-rggb.cuh"
 #include <librealsense2/rs.h>   // rs2_intrinsics/rs2_extrinsics (used by rscuda_utils.cuh)
@@ -329,4 +333,4 @@ void rscuda::rggb_cuda_free( void * dev_ptr )
         hipFree( dev_ptr );
 }
 
-#endif // RS2_USE_CUDA
+#endif // RS2_USE_CUDA || RS2_USE_HIP

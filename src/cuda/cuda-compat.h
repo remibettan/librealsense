@@ -5,7 +5,10 @@
 // Small CUDA/HIP-version compatibility shims shared across the GPU translation units, kept
 // dependency-free (only <cuda_runtime.h> / <hip/hip_runtime.h>) so any .cu/.cuh/.hip can
 // include it without pulling in librealsense types.
-#ifdef RS2_USE_CUDA
+// Guarded on either macro (not just RS2_USE_CUDA) so this compiles under HIP regardless of
+// whether global_config.cmake's BUILD_WITH_HIP branch also defines RS2_USE_CUDA (today, for
+// back-compat) or drops it in favor of RS2_USE_HIP alone.
+#if defined(RS2_USE_CUDA) || defined(RS2_USE_HIP)
 #ifdef RS2_USE_HIP
 #include <hip/hip_runtime.h>
 
@@ -25,4 +28,4 @@
 #endif
 
 #endif  // RS2_USE_HIP
-#endif  // RS2_USE_CUDA
+#endif  // RS2_USE_CUDA || RS2_USE_HIP
