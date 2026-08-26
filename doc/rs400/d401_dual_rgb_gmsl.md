@@ -11,18 +11,25 @@ The **D401 GMSL** builds its color image from its **two OV9782 global‑shutter 
 
 > **Firmware requirement.** Raw dual‑RGB is available only on firmware **5.17.4.13 or newer**. On older firmware the camera exposes the **ISP color** path only; requesting dual‑RGB (a second color stream) will fail to resolve, and the Viewer shows a single ISP color stream.
 
-<!-- TODO(images): overview / mode comparison graphic -->
-<!-- ![D401 GMSL color modes](d401_dual_rgb_modes.png) -->
-
 ## The two modes
 
 ### ISP color (legacy)
 
 The firmware ISP produces a single processed color stream (`YUYV`), which the SDK converts to the standard color formats. This is the original D401 GMSL color behavior and it coexists with `Depth`, `Infrared 1`, and `Infrared 2`. Use ISP color when you want color **alongside** infrared.
 
+<p align="center">
+  <img src="d401_isp_color_viewer.png" width="820" alt="ISP color mode in the Viewer: Depth, Infrared 1, Infrared 2 and a YUYV Color stream"/>
+</p>
+<p align="center"><em>ISP color mode — <code>Depth</code> + <code>Infrared 1</code> + <code>Infrared 2</code> + <code>Color</code> (<code>YUYV</code>) all streaming together.</em></p>
+
 ### Raw dual‑RGB
 
 Both imagers stream **raw Bayer** (`RAW8`, fourcc `BA81`). The SDK debayers and color‑processes each imager on the host and exposes **two** color streams: `Color` (index 0, left imager) and `Color 1` (index 1, right imager). Because both imagers are producing Bayer color, **infrared is not available** in this mode. The Viewer additionally offers a stereo‑rectification filter (on by default) that aligns the two color streams.
+
+<p align="center">
+  <img src="d401_dual_rgb_viewer.png" width="820" alt="Raw dual-RGB mode in the Viewer: Depth, Color and Color 1 both RGB8"/>
+</p>
+<p align="center"><em>Raw dual‑RGB mode — <code>Depth</code> + <code>Color</code> + <code>Color 1</code> (both <code>RGB8</code>); infrared is unavailable while both imagers produce Bayer.</em></p>
 
 ## Streams and formats
 
@@ -86,11 +93,7 @@ In **Stereo Module → Available Streams** you will see `Depth`, `Infrared 1`, `
 - **`RGB8`** selects **raw** dual‑RGB. `Infrared 1/2` grey out and `Color 1` becomes selectable.
 - **`BGR8` / `YUYV` / `RGBA8` / `BGRA8`** selects **ISP** color. `Infrared 1/2` stay available and `Color 1` greys out.
 
-The Viewer greys out any stream that cannot run in the currently selected mode, so it is not possible to pick an unstreamable combination.
-
-<!-- TODO(images): Viewer screenshots / GIFs -->
-<!-- ![Selecting raw dual-RGB in the Viewer](d401_dual_rgb_viewer.png) -->
-<!-- ![ISP color with infrared in the Viewer](d401_isp_color_viewer.png) -->
+The Viewer greys out any stream that cannot run in the currently selected mode, so it is not possible to pick an unstreamable combination. See the two mode screenshots above.
 
 ## Controls
 
