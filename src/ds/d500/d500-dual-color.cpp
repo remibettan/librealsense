@@ -11,6 +11,7 @@
 #include <src/platform/uvc-option.h>
 #include <src/metadata-parser.h>
 #include <src/ds/ds-color-common.h>
+#include <src/firmware-version.h>
 
 #include <rsutils/type/fourcc.h>
 using rs_fourcc = rsutils::type::fourcc;
@@ -74,6 +75,8 @@ namespace librealsense
     }
     void d500_dual_color::register_ae_policy_option()
     {
+        if( _fw_version < firmware_version( "7.58.45946.14332" ) )
+            return;
 
         // IR imagers feed both RGB and depth at once, so AE has to be arbitrated between the IPU (color priority) and the SDP (depth priority).
         auto options_map = std::map< float, std::string >{ { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_AUTO ), "Auto" },
