@@ -79,6 +79,8 @@ def test_ae_policy_rejected_while_streaming(test_device):
         depth_sensor.close()
 
     # ... and settable again once streaming stopped
-    depth_sensor.set_option(AE_MODE, target)
-    assert depth_sensor.get_option(AE_MODE) == target
-    depth_sensor.set_option(AE_MODE, original)
+    try:
+        depth_sensor.set_option(AE_MODE, target)
+        assert depth_sensor.get_option(AE_MODE) == target
+    finally:
+        depth_sensor.set_option(AE_MODE, original)
