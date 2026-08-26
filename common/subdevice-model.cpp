@@ -13,7 +13,6 @@
 #include "metadata-helper.h"
 #include "subdevice-model.h"
 #include <rsutils/accelerators/gpu.h>
-#include <rsutils/version.h>
 
 namespace rs2
 {
@@ -1617,25 +1616,25 @@ namespace rs2
             || std::string(dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID)) != "ABCC")   // RS401_GMSL_PID
             return false;
 
-        // Raw dual-RGB is only exposed by firmware that ships the RAW8 CSI passthrough. On older
-        // firmware the device offers the ISP color path only (a single color stream), so present it
-        // as a plain color subdevice: no Color 1 stream, no raw color format, no color<->IR gating.
-        if (!dev.supports(RS2_CAMERA_INFO_FIRMWARE_VERSION)
-            || rsutils::version(dev.get_info(RS2_CAMERA_INFO_FIRMWARE_VERSION)) < rsutils::version("5.17.4.13"))
-            return false;
-
-        // Structural sanity: this subdevice actually exposes the dual-RGB config (two color streams
-        // alongside the stereo streams) rather than, say, the plain depth sensor of the same device.
-        int color_streams = 0;
-        bool has_stereo = false;
+        // Treat this as a dual-RGB subdevice only when it actually exposes a second color stream
+        // (Color 1) alongside the stereo streams. This mirrors exactly what the device registers:
+        // raw dual-RGB - and therefore Color 1 - is exposed only on firmware that supports it, so on
+        // older firmware there is a single color stream and this returns false (no Color 1, no raw
+        // color format, no color<->IR gating). Distinct color stream indices, not profile count, are
+        // what separate a real second color stream from the many format/resolution profiles of a
+        // single ISP color stream.
+        bool has_color0 = false, has_second_color = false, has_stereo = false;
         for (auto&& p : profiles)
         {
             if (p.stream_type() == RS2_STREAM_COLOR)
-                ++color_streams;
+            {
+                if (p.stream_index() == 0) has_color0 = true;
+                else                       has_second_color = true;
+            }
             else if (p.stream_type() == RS2_STREAM_INFRARED || p.stream_type() == RS2_STREAM_DEPTH)
                 has_stereo = true;
         }
-        return color_streams >= 2 && has_stereo;
+        return has_color0 && has_second_color && has_stereo;
     }
 
     bool subdevice_model::color_uid_is_raw(int unique_id) const
