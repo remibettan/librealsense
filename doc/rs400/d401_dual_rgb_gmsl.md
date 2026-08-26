@@ -18,7 +18,7 @@ The **D401 GMSL** builds its color image from its **two OV9782 global‑shutter 
 The firmware ISP produces a single processed color stream (`YUYV`), which the SDK converts to the standard color formats. This is the original D401 GMSL color behavior and it coexists with `Depth`, `Infrared 1`, and `Infrared 2`. Use ISP color when you want color **alongside** infrared.
 
 <p align="center">
-  <img src="d401_isp_color_viewer.png" width="820" alt="ISP color mode in the Viewer: Depth, Infrared 1, Infrared 2 and a YUYV Color stream"/>
+  <img src="https://librealsense.realsenseai.com/readme-media/d401_isp_color_viewer.png" width="820" alt="ISP color mode in the Viewer: Depth, Infrared 1, Infrared 2 and a YUYV Color stream"/>
 </p>
 <p align="center"><em>ISP color mode — <code>Depth</code> + <code>Infrared 1</code> + <code>Infrared 2</code> + <code>Color</code> (<code>YUYV</code>) all streaming together.</em></p>
 
@@ -27,7 +27,7 @@ The firmware ISP produces a single processed color stream (`YUYV`), which the SD
 Both imagers stream **raw Bayer** (`RAW8`, fourcc `BA81`). The SDK debayers and color‑processes each imager on the host and exposes **two** color streams: `Color` (index 0, left imager) and `Color 1` (index 1, right imager). Because both imagers are producing Bayer color, **infrared is not available** in this mode. The Viewer additionally offers a stereo‑rectification filter (on by default) that aligns the two color streams.
 
 <p align="center">
-  <img src="d401_dual_rgb_viewer.png" width="820" alt="Raw dual-RGB mode in the Viewer: Depth, Color and Color 1 both RGB8"/>
+  <img src="https://librealsense.realsenseai.com/readme-media/d401_dual_rgb_viewer.png" width="820" alt="Raw dual-RGB mode in the Viewer: Depth, Color and Color 1 both RGB8"/>
 </p>
 <p align="center"><em>Raw dual‑RGB mode — <code>Depth</code> + <code>Color</code> + <code>Color 1</code> (both <code>RGB8</code>); infrared is unavailable while both imagers produce Bayer.</em></p>
 
