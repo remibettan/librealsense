@@ -49,8 +49,9 @@ dispatcher::dispatcher( unsigned int cap, std::string name, std::function< void(
 
 dispatcher::~dispatcher()
 {
-    // Logged before the join, so a thread that hangs on exit leaves this as its last trace
-    LOG_DEBUG( "Dispatcher [" << _name << " @ " << this << "] destroying" );
+    // The teardown path is deliberately unlogged: a dispatcher can be destroyed during static
+    // destruction -- e.g. by an app holding an rs2::device in a global -- when the logger is
+    // already gone, calling LOG_DEBUG will issue a segmentation fault.
 
     // Don't get into any more dispatches
     _is_alive = false;
@@ -101,16 +102,13 @@ void dispatcher::stop()
         assert(_queue.empty());
     }
     // Signal we've stopped so any sleeping dispatched will wake up immediately
-    bool was_started;
     {
         std::lock_guard< std::mutex > lock( _was_stopped_mutex );
-        was_started = ! _was_stopped.exchange( true );
+        _was_stopped = true;
     }
     _was_stopped_cv.notify_all();
 
-    // Only the actual transition: stop() is called more than once (see above)
-    if( was_started )
-        LOG_DEBUG( "Dispatcher [" << _name << " @ " << this << "] stopped" );
+    // Stopping not logged: stop() is also reached from the destructor -- see the note there
 }
 
 
