@@ -3,6 +3,7 @@
 
 #include "ds-mipi-device.h"
 #include "ds-device-common.h"
+#include "error-handling.h"
 #include "types.h"
 
 #include <algorithm>
@@ -16,8 +17,10 @@
 
 namespace librealsense
 {
-    ds_mipi_device::ds_mipi_device( std::shared_ptr< ds_device_common > device_common )
+    ds_mipi_device::ds_mipi_device( std::shared_ptr< ds_device_common > device_common,
+                                    std::shared_ptr< polling_error_handler > error_poller )
         : _device_common( std::move( device_common ) )
+        , _error_poller( std::move( error_poller ) )
     {
     }
 
@@ -27,6 +30,17 @@ namespace librealsense
                                             int estimated_seconds ) const
     {
         options_watcher_pause_guard guard( *_device_common );
+
+        // Pause the 1 Hz error-polling thread over the DFU write; its XU query would share
+        // the d4xx I2C bus with the DFU status protocol. RAII resumes on any exit.
+        struct poller_gate {
+            polling_error_handler * p;
+            unsigned interval;
+            ~poller_gate() { if( p ) p->start( interval ); }
+        };
+        poller_gate _pg{ _error_poller.get(),
+                         _error_poller ? _error_poller->get_polling_interval() : 0 };
+        if( _error_poller ) _error_poller->stop();
 
         std::ofstream fw_path_in_device( dfu_path.c_str(), std::ios::binary );
         if( ! fw_path_in_device )

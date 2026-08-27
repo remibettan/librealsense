@@ -734,7 +734,8 @@ namespace librealsense
             _mipi_device = std::make_unique< d500_mipi_device >(
                 group.uvc_devices.front().dfu_device_path,
                 _ds_device_common,
-                _hw_monitor );
+                _hw_monitor,
+                _polling_error_handler );
         }
 
         if (_pid == D585S_PID)

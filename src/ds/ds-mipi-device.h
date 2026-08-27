@@ -13,6 +13,7 @@
 namespace librealsense
 {
     class ds_device_common;
+    class polling_error_handler;
 
     // Shared MIPI DFU write flow used by d400_mipi_device and d500_mipi_device.
     // Single-shot ofstream write of the whole image: the kernel driver's
@@ -23,7 +24,10 @@ namespace librealsense
     class ds_mipi_device
     {
     public:
-        explicit ds_mipi_device( std::shared_ptr< ds_device_common > device_common );
+        // Pass an error_poller to have it stopped over the DFU write and restarted on any exit;
+        // pass nullptr to leave any existing poller running (current D400 behaviour).
+        explicit ds_mipi_device( std::shared_ptr< ds_device_common > device_common,
+                                 std::shared_ptr< polling_error_handler > error_poller = nullptr );
 
         void perform_dfu_write( const std::string & dfu_path,
                                 const void * fw_image, std::size_t fw_image_size,
@@ -32,5 +36,6 @@ namespace librealsense
 
     private:
         std::shared_ptr< ds_device_common > _device_common;
+        std::shared_ptr< polling_error_handler > _error_poller;
     };
 }

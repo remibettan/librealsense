@@ -12,9 +12,10 @@ namespace librealsense
 {
     d500_mipi_device::d500_mipi_device( const std::string & dfu_device_path,
                                         std::shared_ptr< ds_device_common > device_common,
-                                        std::shared_ptr< hw_monitor > hw_monitor )
+                                        std::shared_ptr< hw_monitor > hw_monitor,
+                                        std::shared_ptr< polling_error_handler > error_poller )
         : _dfu_device_path( dfu_device_path )
-        , _mipi( std::move( device_common ) )
+        , _mipi( std::move( device_common ), std::move( error_poller ) )
         , _hw_monitor( std::move( hw_monitor ) )
     {
     }
