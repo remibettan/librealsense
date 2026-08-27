@@ -883,7 +883,7 @@ namespace rs2
                     if (RsImGui::CustomComboBox(label.c_str(), &ui.selected_format_id[f.first], formats_chars.data(),
                         static_cast<int>(formats_chars.size())))
                     {
-                        // Color format can flip raw (RGB8) <-> ISP mode; reconcile the other streams.
+                        // Setting Color 0 to an ISP format (non-RGB8) can't pair with raw Color 1; reconcile.
                         if (is_dual_color_subdevice() && stream_enabled.count(f.first) && stream_enabled.at(f.first))
                             enforce_dual_color_ir_exclusion(f.first);
                     }
@@ -1096,7 +1096,7 @@ namespace rs2
                     if (RsImGui::CustomComboBox(label.c_str(), &ui.selected_format_id[f.first], formats_chars.data(),
                         static_cast<int>(formats_chars.size())))
                     {
-                        // Color format can flip raw (RGB8) <-> ISP mode; reconcile the other streams.
+                        // Setting Color 0 to an ISP format (non-RGB8) can't pair with raw Color 1; reconcile.
                         if (is_dual_color_subdevice() && stream_enabled.count(f.first) && stream_enabled.at(f.first))
                             enforce_dual_color_ir_exclusion(f.first);
                     }
@@ -1590,23 +1590,31 @@ namespace rs2
             || std::string(dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID)) != "ABCC")   // RS401_GMSL_PID
             return false;
 
-        // Structural sanity: this subdevice actually exposes the dual-RGB config (two color streams
-        // alongside the stereo streams) rather than, say, the plain depth sensor of the same device.
-        int color_streams = 0;
-        bool has_stereo = false;
+        // Treat this as a dual-RGB subdevice only when it actually exposes a second color stream
+        // (Color 1) alongside the stereo streams. This mirrors exactly what the device registers:
+        // raw dual-RGB - and therefore Color 1 - is exposed only on firmware that supports it, so on
+        // older firmware there is a single color stream and this returns false (no Color 1, no raw
+        // color format, no color<->IR gating). Distinct color stream indices, not profile count, are
+        // what separate a real second color stream from the many format/resolution profiles of a
+        // single ISP color stream.
+        bool has_color0 = false, has_second_color = false, has_stereo = false;
         for (auto&& p : profiles)
         {
             if (p.stream_type() == RS2_STREAM_COLOR)
-                ++color_streams;
+            {
+                if (p.stream_index() == 0) has_color0 = true;
+                else                       has_second_color = true;
+            }
             else if (p.stream_type() == RS2_STREAM_INFRARED || p.stream_type() == RS2_STREAM_DEPTH)
                 has_stereo = true;
         }
-        return color_streams >= 2 && has_stereo;
+        return has_color0 && has_second_color && has_stereo;
     }
 
     bool subdevice_model::color_uid_is_raw(int unique_id) const
     {
-        // Raw/dual-RGB color surfaces as RGB8 (BA81->rggb); ISP color is YUYV/BGR8/RGBA8/BGRA8.
+        // Pure format check: is this color stream currently set to RGB8. NOTE this alone does NOT mean
+        // "raw mode" - a lone Color 0 RGB8 is ISP color. Raw dual-RGB is decided by dual_rgb_active().
         bool is_color = false;
         for (auto&& p : profiles)
             if (p.unique_id() == unique_id) { is_color = ( p.stream_type() == RS2_STREAM_COLOR ); break; }
@@ -1634,6 +1642,15 @@ namespace rs2
         return 0;
     }
 
+    bool subdevice_model::dual_rgb_active() const
+    {
+        // Raw dual-RGB is active iff Color 1 (index >= 1) is enabled; a lone Color 0 (even RGB8) is ISP.
+        for (auto&& kv : stream_enabled)
+            if (kv.second && stream_type_of(kv.first) == RS2_STREAM_COLOR && stream_index_of(kv.first) >= 1)
+                return true;
+        return false;
+    }
+
     void subdevice_model::enforce_dual_color_ir_exclusion(int changed_unique_id)
     {
         // Caller gates this on is_dual_color_subdevice(). Reconciles the single-mode invariant.
@@ -1655,29 +1672,32 @@ namespace rs2
         if (!changed_on)
             return;   // disabling a stream never forces another off
 
-        if (is_color(changed_unique_id) && color_uid_is_raw(changed_unique_id))
+        const bool changed_is_color = is_color(changed_unique_id);
+        const int  changed_index    = stream_index_of(changed_unique_id);
+
+        if (changed_is_color && changed_index >= 1)
         {
-            // Raw mode: drop mono IR; couple the other color to RGB8 (no ISP+raw imager mix).
+            // Enabling Color 1 -> raw dual-RGB: drop IR and force Color 0 to RGB8 (both pins must be raw).
             for (auto& o : stream_enabled)
             {
                 if (o.first == changed_unique_id || !o.second) continue;
-                if (is_ir(o.first))         o.second = false;
-                else if (is_color(o.first)) set_format(o.first, RS2_FORMAT_RGB8);
+                if (is_ir(o.first))                                          o.second = false;
+                else if (is_color(o.first) && stream_index_of(o.first) == 0) set_format(o.first, RS2_FORMAT_RGB8);
             }
         }
         else if (is_ir(changed_unique_id))
         {
-            // Enabling IR -> ISP/stereo mode: drop any raw color (RGB8 Color 0 and the raw-only Color 1).
+            // Enabling IR -> ISP/stereo: drop the raw-only Color 1 (Color 0 stays; RGB8 there is now ISP).
             for (auto& o : stream_enabled)
             {
                 if (o.first == changed_unique_id || !o.second) continue;
-                if (is_color(o.first) && ( color_uid_is_raw(o.first) || stream_index_of(o.first) >= 1 ))
+                if (is_color(o.first) && stream_index_of(o.first) >= 1)
                     o.second = false;
             }
         }
-        else if (is_color(changed_unique_id))
+        else if (changed_is_color && changed_index == 0 && !color_uid_is_raw(changed_unique_id))
         {
-            // Enabling / selecting an ISP color -> drop the raw-only Color 1 (no ISP + raw mix).
+            // Color 0 on an ISP format can't pair with raw Color 1: drop Color 1.
             for (auto& o : stream_enabled)
             {
                 if (o.first == changed_unique_id || !o.second) continue;
@@ -1692,26 +1712,19 @@ namespace rs2
         if (!is_dual_color_subdevice())
             return false;
 
-        bool raw_active = false, ir_active = false, isp_color_active = false;
+        const bool raw_active = dual_rgb_active();          // Color 1 enabled => raw dual-RGB
+        bool ir_active = false;
         for (auto&& kv : stream_enabled)
         {
-            if (!kv.second) continue;
-            rs2_stream t = stream_type_of(kv.first);
-            if (t == RS2_STREAM_COLOR)
-            {
-                if (color_uid_is_raw(kv.first)) raw_active = true;
-                else                            isp_color_active = true;
-            }
-            else if (t == RS2_STREAM_INFRARED)
-                ir_active = true;
+            if (kv.second && stream_type_of(kv.first) == RS2_STREAM_INFRARED) { ir_active = true; break; }
         }
 
         rs2_stream t = stream_type_of(unique_id);
         if (t == RS2_STREAM_INFRARED)
-            return raw_active;                              // IR unavailable while raw color streams
+            return raw_active;                              // IR unavailable while raw dual-RGB (Color 1) streams
         if (t == RS2_STREAM_COLOR && stream_index_of(unique_id) >= 1)
-            return ir_active || isp_color_active;           // Color 1 is raw-only
-        return false;                                       // depth and Color 0 (mode chooser) never lock
+            return ir_active;                              // Color 1 (raw) unavailable while IR streams
+        return false;                                       // depth and Color 0 work in both modes - never lock
     }
 
     bool subdevice_model::is_depth_calibration_profile() const
