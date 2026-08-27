@@ -282,12 +282,15 @@ namespace rs2
         // Depth is a separate node and coexists with either mode.
         rs2_stream stream_type_of(int unique_id) const;   // profile stream type for a unique id (ANY if not found)
         int        stream_index_of(int unique_id) const;  // profile stream index for a unique id (0 if not found)
-        bool color_uid_is_raw(int unique_id) const;   // color stream currently in the raw RGB8 format
+        bool color_uid_is_raw(int unique_id) const;   // this color uid's selected format is RGB8
+        // Raw dual-RGB mode is active iff the second color stream (Color 1, index >= 1) is enabled. A lone
+        // Color 0 (any format, including RGB8) is ISP color and coexists with infrared.
+        bool dual_rgb_active() const;
         // Reconcile the single-mode invariant after `changed_unique_id` toggled or changed format:
         // uncheck streams that can't coexist with it and couple the two color pins to the same format.
         void enforce_dual_color_ir_exclusion(int changed_unique_id);
-        // True when `unique_id`'s checkbox should be greyed out given the current mode (IR while a raw
-        // color is active; the raw-only Color 1 while an ISP color or IR is active).
+        // True when `unique_id`'s checkbox should be greyed out given the current mode (IR while raw
+        // dual-RGB is active; the raw-only Color 1 while IR is active).
         bool is_stream_mode_locked(int unique_id) const;
         void set_extrinsics_from_depth_if_needed();
         bool is_post_processing_enabled_in_config_file() const;
