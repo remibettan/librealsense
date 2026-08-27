@@ -381,10 +381,14 @@ namespace librealsense
             }
         }
 
-        // D401 GMSL raw dual-RGB: register the RAW8->RGB8 debayer AFTER the ISP blocks above. The
-        // formats-converter breaks ties by registration order, so a lone Color 0 RGB8 resolves to ISP
-        // (coexists with IR) and the raw path wins only when Color 1 is also requested (it satisfies both
-        // color streams). Raw uses both imagers, so it excludes IR. Per-pin routing is set in d400_device::init().
+        // D401 GMSL raw dual-RGB: register the RAW8->RGB8 debayer AFTER the ISP blocks above so ISP wins
+        // ties. formats_converter::find_pbf_matching_most_profiles picks the block satisfying the most
+        // REQUESTED targets; find_satisfied_requests counts only requested profiles, so the raw block's
+        // extra Color 1 output is NOT counted when Color 1 is not requested. A lone Color 0 RGB8 is thus a
+        // tie (both blocks satisfy 1, equal source size) and the first-registered block - ISP - wins, so it
+        // stays ISP and coexists with IR. Requesting Color 1 too makes only the raw block satisfy both
+        // (count 2), so raw wins for both imagers (which excludes IR). Verified on HW: Color 0 RGB8 + IR
+        // stream together. Per-pin routing is set in d400_device::init().
         if( _is_mipi_device && _pid == ds::RS401_GMSL_PID && _fw_version >= firmware_version( "5.17.4.13" ) )
         {
             // Native color is 1288x808 (after cropping 1612 transport padding); other resolutions are
