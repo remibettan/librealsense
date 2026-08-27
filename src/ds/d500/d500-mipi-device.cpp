@@ -22,9 +22,10 @@ namespace librealsense
     void d500_mipi_device::update( const void * fw_image, int fw_image_size,
                                    rs2_update_progress_callback_sptr update_progress_callback ) const
     {
+        // D5xx GMSL DFU wall-clock is ~30 min end-to-end (D400 default of 120 s does not fit).
         _mipi.perform_dfu_write( _dfu_device_path, fw_image,
                                  static_cast< std::size_t >( fw_image_size ),
-                                 update_progress_callback );
+                                 update_progress_callback, 1800 );
 
         // HWRST kicks the D585 out of dfuMANIFEST_WAIT_RESET so it boots the new
         // image; without it the FW stays in the bootloader and even a driver
