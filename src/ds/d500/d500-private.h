@@ -40,6 +40,7 @@ namespace librealsense
             PVT_TEMPERATURE       = 0x15,
             PROJECTOR_TEMPERATURE = 0x16,
             OHM_TEMPERATURE       = 0x17,
+            COLORED_IR_AE_POLICY  = 0x19,
             EXTERNAL_SYNC_MODE    = 0x1A
         };
 
