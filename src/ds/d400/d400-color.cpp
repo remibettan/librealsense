@@ -380,6 +380,46 @@ namespace librealsense
                 color_ep.register_processing_block(processing_block_factory::create_pbf_vector<yuy2_converter>(RS2_FORMAT_YUYV, map_supported_color_formats(RS2_FORMAT_YUYV), RS2_STREAM_COLOR));
             }
         }
+
+        // D401 GMSL raw dual-RGB: register the RAW8 -> RGB8 debayer AFTER the ISP (YUYV) color blocks
+        // above. The formats-converter breaks a tie between equally-matching converters by registration
+        // order, so a lone Color 0 RGB8 request now resolves to ISP (RGB8 stays ISP color and can still
+        // coexist with infrared), and the raw debayer is chosen only when Color 1 is also requested (it
+        // satisfies both Color 0 and Color 1, so it wins that larger match). Raw dual-RGB uses both
+        // imagers, so it excludes infrared. Gated to firmware that ships the RAW8 CSI passthrough; the
+        // per-pin routing (resolve_d401_color_stream) is set up in d400_device::init().
+        if( _is_mipi_device && _pid == ds::RS401_GMSL_PID && _fw_version >= firmware_version( "5.17.4.13" ) )
+        {
+            // Native color is 1288x808 (after cropping the 1612 transport padding). Expose the standard
+            // resolutions by demosaicing to native then center-cropping to aspect + bilinear scaling
+            // (see rggb_converter / cuda-rggb). resolution_transform is a captureless function pointer,
+            // so each output resolution needs its own; the factory std::function captures the target size.
+            static const int NATIVE_W = 1288;
+            struct color_res { int w, h; void ( *xf )( uint32_t &, uint32_t & ); };
+            static const color_res color_resolutions[] = {
+                { 1280, 720, []( uint32_t & w, uint32_t & h ) { w = 1280; h = 720; } },
+                {  848, 480, []( uint32_t & w, uint32_t & h ) { w =  848; h = 480; } },
+                {  640, 480, []( uint32_t & w, uint32_t & h ) { w =  640; h = 480; } },
+                {  640, 360, []( uint32_t & w, uint32_t & h ) { w =  640; h = 360; } },
+                {  480, 270, []( uint32_t & w, uint32_t & h ) { w =  480; h = 270; } },
+                {  424, 240, []( uint32_t & w, uint32_t & h ) { w =  424; h = 240; } },
+            };
+            for( auto & r : color_resolutions )
+            {
+                const int rw = r.w, rh = r.h;
+                color_ep.register_processing_block(
+                    { { RS2_FORMAT_RAW8, RS2_STREAM_COLOR } },
+                    { { RS2_FORMAT_RGB8, RS2_STREAM_COLOR, 0, 0, 0, 0, r.xf },
+                      { RS2_FORMAT_RGB8, RS2_STREAM_COLOR, 1, 0, 0, 0, r.xf } },
+                    [rw, rh]() {
+                        rggb::isp_params isp;
+                        isp.swap_rb = true;   // OV9782 is BGGR (driver declares SBGGR8); base demosaic is
+                                              // RGGB-pattern, so swap R<->B to correct it
+                        return std::make_shared< rggb_converter >( RS2_FORMAT_RGB8, NATIVE_W, rw, rh, isp );
+                    }
+                );
+            }
+        }
     }
 
     void d400_color::register_metadata_mipi(const synthetic_sensor &color_ep) const

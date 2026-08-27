@@ -793,47 +793,11 @@ namespace librealsense
                     // reported color FPS reads 2x.
                     raw_depth_sensor->enable_software_color_frame_numbers();
 
-                    // The camera always delivers one native color resolution (1288x808 after the
-                    // 1612 transport crop). For the user we expose the standard resolutions too: each
-                    // is produced by demosaicing to native then center-cropping to that aspect ratio
-                    // and bilinear-scaling (crop-to-aspect + scale, no stretch; see rggb_converter /
-                    // cuda-rggb). We mirror the depth resolution set so the viewer offers one shared
-                    // resolution across depth + Color 0/1 (no per-stream resolution UI needed).
-                    //
-                    // resolution_transform is a plain function pointer (no captures), so each output
-                    // resolution needs its own captureless transform; the converter factory (a
-                    // std::function) captures the target size. Index 0 = left imager, 1 = right; the
-                    // resolver tags the two RGGB sources 0/1 and formats-converter matches by index.
-                    static const int NATIVE_W = 1288;
-                    struct color_res { int w, h; void ( *xf )( uint32_t &, uint32_t & ); };
-                    // Mirror the depth resolution set exactly (top out at 1280x720, not the native
-                    // 1288x808) so color shares every resolution with depth/IR. That keeps the viewer
-                    // on a single shared Resolution dropdown and lets depth + IR + Color 0/1 always be
-                    // selected together (depth has no 1288x808 mode). The native 1288x808 is still the
-                    // internal capture/demosaic size; 1280x720 is its center-cropped 16:9 output.
-                    static const color_res color_resolutions[] = {
-                        { 1280, 720, []( uint32_t & w, uint32_t & h ) { w = 1280; h = 720; } },
-                        {  848, 480, []( uint32_t & w, uint32_t & h ) { w =  848; h = 480; } },
-                        {  640, 480, []( uint32_t & w, uint32_t & h ) { w =  640; h = 480; } },
-                        {  640, 360, []( uint32_t & w, uint32_t & h ) { w =  640; h = 360; } },
-                        {  480, 270, []( uint32_t & w, uint32_t & h ) { w =  480; h = 270; } },
-                        {  424, 240, []( uint32_t & w, uint32_t & h ) { w =  424; h = 240; } },
-                    };
-                    for( auto & r : color_resolutions )
-                    {
-                        const int rw = r.w, rh = r.h;
-                        depth_sensor.register_processing_block(
-                            { { RS2_FORMAT_RAW8, RS2_STREAM_COLOR } },
-                            { { RS2_FORMAT_RGB8, RS2_STREAM_COLOR, 0, 0, 0, 0, r.xf },
-                              { RS2_FORMAT_RGB8, RS2_STREAM_COLOR, 1, 0, 0, 0, r.xf } },
-                            [rw, rh]() {
-                                rggb::isp_params isp;
-                                isp.swap_rb = true;   // OV9782 is BGGR (driver declares SBGGR8); the base
-                                                      // demosaic is RGGB-pattern, so swap R<->B to correct it
-                                return std::make_shared< rggb_converter >( RS2_FORMAT_RGB8, NATIVE_W, rw, rh, isp );
-                            }
-                        );
-                    }
+                    // NOTE: the RAW8 -> RGB8 dual-RGB processing blocks are registered later, in
+                    // d400_color::register_processing_blocks(), AFTER the ISP (YUYV) color blocks.
+                    // Registration order is the formats-converter tie-breaker, so a lone Color 0 RGB8
+                    // request resolves to ISP (and can still coexist with infrared), while a request
+                    // that also includes Color 1 resolves to the raw debayer for both imagers.
                 }
             }
 
