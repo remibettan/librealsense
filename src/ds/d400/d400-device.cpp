@@ -779,8 +779,10 @@ namespace librealsense
 
                 // D401 GMSL dual-RGB: the two OV9782 imagers stream 8-bit RGGB Bayer via the FW RAW8
                 // CSI passthrough, routed to Color 0 / Color 1. Only firmware with that passthrough
-                // supports it; older firmware exposes the ISP color path only.
-                if( _pid == RS401_GMSL_PID && _fw_version >= firmware_version( "5.17.4.13" ) )
+                // supports it; older firmware exposes the ISP color path only. Keep this guard identical
+                // to the block registration guard in d400_color::register_processing_blocks() - the
+                // resolver armed here and the RAW8->RGB8 blocks there must be enabled together.
+                if( _is_mipi_device && _pid == RS401_GMSL_PID && _fw_version >= firmware_version( "5.17.4.13" ) )
                 {
                     // Route the two identical BGGR color pins to Color 0 / Color 1 (ascending pin order).
                     raw_depth_sensor->set_stream_id_resolver( resolve_d401_color_stream );
