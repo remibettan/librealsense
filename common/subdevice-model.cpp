@@ -161,7 +161,7 @@ namespace rs2
         // Queue capacity is generous: even rapid slider drags coalesce into at most one
         // queued job per option (see option_model::set_option_async), so realistically
         // depth ≪ 16.
-        _set_dispatcher( std::make_shared< dispatcher >( 64u ) )
+        _set_dispatcher( std::make_shared< dispatcher >( 64u, "subdevice-set-option" ) )
     {
         // dispatcher's worker thread starts in _was_stopped=true; invoke() is a
         // silent no-op until start() is called. (The header comment claiming it
