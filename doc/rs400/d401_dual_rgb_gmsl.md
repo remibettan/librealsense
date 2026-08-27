@@ -110,6 +110,6 @@ On the D401 GMSL all controls are exposed on a single **Stereo Module** sensor (
 - **Color and infrared cannot run together in raw mode.** Both imagers produce Bayer, and `Color 1` uses the infrared imager. Keep to a single `Color` stream (do not enable `Color 1`) if you need color and infrared together.
 - **Colored infrared** is not available on GMSL (infrared is delivered as `Y8` / `Y16` only).
 - Raw dual-RGB requires firmware **5.17.4.13+**. Older firmware provides ISP color only.
-- **Switching between ISP and raw dual-RGB needs a hardware reset** to take effect (each imager streams ISP color or raw Bayer, not both). Partially fixed; status in RSDSO-21854.
-- **Manual exposure and gain have no effect on raw dual-RGB color.** The color-node controls do not reach the shared imager. Root caused, work in progress; RSDSO-21895.
-- **Raw dual-RGB color auto-exposure runs only while depth streams**, so with depth off the color can be over-exposed. Stream depth as a workaround. Not yet started; RSDSO-21894 (likely fixed together with RSDSO-21895).
+- **Switching between ISP and raw dual-RGB needs a hardware reset** to take effect (each imager streams ISP color or raw Bayer, not both).
+- **Manual exposure and gain have no effect on raw dual-RGB color** (the color-node controls do not reach the shared imager).
+- **Raw dual-RGB color auto-exposure runs only while depth streams**, so with depth off the color can be over-exposed. Stream depth as a workaround.
