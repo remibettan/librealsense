@@ -778,26 +778,16 @@ namespace librealsense
                 );
 
                 // D401 GMSL dual-RGB: the two OV9782 imagers stream 8-bit RGGB Bayer via the FW RAW8
-                // CSI passthrough. Expose each as a color stream - crop the transport padding
-                // (1612 -> 1288 px) and demosaic RGGB -> RGB8. The per-imager stream index (0/1) is
-                // carried through from the source profile, mirroring the IR1/IR2 split.
-                // Only firmware that ships the RAW8 CSI passthrough supports this. On older firmware
-                // the imagers expose the ISP color path only, so the raw color streams are not
-                // registered and a raw dual-RGB request has no matching profile to resolve.
+                // CSI passthrough, routed to Color 0 / Color 1. Only firmware with that passthrough
+                // supports it; older firmware exposes the ISP color path only.
                 if( _pid == RS401_GMSL_PID && _fw_version >= firmware_version( "5.17.4.13" ) )
                 {
                     // Route the two identical BGGR color pins to Color 0 / Color 1 (ascending pin order).
                     raw_depth_sensor->set_stream_id_resolver( resolve_d401_color_stream );
-
-                    // Both imagers share one hardware frame counter; without a per-stream counter the
-                    // reported color FPS reads 2x.
+                    // Both imagers share one HW frame counter; without a per-stream counter FPS reads 2x.
                     raw_depth_sensor->enable_software_color_frame_numbers();
-
-                    // NOTE: the RAW8 -> RGB8 dual-RGB processing blocks are registered later, in
-                    // d400_color::register_processing_blocks(), AFTER the ISP (YUYV) color blocks.
-                    // Registration order is the formats-converter tie-breaker, so a lone Color 0 RGB8
-                    // request resolves to ISP (and can still coexist with infrared), while a request
-                    // that also includes Color 1 resolves to the raw debayer for both imagers.
+                    // The RAW8->RGB8 blocks are registered in d400_color::register_processing_blocks(),
+                    // after the ISP blocks, so a lone Color 0 RGB8 stays ISP and only Color 1 forces raw.
                 }
             }
 

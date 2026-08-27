@@ -38,23 +38,23 @@ Both imagers stream **raw Bayer** (`RAW8`, fourcc `BA81`). The SDK debayers and 
 | `Depth` | `Z16` | Independent — always available |
 | `Infrared 1` | `Y8`, `Y16` | Left imager (mono) |
 | `Infrared 2` | `Y8`, `Y16` | Right imager (mono) |
-| `Color` (index 0) | `RGB8` *(raw)* · `BGR8`, `RGBA8`, `BGRA8`, `YUYV` *(ISP)* | Left imager |
-| `Color 1` (index 1) | `RGB8` *(raw)* | Right imager — raw dual‑RGB only |
+| `Color` (index 0) | `RGB8`, `BGR8`, `RGBA8`, `BGRA8`, `YUYV` | Left imager — ISP color on its own; switches to raw when `Color 1` is also enabled |
+| `Color 1` (index 1) | `RGB8` | Right imager — raw dual‑RGB only |
 
-The **color format selects the mode**: request `RGB8` for raw dual‑RGB, or `BGR8` / `RGBA8` / `BGRA8` / `YUYV` for ISP color.
+The **second color stream (`Color 1`) selects the mode**: enable `Color 1` for raw dual‑RGB. A single `Color` stream — in **any** format, including `RGB8` — is ISP color and coexists with infrared.
 
 Resolutions (shared across depth, infrared, and color): `1280x720`, `848x480`, `640x480`, `640x360`, `480x270`, `424x240`.
 
 ## Valid stream combinations
 
-Because the imagers are shared, only certain combinations can stream together. Infrared can run with color **only in ISP mode**; raw dual‑RGB consumes both imagers, so infrared is not available there. Depth is independent and can be added to any row.
+Because the imagers are shared, only certain combinations can stream together. Infrared can run with a single (ISP) `Color` stream in **any** format; raw dual‑RGB (`Color` + `Color 1`) consumes both imagers, so infrared is not available there. Depth is independent and can be added to any row.
 
 | Use case | Depth | Infrared 1 | Infrared 2 | Color | Color 1 |
 |----------|:-----:|:----------:|:----------:|:-----:|:-------:|
 | Depth + stereo IR | `Z16` | `Y8/Y16` | `Y8/Y16` | — | — |
-| Depth + IR + **ISP** color | `Z16` | `Y8/Y16` | `Y8/Y16` | `BGR8/YUYV/RGBA8/BGRA8` | — |
+| Depth + IR + **ISP** color | `Z16` | `Y8/Y16` | `Y8/Y16` | `RGB8/BGR8/YUYV/RGBA8/BGRA8` | — |
+| **ISP** color only (any format) | `Z16` (opt) | — | — | `RGB8/BGR8/YUYV/RGBA8/BGRA8` | — |
 | **Raw** dual‑RGB (+ optional depth) | `Z16` (opt) | — | — | `RGB8` | `RGB8` |
-| **Raw** single RGB (+ optional depth) | `Z16` (opt) | — | — | `RGB8` | — |
 | Infrared only | — | `Y8/Y16` | `Y8/Y16` | — | — |
 
 ## Using it in the SDK
@@ -84,14 +84,16 @@ rs2::pipeline pipe;
 pipe.start(cfg);
 ```
 
-> On firmware older than 5.17.4.13, enabling `Color 1` (the second color stream) throws `Couldn't resolve requests`, since raw dual‑RGB is not exposed. ISP color (a single `Color` stream) continues to work.
+> A single `Color` stream is ISP regardless of format — `RGB8` on its own is ISP color and runs with infrared. Raw dual‑RGB is selected by also enabling `Color 1`.
+>
+> On firmware older than 5.17.4.13, enabling `Color 1` throws `Couldn't resolve requests`, since raw dual‑RGB is not exposed. ISP color (a single `Color` stream) continues to work.
 
 ## Using it in the Viewer
 
-In **Stereo Module → Available Streams** you will see `Depth`, `Infrared 1`, `Infrared 2`, `Color`, and (on supported firmware) `Color 1`. Set the **Color** format to choose the mode:
+In **Stereo Module → Available Streams** you will see `Depth`, `Infrared 1`, `Infrared 2`, `Color`, and (on supported firmware) `Color 1`. The **`Color 1` checkbox chooses the mode**:
 
-- **`RGB8`** selects **raw** dual‑RGB. `Infrared 1/2` grey out and `Color 1` becomes selectable.
-- **`BGR8` / `YUYV` / `RGBA8` / `BGRA8`** selects **ISP** color. `Infrared 1/2` stay available and `Color 1` greys out.
+- Leave **`Color 1` off** → **ISP** color. `Color` streams in any format (including `RGB8`) alongside `Infrared 1/2`.
+- Tick **`Color 1`** → **raw** dual‑RGB. `Infrared 1/2` grey out and `Color` switches to `RGB8`.
 
 The Viewer greys out any stream that cannot run in the currently selected mode, so it is not possible to pick an unstreamable combination. See the two mode screenshots above.
 
@@ -105,6 +107,6 @@ On the D401 GMSL all controls are exposed on a single **Stereo Module** sensor (
 
 ## Limitations
 
-- **Color and infrared cannot run together in raw mode** — both imagers are producing Bayer, and `Color 1` uses the infrared imager. Use an ISP color format if you need color and infrared together.
+- **Color and infrared cannot run together in raw mode** — both imagers are producing Bayer, and `Color 1` uses the infrared imager. Keep to a single `Color` stream (do not enable `Color 1`) if you need color and infrared together.
 - **Colored infrared** is not available on GMSL (infrared is delivered as `Y8`/`Y16` only).
 - Raw dual‑RGB requires firmware **5.17.4.13+**; older firmware provides ISP color only.

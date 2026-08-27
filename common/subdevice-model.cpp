@@ -1670,9 +1670,7 @@ namespace rs2
 
     bool subdevice_model::dual_rgb_active() const
     {
-        // Raw dual-RGB is active iff the second color stream (Color 1, index >= 1) is enabled. That is the
-        // request that makes the SDK route both color pins through the raw debayer (excluding infrared);
-        // a lone Color 0 - even RGB8 - resolves to ISP color and coexists with infrared.
+        // Raw dual-RGB is active iff Color 1 (index >= 1) is enabled; a lone Color 0 (even RGB8) is ISP.
         for (auto&& kv : stream_enabled)
             if (kv.second && stream_type_of(kv.first) == RS2_STREAM_COLOR && stream_index_of(kv.first) >= 1)
                 return true;
@@ -1705,8 +1703,7 @@ namespace rs2
 
         if (changed_is_color && changed_index >= 1)
         {
-            // Enabling Color 1 selects raw dual-RGB: it drives both imagers as Bayer, so drop mono IR and
-            // force Color 0 to RGB8 (both color pins must be raw - no ISP + raw mix).
+            // Enabling Color 1 -> raw dual-RGB: drop IR and force Color 0 to RGB8 (both pins must be raw).
             for (auto& o : stream_enabled)
             {
                 if (o.first == changed_unique_id || !o.second) continue;
@@ -1716,8 +1713,7 @@ namespace rs2
         }
         else if (is_ir(changed_unique_id))
         {
-            // Enabling IR selects ISP/stereo mode: drop the raw-only Color 1. Color 0 stays as-is - RGB8
-            // there is now ISP color and coexists with IR.
+            // Enabling IR -> ISP/stereo: drop the raw-only Color 1 (Color 0 stays; RGB8 there is now ISP).
             for (auto& o : stream_enabled)
             {
                 if (o.first == changed_unique_id || !o.second) continue;
@@ -1727,7 +1723,7 @@ namespace rs2
         }
         else if (changed_is_color && changed_index == 0 && !color_uid_is_raw(changed_unique_id))
         {
-            // Color 0 set to an ISP format (non-RGB8) cannot pair with the raw Color 1: drop Color 1.
+            // Color 0 on an ISP format can't pair with raw Color 1: drop Color 1.
             for (auto& o : stream_enabled)
             {
                 if (o.first == changed_unique_id || !o.second) continue;

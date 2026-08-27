@@ -381,19 +381,14 @@ namespace librealsense
             }
         }
 
-        // D401 GMSL raw dual-RGB: register the RAW8 -> RGB8 debayer AFTER the ISP (YUYV) color blocks
-        // above. The formats-converter breaks a tie between equally-matching converters by registration
-        // order, so a lone Color 0 RGB8 request now resolves to ISP (RGB8 stays ISP color and can still
-        // coexist with infrared), and the raw debayer is chosen only when Color 1 is also requested (it
-        // satisfies both Color 0 and Color 1, so it wins that larger match). Raw dual-RGB uses both
-        // imagers, so it excludes infrared. Gated to firmware that ships the RAW8 CSI passthrough; the
-        // per-pin routing (resolve_d401_color_stream) is set up in d400_device::init().
+        // D401 GMSL raw dual-RGB: register the RAW8->RGB8 debayer AFTER the ISP blocks above. The
+        // formats-converter breaks ties by registration order, so a lone Color 0 RGB8 resolves to ISP
+        // (coexists with IR) and the raw path wins only when Color 1 is also requested (it satisfies both
+        // color streams). Raw uses both imagers, so it excludes IR. Per-pin routing is set in d400_device::init().
         if( _is_mipi_device && _pid == ds::RS401_GMSL_PID && _fw_version >= firmware_version( "5.17.4.13" ) )
         {
-            // Native color is 1288x808 (after cropping the 1612 transport padding). Expose the standard
-            // resolutions by demosaicing to native then center-cropping to aspect + bilinear scaling
-            // (see rggb_converter / cuda-rggb). resolution_transform is a captureless function pointer,
-            // so each output resolution needs its own; the factory std::function captures the target size.
+            // Native color is 1288x808 (after cropping 1612 transport padding); other resolutions are
+            // center-crop + bilinear scale. resolution_transform is a captureless fn ptr, one per output.
             static const int NATIVE_W = 1288;
             struct color_res { int w, h; void ( *xf )( uint32_t &, uint32_t & ); };
             static const color_res color_resolutions[] = {
