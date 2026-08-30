@@ -205,13 +205,29 @@ void uvc_sensor::open( const stream_profiles & requests )
                     if( msp )
                     {
                         expected_size = 64;  // 32; // D457 - WORKAROUND - SHOULD BE REMOVED AFTER CORRECTION IN DRIVER
-                        //Motion stream on uvc is used only for mipi. Stream frame number counts gyro and accel together.
-                        //We override it using 2 seperate counters.
-                        auto stream_type = ((uint8_t *)f.pixels)[0];
-                        if( stream_type == 1 ) // 1 == Accel
+                        // MIPI motion node interleaves accel/gyro packets on one V4L2 stream, tagged by
+                        // the first payload byte (matches the demux in motion_to_accel_gyro in
+                        // motion-transform.cpp). Drop packets not addressed to this profile - still
+                        // call continuation() on drop so the backend buffer is re-queued (VIDIOC_QBUF).
+                        constexpr uint8_t mipi_payload_accel = 1;
+                        constexpr uint8_t mipi_payload_gyro = 2;
+                        const auto stream_type = ((uint8_t *)f.pixels)[0];
+                        const auto requested_stream_type = req_profile_base->get_stream_type();
+                        if( stream_type == mipi_payload_accel )
+                        {
+                            if( requested_stream_type != RS2_STREAM_ACCEL ) { continuation(); return; }
                             fr->additional_data.frame_number = ++_accel_counter;
-                        else if( stream_type == 2 ) // 2 == Gyro
+                        }
+                        else if( stream_type == mipi_payload_gyro )
+                        {
+                            if( requested_stream_type != RS2_STREAM_GYRO ) { continuation(); return; }
                             fr->additional_data.frame_number = ++_gyro_counter;
+                        }
+                        else
+                        {
+                            continuation();
+                            return;
+                        }
                         frame_counter = fr->additional_data.frame_number;
                     }
 
