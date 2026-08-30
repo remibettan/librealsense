@@ -518,6 +518,15 @@ try
                 if (result != EXIT_SUCCESS)
                     return result;
             }
+
+            // Print the manual-reload hint on operational D5xx GMSL, then fall through
+            // to waiting_for_device_to_reconnect() so the SDK context processes the
+            // fake device-changed callbacks fired by hardware_reset before main exits.
+            if (rs2::fw_update::is_mipi_d5xx_device(d))
+            {
+                std::cout << std::endl << rs2::fw_update::mipi_recovery_message << std::endl;
+                std::cout << "or reboot the system" << std::endl;
+            }
         }
     }
 
