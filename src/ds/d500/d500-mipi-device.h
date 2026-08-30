@@ -12,10 +12,7 @@
 namespace librealsense
 {
     class ds_device_common;
-    class hw_monitor;
     class polling_error_handler;
-
-
 
     // Update-device implementation for operational D5xx GMSL. d500_device holds an
     // instance and returns it from extend_to(), so rs2::device::as<update_device>()
@@ -29,7 +26,6 @@ namespace librealsense
     public:
         d500_mipi_device( const std::string & dfu_device_path,
                           std::shared_ptr< ds_device_common > device_common,
-                          std::shared_ptr< hw_monitor > hw_monitor,
                           std::shared_ptr< polling_error_handler > error_poller );
 
         void update( const void * fw_image, int fw_image_size,
@@ -41,8 +37,13 @@ namespace librealsense
         bool check_fw_compatibility( const std::vector< uint8_t > & image ) const override { return true; }
 
     private:
+        // Mirrors d400_mipi_device::hardware_reset(): delegates to
+        // ds_device_common::hardware_reset(5 s), which sends ds::HWRST + fires
+        // simulate_device_reconnect for the SDK to re-emit the device.
+        void hardware_reset() const;
+
         std::string _dfu_device_path;
+        std::shared_ptr< ds_device_common > _device_common;
         ds_mipi_device _mipi;
-        std::shared_ptr< hw_monitor > _hw_monitor;
     };
 }

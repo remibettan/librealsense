@@ -2,21 +2,19 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #include "d500-mipi-device.h"
-#include "ds/ds-private.h"
-#include "hw-monitor.h"
-#include "types.h"
+#include "ds/ds-device-common.h"
 
-#include <stdexcept>
+#include <chrono>
+#include <thread>
 
 namespace librealsense
 {
     d500_mipi_device::d500_mipi_device( const std::string & dfu_device_path,
                                         std::shared_ptr< ds_device_common > device_common,
-                                        std::shared_ptr< hw_monitor > hw_monitor,
                                         std::shared_ptr< polling_error_handler > error_poller )
         : _dfu_device_path( dfu_device_path )
+        , _device_common( device_common )
         , _mipi( std::move( device_common ), std::move( error_poller ) )
-        , _hw_monitor( std::move( hw_monitor ) )
     {
     }
 
@@ -28,33 +26,14 @@ namespace librealsense
                                  static_cast< std::size_t >( fw_image_size ),
                                  update_progress_callback, 1800 );
 
-        // HWRST kicks the D585 out of dfuMANIFEST_WAIT_RESET so it boots the new
-        // image; without it the FW stays in the bootloader and even a driver
-        // rmmod/modprobe cycle won't recover it (a physical power-cycle is needed).
-        // Matches d400_mipi_device::update_signed_firmware() post-write pattern,
-        // sent directly via hw_monitor instead of ds_device_common::hardware_reset()
-        // to skip the simulate_device_reconnect side-effect — for D5xx GMSL the
-        // device does not come back on its own, so a fake reconnect callback would
-        // just create a phantom device notification.
-        //
-        // Gated off: the current D5xx GMSL proto hardware does not have the HW-reset
-        // path enabled, so sending HWRST is a no-op at best and can hang the bus at
-        // worst. Flip to true once the shipping HW wires it up.
-        constexpr bool HWRST_ENABLED_ON_D5XX_PROTO = false;
-        if( HWRST_ENABLED_ON_D5XX_PROTO && _hw_monitor )
-        {
-            command reset_cmd( ds::fw_cmd::HWRST );
-            reset_cmd.require_response = false;
-            try
-            {
-                _hw_monitor->send( reset_cmd );
-            }
-            catch( const std::exception & e )
-            {
-                // Device resets before ACKing; require_response is false so the send-side
-                // exception is expected.
-                LOG_DEBUG( "HWRST after DFU did not complete (expected during reset): " << e.what() );
-            }
-        }
+        // Restart the device to reconstruct with the new version information
+        // simulate_device_reconnect takes 5 seconds to fake the reconnect cycle
+        hardware_reset();
+        std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
+    }
+
+    void d500_mipi_device::hardware_reset() const
+    {
+        _device_common->hardware_reset( std::chrono::seconds( 5 ) );
     }
 }
