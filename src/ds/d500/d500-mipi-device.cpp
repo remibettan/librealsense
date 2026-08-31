@@ -2,21 +2,19 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #include "d500-mipi-device.h"
-#include "ds/ds-private.h"
-#include "hw-monitor.h"
-#include "types.h"
+#include "ds/ds-device-common.h"
 
-#include <stdexcept>
+#include <chrono>
+#include <thread>
 
 namespace librealsense
 {
     d500_mipi_device::d500_mipi_device( const std::string & dfu_device_path,
                                         std::shared_ptr< ds_device_common > device_common,
-                                        std::shared_ptr< hw_monitor > hw_monitor,
                                         std::shared_ptr< polling_error_handler > error_poller )
         : _dfu_device_path( dfu_device_path )
+        , _device_common( device_common )
         , _mipi( std::move( device_common ), std::move( error_poller ) )
-        , _hw_monitor( std::move( hw_monitor ) )
     {
     }
 
@@ -26,27 +24,18 @@ namespace librealsense
         // D5xx GMSL DFU wall-clock is ~30 min end-to-end (D400 default of 120 s does not fit).
         _mipi.perform_dfu_write( _dfu_device_path, fw_image,
                                  static_cast< std::size_t >( fw_image_size ),
-                                 update_progress_callback, 1800 );
+                                 update_progress_callback, 1800,
+                                 [this]() {
+                                     // Restart the device to reconstruct with the new version
+                                     // information. Keep DFU polling paused until the fake
+                                     // reconnect delay has elapsed.
+                                     hardware_reset();
+                                     std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
+                                 } );
+    }
 
-        // Send HWRST directly, without ds_device_common::hardware_reset(): on the
-        // current HKR proto the device comes back in DFU/recovery mode after HWRST,
-        // not operational, so simulate_device_reconnect() would feed the SDK a fake
-        // add-event for a device that isn't really back and crash the enumerator.
-        // Once the FW boots operational after HWRST, switch this back to
-        // _ds_device_common->hardware_reset() to match d400_mipi_device.
-        if( _hw_monitor )
-        {
-            command reset_cmd( ds::fw_cmd::HWRST );
-            reset_cmd.require_response = false;
-            try
-            {
-                _hw_monitor->send( reset_cmd );
-            }
-            catch( const std::exception & e )
-            {
-                // Device resets before ACKing; require_response is false so this is expected.
-                LOG_DEBUG( "HWRST after DFU did not complete (expected during reset): " << e.what() );
-            }
-        }
+    void d500_mipi_device::hardware_reset() const
+    {
+        _device_common->hardware_reset( std::chrono::seconds( 5 ) );
     }
 }

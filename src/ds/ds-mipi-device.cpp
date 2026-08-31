@@ -27,7 +27,8 @@ namespace librealsense
     void ds_mipi_device::perform_dfu_write( const std::string & dfu_path,
                                             const void * fw_image, std::size_t fw_image_size,
                                             rs2_update_progress_callback_sptr progress_callback,
-                                            int estimated_seconds ) const
+                                            int estimated_seconds,
+                                            std::function< void() > before_polling_resume ) const
     {
         options_watcher_pause_guard guard( *_device_common );
 
@@ -36,10 +37,12 @@ namespace librealsense
         struct poller_gate {
             polling_error_handler * p;
             unsigned interval;
-            ~poller_gate() { if( p ) p->start( interval ); }
+            bool was_active;
+            ~poller_gate() { if( p && was_active ) p->start( interval ); }
         };
         poller_gate _pg{ _error_poller.get(),
-                         _error_poller ? _error_poller->get_polling_interval() : 0 };
+                         _error_poller ? _error_poller->get_polling_interval() : 0,
+                         _error_poller && _error_poller->is_active() };
         if( _error_poller ) _error_poller->stop();
 
         std::ofstream fw_path_in_device( dfu_path.c_str(), std::ios::binary );
@@ -76,8 +79,19 @@ namespace librealsense
         fw_path_in_device.close();
         if( ! fw_path_in_device )
             throw std::runtime_error( "Firmware Update failed - DFU chardev flush/close error: " + dfu_path );
+
+        // Stop progress before reporting 100%; otherwise the heartbeat can race
+        // and publish a lower percentage while reset/reconnect is in progress.
+        done = true;
+        if( heartbeat.joinable() )
+            heartbeat.join();
         if( progress_callback )
             progress_callback->on_update_progress( 1.0f );
         LOG_INFO( "MIPI DFU write complete for " << dfu_path );
+
+        // Keep both options watchers and the error poller paused over the reset
+        // window. The D585 disappears from I2C while HKR and GMSL restart.
+        if( before_polling_resume )
+            before_polling_resume();
     }
 }

@@ -519,15 +519,8 @@ try
                     return result;
             }
 
-            // On operational D5xx GMSL the HKR stays in bootloader after DFU/HWRST and
-            // the driver has to be reloaded before the camera comes back — skip the
-            // reconnect wait (it would time out) and print the manual-reload hint.
-            if (rs2::fw_update::is_mipi_d5xx_device(d))
-            {
-                std::cout << std::endl << rs2::fw_update::mipi_recovery_message << std::endl;
-                std::cout << "or reboot the system" << std::endl;
-                return EXIT_SUCCESS;
-            }
+            // Operational D5xx GMSL now recovers through hardware_reset(); fall
+            // through so the SDK context processes its fake device-change events.
         }
     }
 

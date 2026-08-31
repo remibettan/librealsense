@@ -6,6 +6,7 @@
 #include <librealsense2/hpp/rs_types.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -32,7 +33,8 @@ namespace librealsense
         void perform_dfu_write( const std::string & dfu_path,
                                 const void * fw_image, std::size_t fw_image_size,
                                 rs2_update_progress_callback_sptr progress_callback = nullptr,
-                                int estimated_seconds = 120 ) const;
+                                int estimated_seconds = 120,
+                                std::function< void() > before_polling_resume = {} ) const;
 
     private:
         std::shared_ptr< ds_device_common > _device_common;
