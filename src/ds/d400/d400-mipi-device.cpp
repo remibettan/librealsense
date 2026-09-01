@@ -29,8 +29,8 @@ namespace librealsense
         rs2_camera_info _dfu_port_info = (is_mipi_recovery)?
                     (RS2_CAMERA_INFO_PHYSICAL_PORT):(RS2_CAMERA_INFO_DFU_DEVICE_PATH);
 
-        // Delegate the chunked DFU chardev write + options-watcher pause to the shared
-        // helper (src/ds/ds-mipi-device.cpp); D500 MIPI uses the same code path.
+        // Delegate the DFU chardev write + options-watcher pause to the shared
+        // helper at src/ds/ds-mipi-device.cpp.
         std::string dfu_path = get_info(_dfu_port_info);
         ds_mipi_device( _ds_device_common ).perform_dfu_write(
             dfu_path, image.data(), image.size(), callback );

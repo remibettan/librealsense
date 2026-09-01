@@ -34,12 +34,24 @@ namespace librealsense
         _mipi.perform_dfu_write( _dfu_device_path, fw_image,
                                  static_cast< std::size_t >( fw_image_size ),
                                  update_progress_callback, estimated_seconds,
-                                 [this]() {
-                                     // Restart the device to reconstruct with the new version
-                                     // information. Keep DFU polling paused until the fake
-                                     // reconnect delay has elapsed.
+                                 [this, update_progress_callback]() {
+                                     // Wait for the FW's own dfuMANIFEST_WAIT_RESET → dfuIDLE
+                                     // reset to complete before we send our HWRST. On the HKR
+                                     // proto, an HWRST arriving mid-manifest-reset is interpreted
+                                     // as a recovery-mode request and leaves the device in
+                                     // DFU/recovery instead of booting the new operational image.
+                                     std::this_thread::sleep_for( std::chrono::seconds( 10 ) );
+                                     // Now the FW is on the new operational image — a normal
+                                     // hardware_reset kicks off simulate_device_reconnect so the
+                                     // SDK re-enumerates the device transparently.
                                      hardware_reset();
                                      std::this_thread::sleep_for( std::chrono::seconds( 5 ) );
+                                     // Terminal 100% only after the post-DFU reset is done, so
+                                     // the viewer's DFU dialog transitions to the OK state at
+                                     // the moment the device is really back — not the moment
+                                     // the DFU chardev closed.
+                                     if( update_progress_callback )
+                                         update_progress_callback->on_update_progress( 1.f );
                                  } );
     }
 

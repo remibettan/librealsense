@@ -80,13 +80,14 @@ namespace librealsense
         if( ! fw_path_in_device )
             throw std::runtime_error( "Firmware Update failed - DFU chardev flush/close error: " + dfu_path );
 
-        // Stop progress before reporting 100%; otherwise the heartbeat can race
-        // and publish a lower percentage while reset/reconnect is in progress.
+        // Stop the heartbeat here. The terminal on_update_progress(1.0f) is the
+        // caller's responsibility — it must fire only after the caller's own
+        // post-write recovery (HW reset, GMSL relink) has completed, so the
+        // viewer's DFU dialog reports 100% at the moment the device is truly
+        // back, not the moment the DFU chardev closes.
         done = true;
         if( heartbeat.joinable() )
             heartbeat.join();
-        if( progress_callback )
-            progress_callback->on_update_progress( 1.0f );
         LOG_INFO( "MIPI DFU write complete for " << dfu_path );
 
         // Keep both options watchers and the error poller paused over the reset
