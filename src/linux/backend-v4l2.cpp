@@ -815,25 +815,49 @@ namespace librealsense
             return dfu_paths;
         }
 
+        // Resolve the sysfs realpath of a DFU chardev's owning i2c client, via
+        // /sys/class/d4xx-class/<devname>/device — the driver-registered symlink.
+        // Returns "" if the symlink is missing (older driver without d4xx-class).
+        static std::string mipi_dfu_devname_i2c_client_realpath(const std::string& dfu_devname)
+        {
+            std::string link = "/sys/class/d4xx-class/" + dfu_devname + "/device";
+            char real[PATH_MAX] = {0};
+            if (realpath(link.c_str(), real) == nullptr)
+                return {};
+            return std::string(real);
+        }
+
+        // Resolve the sysfs realpath of a video node's owning i2c client, via
+        // /sys/class/video4linux/<devname>/device. Returns "" on failure.
+        static std::string mipi_video_path_i2c_client_realpath(const std::string& video_path)
+        {
+            auto slash = video_path.find_last_of('/');
+            if (slash == std::string::npos) return {};
+            std::string devname = video_path.substr(slash + 1);
+            std::string link = "/sys/class/video4linux/" + devname + "/device";
+            char real[PATH_MAX] = {0};
+            if (realpath(link.c_str(), real) == nullptr)
+                return {};
+            return std::string(real);
+        }
+
         // Read the DT `compatible` of the parent I2C client for a d4xx DFU chardev.
-        // Resolves via /sys/class/d4xx-class/<devname>/device — the driver-registered
-        // symlink to the owning i2c client — which works for both chardev naming
-        // schemes present in-tree (`d4xx-dfu-<adapter>-<addr>` and the shorter
-        // `d4xx-dfu-<index>` from rs_enum_dfu_node_path()). Returns true when any
-        // entry of the compatible list equals "realsense,d5xx". DT `compatible`
-        // is a concatenation of NUL-terminated strings, so we walk tokens rather
-        // than substring-search (avoids matching a hypothetical "realsense,d5xxfoo").
+        // Works for both chardev naming schemes present in-tree
+        // (`d4xx-dfu-<adapter>-<addr>` and the shorter `d4xx-dfu-<index>` from
+        // rs_enum_dfu_node_path()). Returns true when any entry of the compatible
+        // list equals "realsense,d5xx". DT `compatible` is a concatenation of
+        // NUL-terminated strings, so we walk tokens rather than substring-search
+        // (avoids matching a hypothetical "realsense,d5xxfoo").
         static bool mipi_dfu_devname_is_d5xx(const std::string& dfu_devname)
         {
-            std::string parent_link = "/sys/class/d4xx-class/" + dfu_devname + "/device";
-            char parent_real[PATH_MAX] = {0};
-            if (realpath(parent_link.c_str(), parent_real) == nullptr)
+            std::string parent_real = mipi_dfu_devname_i2c_client_realpath(dfu_devname);
+            if (parent_real.empty())
             {
-                LOG_DEBUG("MIPI DFU family detection: cannot resolve " << parent_link
-                          << ", defaulting to D4xx");
+                LOG_DEBUG("MIPI DFU family detection: cannot resolve /sys/class/d4xx-class/"
+                          << dfu_devname << "/device, defaulting to D4xx");
                 return false;
             }
-            std::string compat_path = std::string(parent_real) + "/of_node/compatible";
+            std::string compat_path = parent_real + "/of_node/compatible";
             std::ifstream compat_in(compat_path, std::ios::binary);
             if (!compat_in)
             {
@@ -1033,16 +1057,22 @@ namespace librealsense
             // Note - jetson can use only bus_info, as card is different for each sensor and metadata node.
             info.unique_id = bus_info + "-" + std::to_string(cam_id);
 
-            // Get DFU node for MIPI camera
+            // Get DFU node for MIPI camera. Match by owning i2c client via sysfs
+            // so a multi-camera rig picks the correct DFU chardev per camera;
+            // fall back to the first-opened chardev when sysfs resolution fails
+            // (older driver without /sys/class/d4xx-class).
+            std::string video_i2c = mipi_video_path_i2c_client_realpath(video_path);
             for (const auto& dfu_device_path : get_mipi_dfu_paths())
             {
+                std::string dfu_i2c = mipi_dfu_devname_i2c_client_realpath(dfu_device_path);
+                if (! video_i2c.empty() && ! dfu_i2c.empty() && video_i2c != dfu_i2c)
+                    continue;
                 auto mipi_dfu_chardev = "/dev/" + dfu_device_path;
                 int vfd = open(mipi_dfu_chardev.c_str(), O_RDONLY | O_NONBLOCK);
                 if (vfd >= 0)
                 {
-                    // Use legacy DFU device node used in firmware_update_manager
                     info.dfu_device_path = mipi_dfu_chardev;
-                    ::close(vfd); // file exists, close file and continue to assign it
+                    ::close(vfd);
                     break;
                 }
             }
