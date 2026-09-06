@@ -72,9 +72,7 @@ namespace librealsense
         register_color_extrinsics();
         register_color_metadata();
         register_ae_policy_option();
-#if defined(_WIN32)
         register_color_options();
-#endif
     }
 
     void d500_dual_color::register_ae_policy_option()
@@ -96,11 +94,13 @@ namespace librealsense
                                                                                           false ) ); // Not settable while streaming
     }
 
-#if defined(_WIN32)
     void d500_dual_color::register_color_options()
     {
-        // The dual-color UVC function contains Depth and RGB processing units. Windows' aggregate
-        // IAMVideoProcAmp binds to the first (Depth) PU, so RGB controls must address its topology node directly.
+        // The dual-color UVC function contains Depth and RGB processing units. Backends that
+        // expose an aggregate Processing Unit (e.g. Windows Media Foundation) bind to the first
+        // PU in the topology (Depth 0x02), so RGB controls have to address the RGB PU node directly.
+        // Backends whose per-PU routing is implicit (e.g. V4L2, one FD per video node) use the same
+        // triple through the default forwarding overloads on uvc_device.
         static const platform::processing_unit rgb_pu = { 0, 0x07, 6 };
 
         auto & color_ep = get_depth_sensor();
@@ -138,7 +138,6 @@ namespace librealsense
             RS2_OPTION_WHITE_BALANCE,
             std::make_shared<auto_disabling_control>(white_balance, auto_white_balance));
     }
-#endif
 
     void d500_dual_color::register_color_metadata()
     {
