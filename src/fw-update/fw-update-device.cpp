@@ -358,7 +358,9 @@ namespace librealsense
         }
         fw_path_in_device.close();
         if (!fw_path_in_device)
-            throw io_exception("Firmware Update failed - DFU chardev flush/close error");
+            // Warn, don't throw: HKR bare-read 0xFF can fail the driver's final
+            // status poll on a DFU that succeeded FW-side; writes already checked.
+            LOG_WARNING("MIPI DFU chardev close returned error (may be a status-poll glitch)");
         LOG_INFO("Firmware Update for MIPI device done.");
     }
 

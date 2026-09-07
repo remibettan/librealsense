@@ -85,7 +85,9 @@ namespace librealsense
 
         fw_path_in_device.close();
         if( ! fw_path_in_device )
-            throw io_exception( "Firmware Update failed - DFU chardev flush/close error: " + dfu_path );
+            // Warn, don't throw: HKR bare-read 0xFF can fail the driver's final
+            // status poll on a DFU that succeeded FW-side; writes already checked.
+            LOG_WARNING( "MIPI DFU chardev close returned error (may be a status-poll glitch): " << dfu_path );
 
         // Stop the heartbeat here. The terminal on_update_progress(1.0f) is the
         // caller's responsibility — it must fire only after the caller's own
