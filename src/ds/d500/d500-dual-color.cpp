@@ -36,18 +36,19 @@ namespace librealsense
         auto & depth_sensor = get_depth_sensor();
         auto raw_depth_sensor = get_raw_depth_sensor();
 
-        // The color pins publish the RGB image in several encodings at once: NV12 (current firmware) and/or
-        // legacy M420, plus YUY2. Map all three so their raw profiles survive enumeration.
+        // Map the color pins' image and calibration encodings so their raw profiles survive enumeration.
         auto & raw_fourcc_to_rs2_format_map = raw_depth_sensor->get_fourcc_to_rs2_format_map();
         raw_fourcc_to_rs2_format_map->insert( { rs_fourcc( 'M', '4', '2', '0' ), RS2_FORMAT_M420 } );
         raw_fourcc_to_rs2_format_map->insert( { rs_fourcc( 'N', 'V', '1', '2' ), RS2_FORMAT_NV12 } );
         raw_fourcc_to_rs2_format_map->insert( { rs_fourcc( 'Y', 'U', 'Y', '2' ), RS2_FORMAT_YUYV } );
         raw_fourcc_to_rs2_format_map->insert( { rs_fourcc( 'Y', 'U', 'Y', 'V' ), RS2_FORMAT_YUYV } );
+        raw_fourcc_to_rs2_format_map->insert( { rs_fourcc( 'B', 'A', '1', '0' ), RS2_FORMAT_RAW16 } );
         auto & raw_fourcc_to_rs2_stream_map = raw_depth_sensor->get_fourcc_to_rs2_stream_map();
         raw_fourcc_to_rs2_stream_map->insert( { rs_fourcc( 'M', '4', '2', '0' ), RS2_STREAM_INFRARED } );
         raw_fourcc_to_rs2_stream_map->insert( { rs_fourcc( 'N', 'V', '1', '2' ), RS2_STREAM_INFRARED } );
         raw_fourcc_to_rs2_stream_map->insert( { rs_fourcc( 'Y', 'U', 'Y', '2' ), RS2_STREAM_INFRARED } );
         raw_fourcc_to_rs2_stream_map->insert( { rs_fourcc( 'Y', 'U', 'Y', 'V' ), RS2_STREAM_INFRARED } );
+        raw_fourcc_to_rs2_stream_map->insert( { rs_fourcc( 'B', 'A', '1', '0' ), RS2_STREAM_INFRARED } );
 
         raw_depth_sensor->set_stream_id_resolver( resolve_color_stream );
 
@@ -63,8 +64,8 @@ namespace librealsense
                                                       [target]() { return std::make_shared< m420_converter >( target ); } );
         }
 
-        // Expose each raw encoding (NV12, M420, YUY2) as a passthrough color profile so it can be streamed as-is.
-        for( auto native : { RS2_FORMAT_NV12, RS2_FORMAT_M420, RS2_FORMAT_YUYV } )
+        // Expose native image and calibration encodings as passthrough color profiles.
+        for( auto native : { RS2_FORMAT_NV12, RS2_FORMAT_M420, RS2_FORMAT_YUYV, RS2_FORMAT_RAW16 } )
             depth_sensor.register_processing_block( { { native, RS2_STREAM_COLOR } },
                                                       { { native, RS2_STREAM_COLOR, 1 }, { native, RS2_STREAM_COLOR, 2 } },
                                                       []() { return std::make_shared< identity_processing_block >(); } );
@@ -326,7 +327,8 @@ namespace librealsense
                                               const platform::stream_profile & p, rs2_stream & type, int & index )
     {
         if( p.format != rs_fourcc( 'M', '4', '2', '0' ) && p.format != rs_fourcc( 'N', 'V', '1', '2' )
-            && p.format != rs_fourcc( 'Y', 'U', 'Y', '2' ) && p.format != rs_fourcc( 'Y', 'U', 'Y', 'V' ) )
+            && p.format != rs_fourcc( 'Y', 'U', 'Y', '2' ) && p.format != rs_fourcc( 'Y', 'U', 'Y', 'V' )
+            && p.format != rs_fourcc( 'B', 'A', '1', '0' ) )
             return;
 
         if( ! is_color_pin( all, p.pin_index ) )
