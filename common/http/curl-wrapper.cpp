@@ -125,8 +125,13 @@ namespace rs2
             CURL * curl = static_cast< CURL * >( _curl );
 
             curl_slist * headers = curl_slist_append( nullptr, "Content-Type: application/json" );
-            if( ! extra_header.empty() )
-                headers = curl_slist_append( headers, extra_header.c_str() );
+            if( headers && ! extra_header.empty() )
+            {
+                curl_slist * with_extra = curl_slist_append( headers, extra_header.c_str() );
+                if( ! with_extra )
+                    curl_slist_free_all( headers );  // append failed without taking ownership
+                headers = with_extra;
+            }
             if( ! headers )
             {
                 LOG_ERROR( "Failed to allocate curl headers" );

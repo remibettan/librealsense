@@ -46,6 +46,7 @@ void rum_uploader::start() {}
 void rum_uploader::upload_async( std::string, std::function< void( bool ) > ) {}
 rum_uploader::~rum_uploader() {}
 void rum_uploader::upload_data( ux_window & ) {}
+void rum_uploader::draw_consent_popup( ux_window & ) {}
 void rum_uploader::join_pending_stops( std::shared_ptr< std::vector< std::unique_ptr< device_model > > > ) {}
 
 #else  // ENABLE_STATS
@@ -101,7 +102,8 @@ static std::string sha256_hex( std::string const & data )
                                           digest, (ULONG)sizeof( digest ) ) );
 #else
     unsigned int digest_size = 0;
-    bool ok = ( EVP_Digest( data.data(), data.size(), digest, &digest_size, EVP_sha256(), nullptr ) == 1 );
+    EVP_MD const * md = EVP_sha256();
+    bool ok = md && ( EVP_Digest( data.data(), data.size(), digest, &digest_size, md, nullptr ) == 1 );
 #endif
     if( ! ok )
     {
@@ -206,7 +208,7 @@ rum_uploader::~rum_uploader()
 }
 
 
-static void draw_consent_popup( rum_uploader & uploader, ux_window & window )
+void rum_uploader::draw_consent_popup( ux_window & window )
 {
     auto const & style = ImGui::GetStyle();
     ImGui::SetNextWindowSize( { 460.f, 0.f } );
@@ -223,15 +225,14 @@ static void draw_consent_popup( rum_uploader & uploader, ux_window & window )
                         "This is entirely voluntary and does not include images, video, or personally "
                         "identifying details." );
     ImGui::Spacing();
-    static bool consented = false;
     // The default frame color equals the popup background, which would leave the box invisible.
     ImGui::PushStyleColor( ImGuiCol_FrameBg, button_color );
-    ImGui::Checkbox( "##rum_consent", &consented );
+    ImGui::Checkbox( "##rum_consent", &_consented );
     ImGui::PopStyleColor();
     ImGui::SameLine( 0.f, style.ItemInnerSpacing.x );
     ImGui::TextWrapped( "I consent to the collection and processing of information as described in the Privacy Policy." );
     if( ImGui::IsItemClicked() )
-        consented = ! consented;  // clicking the text toggles the box too
+        _consented = ! _consented;  // clicking the text toggles the box too
     ImGui::Spacing();
     ImGui::TextWrapped( "You can change this any time in Settings > Online Services." );
     ImGui::Spacing();
@@ -240,9 +241,9 @@ static void draw_consent_popup( rum_uploader & uploader, ux_window & window )
     if( ImGui::Button( "OK", ImVec2( 110, 26 ) ) )
     {
         // save now: the upload thread reads consent from disk
-        config_file::instance().set_and_save( configurations::stats::rum_cloud_enabled, consented );
-        if( consented )
-            uploader.start();
+        config_file::instance().set_and_save( configurations::stats::rum_cloud_enabled, _consented );
+        if( _consented )
+            start();
         ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();
@@ -270,7 +271,7 @@ void rum_uploader::upload_data( ux_window & window )
             start();  // background-upload the previous session's saved report
         startup_done = true;
     }
-    draw_consent_popup( *this, window );
+    draw_consent_popup( window );
 }
 
 
