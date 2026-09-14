@@ -14,6 +14,7 @@
 #include <sstream>
 #include <fstream>
 #include <regex>
+#include <map>
 
 namespace librealsense
 {
@@ -79,6 +80,50 @@ namespace librealsense
                 if( ! ( std::ifstream( "/sys/class/video4linux/" + name + "/device/bInterfaceNumber" ) >> std::hex >> mi ) )
                     throw linux_backend_exception( "Failed to read interface number" );
                 return mi;
+            }
+
+            std::vector< uint8_t > read_streaming_interfaces_in_terminal_order( const std::string & video_path,
+                                                                               uint16_t vc_interface )
+            {
+                // The raw configuration descriptor lives in the USB device directory, 3 levels above the node
+                // (/sys/devices/.../M-N/M-N:1.0/video4linux/videoX)
+                std::ifstream file( video_path + "/../../../descriptors", std::ios::binary );
+                std::vector< uint8_t > cfg( ( std::istreambuf_iterator< char >( file ) ), std::istreambuf_iterator< char >() );
+
+                const uint8_t CS_INTERFACE = 0x24, VIDEO_CONTROL = 1, VIDEO_STREAMING = 2;
+                const uint8_t VC_OUTPUT_TERMINAL = 0x03, VS_INPUT_HEADER = 0x01;
+
+                std::vector< uint8_t > terminals;  // output terminals of vc_interface, in /dev/videoN order
+                std::map< uint8_t, uint8_t > streaming_of_terminal;
+                uint8_t interface = 0;
+                bool is_control = false, is_streaming = false;
+                for( size_t o = 0; o + 2 <= cfg.size() && cfg[o] >= 2 && o + cfg[o] <= cfg.size(); o += cfg[o] )
+                {
+                    if( cfg[o] < 9 )
+                        continue;
+                    if( cfg[o + 1] == USB_DT_INTERFACE )
+                    {
+                        interface = cfg[o + 2];
+                        is_control = ( cfg[o + 5] == RS2_USB_CLASS_VIDEO && cfg[o + 6] == VIDEO_CONTROL );
+                        is_streaming = ( cfg[o + 5] == RS2_USB_CLASS_VIDEO && cfg[o + 6] == VIDEO_STREAMING );
+                    }
+                    else if( cfg[o + 1] == CS_INTERFACE )
+                    {
+                        if( is_control && interface == vc_interface && cfg[o + 2] == VC_OUTPUT_TERMINAL )
+                            terminals.push_back( cfg[o + 3] );              // bTerminalID
+                        else if( is_streaming && cfg[o + 2] == VS_INPUT_HEADER )
+                            streaming_of_terminal[cfg[o + 8]] = interface;  // bTerminalLink
+                    }
+                }
+
+                std::vector< uint8_t > streaming_interfaces;
+                for( auto terminal : terminals )
+                {
+                    auto it = streaming_of_terminal.find( terminal );
+                    if( it != streaming_of_terminal.end() )
+                        streaming_interfaces.push_back( it->second );
+                }
+                return streaming_interfaces;
             }
 
             usb_spec get_usb_connection_type( std::string path )
