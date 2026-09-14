@@ -1258,6 +1258,8 @@ namespace librealsense
                     nodes[indices.front()].first.device_path, function.first.second);
                 if (interfaces.size() != indices.size())
                     continue;  // descriptor unreadable, or terminals with no node of their own - keep /dev/videoN order
+                if (std::is_sorted(interfaces.begin(), interfaces.end()))
+                    continue;  // terminals listed in interface order, as nearly every firmware does
 
                 std::vector<std::pair<uint8_t, node_info>> group;
                 for (size_t i = 0; i < indices.size(); ++i)
@@ -1265,8 +1267,14 @@ namespace librealsense
                 std::stable_sort(group.begin(), group.end(),
                                  [](const std::pair<uint8_t, node_info>& a, const std::pair<uint8_t, node_info>& b)
                                  { return a.first < b.first; });
+
+                std::ostringstream reordered;
                 for (size_t i = 0; i < indices.size(); ++i)
+                {
                     nodes[indices[i]] = group[i].second;
+                    reordered << " " << nodes[indices[i]].second;
+                }
+                LOG_DEBUG("Nodes of mi " << function.first.second << " reordered by streaming interface:" << reordered.str());
             }
         }
 

@@ -112,7 +112,11 @@ namespace librealsense
                         if( is_control && interface == vc_interface && cfg[o + 2] == VC_OUTPUT_TERMINAL )
                             terminals.push_back( cfg[o + 3] );              // bTerminalID
                         else if( is_streaming && cfg[o + 2] == VS_INPUT_HEADER )
+                        {
+                            if( streaming_of_terminal.count( cfg[o + 8] ) )
+                                return {};  // two interfaces claim one terminal - the descriptor is ambiguous
                             streaming_of_terminal[cfg[o + 8]] = interface;  // bTerminalLink
+                        }
                     }
                 }
 
