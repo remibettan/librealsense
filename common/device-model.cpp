@@ -3247,7 +3247,10 @@ namespace rs2
                             && ( ef_type == RS2_EMBEDDED_FILTER_TYPE_DECIMATION
                               || ef_type == RS2_EMBEDDED_FILTER_TYPE_TEMPORAL )
                             && is_perception_streaming();
-                        disable_guard dg( !pb_available || block_enable_while_perception );
+                        // Decimation is FW-side read-only while depth streams - lock both directions.
+                        const bool block_decimation_while_depth_streams = sub->streaming
+                            && ef_type == RS2_EMBEDDED_FILTER_TYPE_DECIMATION;
+                        disable_guard dg( !pb_available || block_enable_while_perception || block_decimation_while_depth_streams );
                         try
                         {
                             ImGui::PushFont(window.get_font());
@@ -3317,6 +3320,8 @@ namespace rs2
                                 RsImGui::CustomTooltip( "%s", pb->unavailable_tooltip.c_str() );
                             else if( block_enable_while_perception && ImGui::IsItemHovered( ImGuiHoveredFlags_AllowWhenDisabled ) )
                                 RsImGui::CustomTooltip( "Stop the perception stream before enabling this filter (cannot run together)" );
+                            else if( block_decimation_while_depth_streams && ImGui::IsItemHovered( ImGuiHoveredFlags_AllowWhenDisabled ) )
+                                RsImGui::CustomTooltip( "Stop streaming before toggling this filter (read-only while active)" );
 
                             ImGui::PopStyleColor(5);
                             ImGui::PopFont();
