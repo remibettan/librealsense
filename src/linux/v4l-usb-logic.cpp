@@ -85,10 +85,16 @@ namespace librealsense
             std::vector< uint8_t > read_streaming_interfaces_in_terminal_order( const std::string & video_path,
                                                                                uint16_t vc_interface )
             {
-                // The raw configuration descriptor lives in the USB device directory, 3 levels above the node
-                // (/sys/devices/.../M-N/M-N:1.0/video4linux/videoX)
-                std::ifstream file( video_path + "/../../../descriptors", std::ios::binary );
-                std::vector< uint8_t > cfg( ( std::istreambuf_iterator< char >( file ) ), std::istreambuf_iterator< char >() );
+                // The raw configuration descriptor lives in the USB device directory, a few levels above the node
+                // (/sys/devices/.../M-N/M-N:1.0/video4linux/videoX). Walk up to the nearest ancestor holding one -
+                // a hub's, should the device itself have none, carries no video interface and is rejected below.
+                std::vector< uint8_t > cfg;
+                std::string path = video_path + "/";
+                for( auto i = 0U; i < MAX_DEV_PARENT_DIR && cfg.empty(); ++i, path += "../" )
+                {
+                    std::ifstream file( path + "descriptors", std::ios::binary );
+                    cfg.assign( std::istreambuf_iterator< char >( file ), std::istreambuf_iterator< char >() );
+                }
 
                 const uint8_t CS_INTERFACE = 0x24, VIDEO_CONTROL = 1, VIDEO_STREAMING = 2;
                 const uint8_t VC_OUTPUT_TERMINAL = 0x03, VS_INPUT_HEADER = 0x01;
