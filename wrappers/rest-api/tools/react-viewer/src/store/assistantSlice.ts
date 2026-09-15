@@ -37,24 +37,6 @@ function persistAssistantConversationId(id: string | null) {
   }
 }
 
-const ASSISTANT_THEME_STORAGE_KEY = 'rsai_theme'
-
-function loadPersistedAssistantTheme(): 'light' | 'dark' {
-  try {
-    return localStorage.getItem(ASSISTANT_THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark'
-  } catch {
-    return 'dark'
-  }
-}
-
-function persistAssistantTheme(theme: 'light' | 'dark') {
-  try {
-    localStorage.setItem(ASSISTANT_THEME_STORAGE_KEY, theme)
-  } catch {
-    // non-fatal — theme just won't survive a reload
-  }
-}
-
 type SetAppState = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void
 type GetAppState = () => AppState
 
@@ -150,7 +132,6 @@ export type AssistantSlice = Pick<AppState,
   | 'isAssistantLoading'
   | 'assistantMessages'
   | 'assistantConversationId'
-  | 'assistantTheme'
   | 'assistantSize'
   | 'toggleAssistant'
   | 'pingAssistantHealth'
@@ -159,7 +140,6 @@ export type AssistantSlice = Pick<AppState,
   | 'stopAssistantMessage'
   | 'sendAssistantReaction'
   | 'clearAssistantChat'
-  | 'toggleAssistantTheme'
   | 'toggleAssistantSize'
 >
 
@@ -169,17 +149,9 @@ export const createAssistantSlice: StateCreator<AppState, [], [], AssistantSlice
   isAssistantLoading: false,
   assistantMessages: [],
   assistantConversationId: loadPersistedAssistantConversationId(),
-  assistantTheme: loadPersistedAssistantTheme(),
   assistantSize: 'compact',
 
   toggleAssistant: () => set((state) => ({ isAssistantOpen: !state.isAssistantOpen })),
-
-  toggleAssistantTheme: () =>
-    set((state) => {
-      const next = state.assistantTheme === 'light' ? 'dark' : 'light'
-      persistAssistantTheme(next)
-      return { assistantTheme: next }
-    }),
 
   toggleAssistantSize: () =>
     set((state) => ({ assistantSize: state.assistantSize === 'wide' ? 'compact' : 'wide' })),

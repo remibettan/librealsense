@@ -24,7 +24,7 @@ export function stripCitationMarkers(content: string, citations?: AssistantCitat
 
 const LINK_CLASSES = 'text-rs-blue hover:underline break-all'
 
-function formatInline(text: string, isLight: boolean): (string | ReactNode)[] {
+function formatInline(text: string): (string | ReactNode)[] {
   const parts: (string | ReactNode)[] = []
   let remaining = text
   let key = 0
@@ -61,7 +61,7 @@ function formatInline(text: string, isLight: boolean): (string | ReactNode)[] {
     if (type === 'bold') {
       parts.push(<strong key={key++} className="font-semibold">{match[1]}</strong>)
     } else if (type === 'code') {
-      parts.push(<code key={key++} className={`px-1 py-0.5 rounded text-xs ${isLight ? 'bg-gray-200' : 'bg-gray-800'}`}>{match[1]}</code>)
+      parts.push(<code key={key++} className="px-1 py-0.5 rounded text-xs bg-gray-800">{match[1]}</code>)
     } else if (type === 'image') {
       parts.push(
         <a key={key++} href={match[2]} target="_blank" rel="noopener noreferrer" className="block mt-2">
@@ -92,7 +92,7 @@ function formatInline(text: string, isLight: boolean): (string | ReactNode)[] {
 }
 
 /** Renders code blocks (```...```) and inline bold/code formatting for a message's content. */
-export function renderMessageContent(content: string, isLight: boolean): ReactNode {
+export function renderMessageContent(content: string): ReactNode {
   const parts = content.split(/(```[\s\S]*?```)/g)
 
   return parts.map((part, i) => {
@@ -101,7 +101,7 @@ export function renderMessageContent(content: string, isLight: boolean): ReactNo
       if (match) {
         const [, lang, code] = match
         return (
-          <pre key={i} className={`mt-2 p-2 rounded text-xs whitespace-pre-wrap break-words ${isLight ? 'bg-gray-100' : 'bg-gray-900'}`}>
+          <pre key={i} className="mt-2 p-2 rounded text-xs whitespace-pre-wrap break-words bg-gray-900">
             <code className={`language-${lang || 'text'}`}>{code.trim()}</code>
           </pre>
         )
@@ -113,7 +113,7 @@ export function renderMessageContent(content: string, isLight: boolean): ReactNo
         {part.split('\n').map((line, j) => (
           <span key={j}>
             {j > 0 && <br />}
-            {formatInline(line, isLight)}
+            {formatInline(line)}
           </span>
         ))}
       </span>

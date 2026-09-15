@@ -13,12 +13,10 @@ export function AssistantButton() {
   const {
     isAssistantOpen,
     isAssistantOnline,
-    assistantTheme,
     toggleAssistant,
     pingAssistantHealth,
     checkChatAvailability,
   } = useAppStore()
-  const isLight = assistantTheme === 'light'
 
   useEffect(() => {
     pingAssistantHealth()
@@ -39,7 +37,7 @@ export function AssistantButton() {
         shadow-lg shadow-black/40
         transition-all duration-200 motion-reduce:transition-none
         hover:-translate-y-0.5
-        ${isLight ? 'bg-white/90 border-gray-200 hover:border-rs-blue/50' : 'bg-rs-dark/90 border-gray-700 hover:border-rs-blue/60'}
+        bg-rs-dark/90 border-gray-700 hover:border-rs-blue/60
         ${isAssistantOpen ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'}
       `}
     >
@@ -49,7 +47,7 @@ export function AssistantButton() {
             into this small circle (which made the icon nearly invisible). */}
         <img src="/realsense-logo.png" alt="" className="w-full h-full object-cover object-left" />
       </span>
-      <span className={`flex items-center gap-2 text-sm font-medium whitespace-nowrap ${isLight ? 'text-gray-800' : 'text-rs-light'}`}>
+      <span className="flex items-center gap-2 text-sm font-medium whitespace-nowrap text-rs-light">
         Ask RealSenseAI
         <span className="relative flex w-2 h-2">
           {isAssistantOnline && (

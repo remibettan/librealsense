@@ -198,7 +198,6 @@ interface AppState {
   isAssistantLoading: boolean
   assistantMessages: AssistantChatMessage[]
   assistantConversationId: string | null
-  assistantTheme: 'light' | 'dark'
   assistantSize: 'compact' | 'wide'
   toggleAssistant: () => void
   pingAssistantHealth: () => Promise<void>
@@ -210,7 +209,6 @@ interface AppState {
   stopAssistantMessage: () => void
   sendAssistantReaction: (value: 1 | -1 | 0) => Promise<void>
   clearAssistantChat: () => void
-  toggleAssistantTheme: () => void
   toggleAssistantSize: () => void
 
   // Error handling

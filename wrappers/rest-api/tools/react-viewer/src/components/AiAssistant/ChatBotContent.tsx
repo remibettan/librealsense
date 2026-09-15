@@ -13,12 +13,7 @@ import { useAppStore } from '../../store'
 import { ChatMessageBubble } from '../ChatBot/ChatMessage'
 import { SettingsPreview } from '../ChatBot/SettingsPreview'
 
-interface ChatBotContentProps {
-  theme: 'light' | 'dark'
-}
-
-export function ChatBotContent({ theme }: ChatBotContentProps) {
-  const isLight = theme === 'light'
+export function ChatBotContent() {
   const { isChatLoading, chatMessages, pendingSettings, sendChatMessage, stopChatMessage } = useAppStore()
 
   const [inputValue, setInputValue] = useState('')
@@ -45,17 +40,17 @@ export function ChatBotContent({ theme }: ChatBotContentProps) {
     <>
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
         {chatMessages.length === 0 ? (
-          <div className={`text-center mt-8 ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
-            <Wrench className={`w-12 h-12 mx-auto mb-3 ${isLight ? 'text-amber-400' : 'text-amber-700'}`} />
+          <div className="text-center mt-8 text-gray-400">
+            <Wrench className="w-12 h-12 mx-auto mb-3 text-amber-700" />
             <p className="text-sm">Hi! I can help you configure your RealSense cameras.</p>
-            <p className={`text-xs mt-2 ${isLight ? 'text-gray-400' : 'text-gray-600'}`}>Try: "Set up for 3D scanning" or "Optimize for robotics"</p>
+            <p className="text-xs mt-2 text-gray-600">Try: "Set up for 3D scanning" or "Optimize for robotics"</p>
           </div>
         ) : (
           chatMessages.map((message) => <ChatMessageBubble key={message.id} message={message} />)
         )}
 
         {isChatLoading && (
-          <div className={`flex items-center gap-2 ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+          <div className="flex items-center gap-2 text-gray-400">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span className="text-sm">Thinking...</span>
           </div>
@@ -66,7 +61,7 @@ export function ChatBotContent({ theme }: ChatBotContentProps) {
 
       {pendingSettings && <SettingsPreview settings={pendingSettings} />}
 
-      <form onSubmit={handleSubmit} className={`p-3 border-t ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-rs-darker border-gray-700'}`}>
+      <form onSubmit={handleSubmit} className="p-3 border-t bg-rs-darker border-gray-700">
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
@@ -75,11 +70,7 @@ export function ChatBotContent({ theme }: ChatBotContentProps) {
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Ask about camera settings..."
             disabled={isChatLoading}
-            className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-amber-500 text-sm ${
-              isLight
-                ? 'bg-gray-100 border-gray-300 text-gray-900 placeholder-gray-400'
-                : 'bg-gray-800 border-gray-600 text-white placeholder-gray-500'
-            }`}
+            className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-amber-500 text-sm bg-gray-800 border-gray-600 text-white placeholder-gray-500"
           />
           <button
             type="submit"
@@ -96,9 +87,7 @@ export function ChatBotContent({ theme }: ChatBotContentProps) {
             onClick={stopChatMessage}
             disabled={!isChatLoading}
             title="Stop generating"
-            className={`p-1.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-              isLight ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-200' : 'text-gray-400 hover:text-white hover:bg-gray-700'
-            }`}
+            className="p-1.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-gray-400 hover:text-white hover:bg-gray-700"
           >
             <Square className="w-4 h-4" />
           </button>

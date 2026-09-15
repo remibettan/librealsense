@@ -6,7 +6,7 @@ import { Send, PlusCircle, Loader2, Sparkles, Paperclip, Square, X, FileText, Wr
 import { useAppStore } from '../../store'
 import { getActiveProviderName } from '../../api/chat'
 import { AssistantMessageBubble } from './AssistantMessage'
-import { ExpandIcon, CollapseIcon, SunIcon, MoonIcon, CloseIcon } from './icons'
+import { ExpandIcon, CollapseIcon, CloseIcon } from './icons'
 import { usePendingAttachments } from './usePendingAttachments'
 import { ChatBotContent } from './ChatBotContent'
 
@@ -22,20 +22,17 @@ export function AssistantPanel() {
     isAssistantOnline,
     isAssistantLoading,
     assistantMessages,
-    assistantTheme,
     assistantSize,
     sendAssistantMessage,
     stopAssistantMessage,
     clearAssistantChat,
     toggleAssistant,
     setError,
-    toggleAssistantTheme,
     toggleAssistantSize,
     isChatAvailable,
     clearChat,
   } = useAppStore()
 
-  const isLight = assistantTheme === 'light'
   const isWide = assistantSize === 'wide'
 
   const [mode, setMode] = useState<PanelMode>('assistant')
@@ -95,16 +92,12 @@ export function AssistantPanel() {
     sendAssistantMessage(message, attachments)
   }
 
-  const panelBg = isLight ? 'bg-white border-gray-200' : 'bg-rs-dark border-gray-700'
-  const headerBg = isLight ? 'bg-gray-50 border-gray-200' : 'bg-rs-darker border-gray-700'
-  const titleText = isLight ? 'text-gray-900' : 'text-white'
-  const mutedText = isLight ? 'text-gray-500' : 'text-gray-400'
-  const iconBtn = isLight
-    ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
-    : 'text-gray-400 hover:text-white hover:bg-gray-700'
-  const inputClasses = isLight
-    ? 'bg-gray-100 border-gray-300 text-gray-900 placeholder-gray-400'
-    : 'bg-gray-800 border-gray-600 text-white placeholder-gray-500'
+  const panelBg = 'bg-rs-dark border-gray-700'
+  const headerBg = 'bg-rs-darker border-gray-700'
+  const titleText = 'text-white'
+  const mutedText = 'text-gray-400'
+  const iconBtn = 'text-gray-400 hover:text-white hover:bg-gray-700'
+  const inputClasses = 'bg-gray-800 border-gray-600 text-white placeholder-gray-500'
   const panelSize = isWide
     ? 'sm:w-[640px] sm:h-[700px] sm:max-h-[85vh]'
     : 'sm:w-96 sm:h-[600px] sm:max-h-[75vh]'
@@ -180,16 +173,14 @@ export function AssistantPanel() {
             <div
               role="group"
               aria-label="Choose assistant mode"
-              className={`flex items-center rounded-full p-0.5 gap-0.5 ${isLight ? 'bg-gray-200' : 'bg-gray-700'}`}
+              className="flex items-center rounded-full p-0.5 gap-0.5 bg-gray-700"
             >
               <button
                 onClick={() => setMode('assistant')}
                 title="Switch to the RealSense AI Assistant (product Q&A)"
                 aria-pressed={!isChatbotMode}
                 className={`flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                  !isChatbotMode
-                    ? 'bg-rs-blue text-white'
-                    : isLight ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-300' : 'text-gray-400 hover:text-white hover:bg-gray-600'
+                  !isChatbotMode ? 'bg-rs-blue text-white' : 'text-gray-400 hover:text-white hover:bg-gray-600'
                 }`}
               >
                 <Sparkles className="w-3 h-3 shrink-0" />
@@ -200,9 +191,7 @@ export function AssistantPanel() {
                 title="Switch to the device-config Chatbot (camera settings)"
                 aria-pressed={isChatbotMode}
                 className={`flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                  isChatbotMode
-                    ? 'bg-amber-600 text-white'
-                    : isLight ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-300' : 'text-gray-400 hover:text-white hover:bg-gray-600'
+                  isChatbotMode ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-600'
                 }`}
               >
                 <Wrench className="w-3 h-3 shrink-0" />
@@ -213,13 +202,6 @@ export function AssistantPanel() {
             <span />
           )}
           <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={toggleAssistantTheme}
-              className={`p-1.5 rounded transition-colors hidden sm:inline-flex ${iconBtn}`}
-              title={isLight ? 'Switch to dark theme' : 'Switch to light theme'}
-            >
-              {isLight ? <MoonIcon /> : <SunIcon />}
-            </button>
             <button
               onClick={toggleAssistantSize}
               className={`p-1.5 rounded transition-colors hidden sm:inline-flex ${iconBtn}`}
@@ -239,16 +221,16 @@ export function AssistantPanel() {
       </div>
 
       {isChatbotMode ? (
-        <ChatBotContent theme={assistantTheme} />
+        <ChatBotContent />
       ) : (
         <>
       {/* Messages */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
         {assistantMessages.length === 0 ? (
           <div className={`text-center mt-8 ${mutedText}`}>
-            <Sparkles className={`w-12 h-12 mx-auto mb-3 ${isLight ? 'text-gray-300' : 'text-gray-600'}`} />
+            <Sparkles className="w-12 h-12 mx-auto mb-3 text-gray-600" />
             <p className="text-sm">Ask me anything about RealSense products.</p>
-            <p className={`text-xs mt-2 ${isLight ? 'text-gray-400' : 'text-gray-600'}`}>Try: "What's the depth range of the D435i?"</p>
+            <p className="text-xs mt-2 text-gray-600">Try: "What's the depth range of the D435i?"</p>
           </div>
         ) : (
           assistantMessages.map((message, i) => (
@@ -256,7 +238,6 @@ export function AssistantPanel() {
               key={message.id}
               message={message}
               isLatestAssistant={message.role === 'assistant' && i === assistantMessages.length - 1}
-              theme={assistantTheme}
             />
           ))
         )}
@@ -291,7 +272,7 @@ export function AssistantPanel() {
             {pendingFiles.map((file, i) => (
               <div
                 key={i}
-                className={`flex items-center gap-1 pl-2 pr-1 py-1 rounded border text-xs ${isLight ? 'bg-gray-100 border-gray-300 text-gray-700' : 'bg-gray-800 border-gray-600 text-gray-300'}`}
+                className="flex items-center gap-1 pl-2 pr-1 py-1 rounded border text-xs bg-gray-800 border-gray-600 text-gray-300"
               >
                 <FileText className="w-3.5 h-3.5 shrink-0" />
                 <span className="max-w-[120px] truncate">{file.fileName}</span>
