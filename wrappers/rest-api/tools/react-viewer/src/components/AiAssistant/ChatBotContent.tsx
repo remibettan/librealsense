@@ -8,10 +8,11 @@
 // are visually distinguishable at a glance, without having to read the header title.
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, Square, Wrench } from 'lucide-react'
+import { Send, Loader2, Wrench } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { ChatMessageBubble } from '../ChatBot/ChatMessage'
 import { SettingsPreview } from '../ChatBot/SettingsPreview'
+import { StopGeneratingButton } from './StopGeneratingButton'
 
 export function ChatBotContent() {
   const { isChatLoading, chatMessages, pendingSettings, sendChatMessage, stopChatMessage } = useAppStore()
@@ -82,15 +83,7 @@ export function ChatBotContent() {
         </div>
 
         <div className="flex items-center gap-1 mt-2">
-          <button
-            type="button"
-            onClick={stopChatMessage}
-            disabled={!isChatLoading}
-            title="Stop generating"
-            className="p-1.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-gray-400 hover:text-white hover:bg-gray-700"
-          >
-            <Square className="w-4 h-4" />
-          </button>
+          <StopGeneratingButton onClick={stopChatMessage} disabled={!isChatLoading} />
         </div>
       </form>
     </>

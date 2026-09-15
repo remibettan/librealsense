@@ -2,13 +2,14 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, PlusCircle, Loader2, Sparkles, Paperclip, Square, X, FileText, Wrench } from 'lucide-react'
+import { Send, PlusCircle, Loader2, Sparkles, Paperclip, X, FileText, Wrench } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { getActiveProviderName } from '../../api/chat'
 import { AssistantMessageBubble } from './AssistantMessage'
 import { ExpandIcon, CollapseIcon, CloseIcon } from './icons'
 import { usePendingAttachments } from './usePendingAttachments'
 import { ChatBotContent } from './ChatBotContent'
+import { StopGeneratingButton } from './StopGeneratingButton'
 
 type PanelMode = 'assistant' | 'chatbot'
 
@@ -325,15 +326,7 @@ export function AssistantPanel() {
           >
             <Paperclip className="w-4 h-4" />
           </button>
-          <button
-            type="button"
-            onClick={stopAssistantMessage}
-            disabled={!isAssistantLoading}
-            title="Stop generating"
-            className={`p-1.5 rounded transition-colors ${iconBtn} disabled:opacity-30 disabled:cursor-not-allowed`}
-          >
-            <Square className="w-4 h-4" />
-          </button>
+          <StopGeneratingButton onClick={stopAssistantMessage} disabled={!isAssistantLoading} />
         </div>
       </form>
         </>
