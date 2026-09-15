@@ -2,12 +2,11 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, PlusCircle, Loader2, Sparkles, Paperclip, Square, Mic, MicOff, X, FileText, Wrench } from 'lucide-react'
+import { Send, PlusCircle, Loader2, Sparkles, Paperclip, Square, X, FileText, Wrench } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { getActiveProviderName } from '../../api/chat'
 import { AssistantMessageBubble } from './AssistantMessage'
 import { ExpandIcon, CollapseIcon, SunIcon, MoonIcon, CloseIcon } from './icons'
-import { useVoiceInput } from './useVoiceInput'
 import { usePendingAttachments } from './usePendingAttachments'
 import { ChatBotContent } from './ChatBotContent'
 
@@ -52,9 +51,6 @@ export function AssistantPanel() {
 
   const { pendingImages, pendingFiles, handleFileChange, removeImage, removeFile, clear: clearAttachments } =
     usePendingAttachments(setError)
-  const { isListening, micSupported, toggleListening } = useVoiceInput((transcript) =>
-    setInputValue((prev) => (prev ? `${prev} ${transcript}` : transcript))
-  )
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -357,16 +353,6 @@ export function AssistantPanel() {
           >
             <Square className="w-4 h-4" />
           </button>
-          {micSupported && (
-            <button
-              type="button"
-              onClick={toggleListening}
-              title={isListening ? 'Stop voice input' : 'Voice input'}
-              className={`p-1.5 rounded transition-colors ${isListening ? 'text-red-400' : iconBtn}`}
-            >
-              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </button>
-          )}
         </div>
       </form>
         </>
