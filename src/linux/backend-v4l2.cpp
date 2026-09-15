@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <map>
 #include <string>
 #include <sstream>
 #include <fstream>
@@ -1237,6 +1238,46 @@ namespace librealsense
             return uvc_nodes;
         }
 
+        // uvcvideo creates one /dev/videoN per UVC output terminal, numbered in VideoControl descriptor order, so
+        // /dev/videoN order can disagree with VideoStreaming interface order (D585 2C reverses its two color
+        // terminals). Sort by interface - the order Windows enumerates pins in - so a pin index means one endpoint.
+        void v4l_uvc_device::sort_nodes_by_streaming_interface( std::vector<node_info>& nodes )
+        {
+            std::map<std::pair<std::string, uint16_t>, std::vector<size_t>> functions;
+            for (size_t i = 0; i < nodes.size(); ++i)
+                if (!nodes[i].first.is_mipi)  // a MIPI node has no USB descriptor to order by
+                    functions[{ nodes[i].first.unique_id, nodes[i].first.mi }].push_back(i);
+
+            for (auto&& function : functions)
+            {
+                auto& indices = function.second;
+                if (indices.size() < 2)
+                    continue;
+
+                auto interfaces = v4l_usb_logic::read_streaming_interfaces_in_terminal_order(
+                    nodes[indices.front()].first.device_path, function.first.second);
+                if (interfaces.size() != indices.size())
+                    continue;  // descriptor unreadable, or terminals with no node of their own - keep /dev/videoN order
+                if (std::is_sorted(interfaces.begin(), interfaces.end()))
+                    continue;  // terminals listed in interface order, as nearly every firmware does
+
+                std::vector<std::pair<uint8_t, node_info>> group;
+                for (size_t i = 0; i < indices.size(); ++i)
+                    group.emplace_back(interfaces[i], nodes[indices[i]]);
+                std::stable_sort(group.begin(), group.end(),
+                                 [](const std::pair<uint8_t, node_info>& a, const std::pair<uint8_t, node_info>& b)
+                                 { return a.first < b.first; });
+
+                std::ostringstream reordered;
+                for (size_t i = 0; i < indices.size(); ++i)
+                {
+                    nodes[indices[i]] = group[i].second;
+                    reordered << " " << nodes[indices[i]].second;
+                }
+                LOG_DEBUG("Nodes of mi " << function.first.second << " reordered by streaming interface:" << reordered.str());
+            }
+        }
+
         void v4l_uvc_device::foreach_uvc_device( std::function<void(const uvc_device_info&, const std::string&)> action )
         {
             // building vector of /sys/class/video4linux/.../videoX files with path, major, minor
@@ -1251,6 +1292,8 @@ namespace librealsense
 
             // Matching video and metadata nodes
             std::vector<node_info> uvc_devices = match_video_with_metadata_nodes(uvc_nodes);
+
+            sort_nodes_by_streaming_interface(uvc_devices);
 
             try
             {
