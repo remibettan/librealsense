@@ -212,7 +212,7 @@ export const createAssistantSlice: StateCreator<AppState, [], [], AssistantSlice
     currentAssistantAbortController?.abort()
   },
 
-  sendAssistantReaction: async (value: 1 | -1 | 0) => {
+  sendAssistantReaction: async (value: 1 | -1) => {
     const { assistantConversationId } = get()
     if (!assistantConversationId) return false
     try {

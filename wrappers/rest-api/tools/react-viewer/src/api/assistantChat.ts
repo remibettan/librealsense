@@ -16,11 +16,9 @@ export interface AssistantCitation {
   type: 'url_citation'
   label: string
   url: string
+  // Not used yet — kept for a future GET /api/files/{fileId} lookup per API.md.
   fileId?: string | null
-  containerId?: string | null
   textToReplace?: string
-  startIndex?: number
-  endIndex?: number
   quote?: string
 }
 
@@ -51,8 +49,6 @@ export type AssistantStreamEvent =
   | { type: 'error'; message: string }
 
 export class AssistantRateLimitError extends Error {
-  retryAfterSeconds?: number
-
   constructor(retryAfterSeconds?: number) {
     super(
       retryAfterSeconds
@@ -60,7 +56,6 @@ export class AssistantRateLimitError extends Error {
         : 'Rate limited. Please wait a moment before trying again.'
     )
     this.name = 'AssistantRateLimitError'
-    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -152,7 +147,7 @@ export async function* streamChatMessage(
 }
 
 /** Thumbs up/down feedback on the latest answer in a conversation (conversation-scoped, not per-message). */
-export async function sendReaction(conversationId: string, value: 1 | -1 | 0): Promise<void> {
+export async function sendReaction(conversationId: string, value: 1 | -1): Promise<void> {
   const response = await fetch(endpointUrl('reactions'), {
     method: 'POST',
     headers: JSON_HEADERS,
@@ -164,9 +159,9 @@ export async function sendReaction(conversationId: string, value: 1 | -1 | 0): P
 }
 
 /** Cosmetic status check only — never gates the UI (the assistant is anonymous, always-on infra). */
-export async function pingAssistantHealth(signal?: AbortSignal): Promise<boolean> {
+export async function pingAssistantHealth(): Promise<boolean> {
   try {
-    const response = await fetch(endpointUrl('health'), { signal })
+    const response = await fetch(endpointUrl('health'))
     return response.ok
   } catch {
     return false

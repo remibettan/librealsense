@@ -207,7 +207,7 @@ interface AppState {
   ) => Promise<void>
   regenerateLastAssistantMessage: () => Promise<void>
   stopAssistantMessage: () => void
-  sendAssistantReaction: (value: 1 | -1 | 0) => Promise<boolean>
+  sendAssistantReaction: (value: 1 | -1) => Promise<boolean>
   clearAssistantChat: () => void
   toggleAssistantSize: () => void
 
