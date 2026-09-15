@@ -143,7 +143,7 @@ interface AppState {
   toggleDeviceActive: (device: DeviceInfo) => Promise<void>
   getActiveDevices: () => DeviceState[]
   isAnyDeviceStreaming: () => boolean
-
+  
   resetDevice: (deviceId: string) => Promise<void>
 
   // Per-device sensors fetch
@@ -157,7 +157,7 @@ interface AppState {
     value: number | boolean | string
   ) => Promise<void>
 
-  // Per-device stream configuration
+  // Per-device stream configuration  
   updateStreamConfig: (deviceId: string, config: StreamConfig) => void
   updateSensorConfig: (deviceId: string, sensorId: string, config: Partial<SensorConfig>) => void
 
@@ -271,7 +271,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
   devices: [],
   deviceStates: {},
   isLoadingDevices: false,
-
+  
   // Unguarded on purpose: dropping a concurrent call loses the post-flash refresh.
   fetchDevices: async (forceRefresh = false) => {
     set({ isLoadingDevices: true, error: null })
@@ -338,7 +338,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
   toggleDeviceActive: async (device: DeviceInfo) => {
     const state = get()
     const existing = state.deviceStates[device.device_id]
-
+    
     if (existing?.isActive) {
       // Deactivate: stop streaming if active, then remove
       for (const [sensorId, status] of Object.entries(existing.sensorStreamingStatus)) {
@@ -367,7 +367,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
       set((s) => ({
         deviceStates: { ...s.deviceStates, [device.device_id]: deviceState },
       }))
-
+      
       // Fetch sensors for this device
       await get().fetchSensors(device.device_id)
       // Best-effort: a versions-DB outage shouldn't make opening a camera look like it failed.
@@ -454,7 +454,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
       set((state) => {
         const deviceState = state.deviceStates[deviceId]
         if (!deviceState) return state
-
+        
         return {
           deviceStates: {
             ...state.deviceStates,
@@ -465,7 +465,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
                 [sensorId]: deviceState.options[sensorId]?.map((opt) =>
                   // Match by option_id OR by name (case-insensitive) for chatbot compatibility
                   (opt.option_id === optionId || opt.name.toLowerCase() === optionId.toLowerCase())
-                    ? { ...opt, current_value: value }
+                    ? { ...opt, current_value: value } 
                     : opt
                 ),
               },
@@ -485,7 +485,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
     set((state) => {
       const deviceState = state.deviceStates[deviceId]
       if (!deviceState) return state
-
+      
       return {
         deviceStates: {
           ...state.deviceStates,
@@ -505,9 +505,9 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
     set((state) => {
       const deviceState = state.deviceStates[deviceId]
       if (!deviceState) return state
-
+      
       const currentConfig = deviceState.sensorConfigs[sensorId] || { resolution: { width: 0, height: 0 }, framerate: 0 }
-
+      
       return {
         deviceStates: {
           ...state.deviceStates,
@@ -566,7 +566,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
 
     try {
       const status = await apiClient.startSensor(deviceId, sensorId, configs)
-
+      
       set((s) => ({
         deviceStates: {
           ...s.deviceStates,
@@ -592,7 +592,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
           errorMessage = axiosError.message
         }
       }
-
+      
       // Store error in sensor status
       set((s) => ({
         deviceStates: {
@@ -662,7 +662,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
     const stopPromise = (async () => {
       try {
         const status = await apiClient.stopSensor(deviceId, sensorId)
-
+        
         set((s) => {
           const deviceState = s.deviceStates[deviceId]
           if (!deviceState) return s
@@ -730,7 +730,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
     set((state) => {
       const deviceState = state.deviceStates[deviceId]
       if (!deviceState) return state
-
+      
       return {
         deviceStates: {
           ...state.deviceStates,
@@ -836,17 +836,17 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
   isChatLoading: false,
   chatMessages: [],
   pendingSettings: null,
-
+  
   toggleChat: () => set((state) => ({ isChatOpen: !state.isChatOpen })),
-
+  
   checkChatAvailability: async () => {
     const available = await checkChatAvailability()
     set({ isChatAvailable: available })
   },
-
+  
   sendChatMessage: async (content: string) => {
     const state = get()
-
+    
     // Add user message
     const userMessage: ChatMessage = {
       id: generateMessageId(),
@@ -854,7 +854,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
       content,
       timestamp: Date.now(),
     }
-
+    
     set((s) => ({
       chatMessages: [...s.chatMessages, userMessage],
       isChatLoading: true,
@@ -869,7 +869,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
     try {
       // Get all messages for context
       const allMessages = [...state.chatMessages, userMessage]
-
+      
       // Send to API with device context
       const response: ChatResponse = await sendChatMessageApi(allMessages, state.deviceStates, controller.signal)
 
@@ -881,7 +881,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
         proposedSettings: response.proposedSettings,
         timestamp: Date.now(),
       }
-
+      
       set((s) => ({
         chatMessages: [...s.chatMessages, assistantMessage],
         pendingSettings: response.proposedSettings || s.pendingSettings,
@@ -912,33 +912,33 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
     const state = get()
     const settings = state.pendingSettings
     if (!settings) return
-
+    
     try {
       // Find the device
       const deviceState = Object.values(state.deviceStates).find(
         ds => ds.device.serial_number === settings.deviceSerial
       )
-
+      
       if (!deviceState) {
         throw new Error(`Device ${settings.deviceSerial} not found`)
       }
-
+      
       const deviceId = deviceState.device.device_id
-
+      
       // Apply stream configurations to local state first
       // Apply stream configurations - match by stream_type (case-insensitive)
       if (settings.streamConfigs && settings.streamConfigs.length > 0) {
         set((state) => {
           const deviceState = state.deviceStates[deviceId]
           if (!deviceState) return state
-
+          
           // Create updated stream configs
           const updatedConfigs = deviceState.streamConfigs.map(existingConfig => {
             // Find matching proposed config by stream_type (case-insensitive)
             const proposedConfig = settings.streamConfigs!.find(
               pc => pc.stream_type.toLowerCase() === existingConfig.stream_type.toLowerCase()
             )
-
+            
             if (proposedConfig) {
               // Merge proposed config with existing, keeping sensor_id from existing
               return {
@@ -951,7 +951,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
             }
             return { ...existingConfig, enable: false }
           })
-
+          
           return {
             deviceStates: {
               ...state.deviceStates,
@@ -963,7 +963,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
           }
         })
       }
-
+      
       // Apply option changes
       if (settings.optionChanges) {
         for (const change of settings.optionChanges) {
@@ -980,7 +980,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
           await get().setOption(deviceId, uniqueSensorId, change.optionId, change.value)
         }
       }
-
+      
       // Handle stream start/stop actions
       if (settings.streamAction === 'start') {
         // Make sure we have stream configs before starting
@@ -998,10 +998,10 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
           if (ss.is_streaming) await get().stopSensorStreaming(deviceId, sensorId)
         }
       }
-
+      
       // Clear pending settings
       set({ pendingSettings: null })
-
+      
       // Build confirmation message
       let confirmContent = '✓ Settings applied successfully'
       if (settings.streamAction === 'start') {
@@ -1012,7 +1012,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
       if (settings.explanation) {
         confirmContent += `: ${settings.explanation}`
       }
-
+      
       // Add confirmation message
       const confirmMessage: ChatMessage = {
         id: generateMessageId(),
@@ -1027,11 +1027,11 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
       get().setError(`Failed to apply settings: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   },
-
+  
   dismissProposedSettings: () => {
     set({ pendingSettings: null })
   },
-
+  
   clearChat: () => {
     set({
       chatMessages: [],
