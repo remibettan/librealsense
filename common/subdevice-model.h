@@ -80,6 +80,11 @@ namespace rs2
         std::map<int, int> selected_fps_id;
         std::map<int, int> selected_format_id;
     };
+    // True when a sensor exposes color streams - a dedicated RGB sensor, or a stereo module that carries
+    // them too (D500 dual-RGB, D405). Object-detection overlays and their sensor_is_on flag hang off it.
+    bool sensor_has_color_stream( const std::vector< stream_profile > & profiles );
+    // True when a sensor exposes depth streams. Some sensors carries both, so this cannot be inferred from the absence of color.
+    bool sensor_has_depth_stream( const std::vector< stream_profile > & profiles );
 
     class subdevice_model
     {
