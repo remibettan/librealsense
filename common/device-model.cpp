@@ -1031,6 +1031,11 @@ namespace rs2
 
     void device_model::check_for_device_updates(viewer_model& viewer, bool activated_by_user )
     {
+#ifndef CHECK_FOR_UPDATES
+        // BUILD_WITH_LIBCURL (and therefore the http_downloader this relies on) may still be on
+        // because of ENABLE_STATS; this flag stays the sole on/off switch for update checking.
+        return;
+#endif
         std::weak_ptr< updates_model > updates_model_protected( viewer.updates );
         std::weak_ptr< dev_updates_profile::update_profile > update_profile_protected(
             _updates_profile );
@@ -1167,7 +1172,6 @@ namespace rs2
                 auto error = e.what();
             }
         } );
-
     }
 
     float device_model::draw_device_panel(float panel_width,
