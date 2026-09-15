@@ -2,11 +2,10 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, PlusCircle, Loader2, Sparkles, Paperclip, X, FileText, Wrench } from 'lucide-react'
+import { Send, PlusCircle, Loader2, Sparkles, Paperclip, X, FileText, Wrench, Maximize2, Minimize2 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { getActiveProviderName } from '../../api/chat'
 import { AssistantMessageBubble } from './AssistantMessage'
-import { ExpandIcon, CollapseIcon, CloseIcon } from './icons'
 import { usePendingAttachments } from './usePendingAttachments'
 import { ChatBotContent } from './ChatBotContent'
 import { StopGeneratingButton } from './StopGeneratingButton'
@@ -165,7 +164,7 @@ export function AssistantPanel() {
             className={`p-1.5 rounded transition-colors shrink-0 ${iconBtn}`}
             title="Close"
           >
-            <CloseIcon />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -208,7 +207,7 @@ export function AssistantPanel() {
               className={`p-1.5 rounded transition-colors hidden sm:inline-flex ${iconBtn}`}
               title={isWide ? 'Collapse panel' : 'Expand panel'}
             >
-              {isWide ? <CollapseIcon /> : <ExpandIcon />}
+              {isWide ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
             <button
               onClick={isChatbotMode ? clearChat : clearAssistantChat}
