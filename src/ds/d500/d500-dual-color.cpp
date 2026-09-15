@@ -76,7 +76,6 @@ namespace librealsense
         d500_depth.add_stream( _color_stream_1 );
         d500_depth.add_stream( _color_stream_2 );
 
-        add_stream_combination_validator( [this]( const stream_profiles & requests ) { close_range_allowed_or_throw( requests ); } );
         add_stream_combination_validator( [this]( const stream_profiles & requests ) { frame_rates_allowed_or_throw( requests ); } );
 
         register_color_extrinsics();
@@ -85,7 +84,7 @@ namespace librealsense
         register_color_options( dev_info );
     }
 
-    // Both rules below only bite once a color stream shares the depth sensor's imagers.
+    // The rule below only bites once a color stream shares the depth sensor's imagers.
     static bool color_requested( const stream_profiles & requests )
     {
         return std::any_of( requests.begin(), requests.end(), []( auto & p )
@@ -96,22 +95,6 @@ namespace librealsense
     {
         return std::any_of( requests.begin(), requests.end(), []( auto & p )
                             { return p && ( p->get_stream_type() == RS2_STREAM_DEPTH || p->get_stream_type() == RS2_STREAM_INFRARED ); } );
-    }
-
-    // Close range works on depth only, so it cannot be enabled while a color stream starts.
-    void d500_dual_color::close_range_allowed_or_throw( const stream_profiles & requests ) const
-    {
-        if( ! color_requested( requests ) )
-            return;
-
-        // get_depth_sensor() has no const overload, and this rule only reads the filter's state.
-        auto & depth_sensor = dynamic_cast< const d500_depth_sensor & >( const_cast< d500_dual_color * >( this )->get_depth_sensor() );
-        for( auto & f : depth_sensor.get_supported_embedded_filters() )
-            if( f && f->get_type() == RS2_EMBEDDED_FILTER_TYPE_CLOSE_RANGE
-                && f->supports_option( RS2_OPTION_EMBEDDED_FILTER_ENABLED )
-                && f->get_option( RS2_OPTION_EMBEDDED_FILTER_ENABLED ).query() != 0.f )
-                throw wrong_api_call_sequence_exception(
-                    "Color streams cannot be activated while Improved Close Range Depth is enabled" );
     }
 
     // Produce a friendly stream name to the user, e.g. "Depth" / "Color 1"
