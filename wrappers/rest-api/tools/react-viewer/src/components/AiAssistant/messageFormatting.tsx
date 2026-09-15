@@ -2,10 +2,13 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 //
 // Pure formatting helpers for rendering an assistant message's streamed text: strips the
-// assistant's raw citation placeholders and does light markdown-ish rendering (bold, inline
-// code, code blocks). No component state — just string/content in, JSX out.
+// assistant's raw citation placeholders and renders the remaining markdown (GFM tables,
+// headers, lists, links, images, code) via react-markdown. No component state — just
+// string/content in, JSX out.
 
 import type { ReactNode } from 'react'
+import ReactMarkdown, { type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { AssistantCitation } from '../../api/assistantChat'
 
 /**
@@ -24,99 +27,49 @@ export function stripCitationMarkers(content: string, citations?: AssistantCitat
 
 const LINK_CLASSES = 'text-rs-blue hover:underline break-all'
 
-function formatInline(text: string): (string | ReactNode)[] {
-  const parts: (string | ReactNode)[] = []
-  let remaining = text
-  let key = 0
-
-  while (remaining) {
-    const candidates: { match: RegExpMatchArray; type: 'bold' | 'code' | 'link' | 'url' | 'image' }[] = []
-    const boldMatch = remaining.match(/\*\*(.+?)\*\*/)
-    if (boldMatch) candidates.push({ match: boldMatch, type: 'bold' })
-    const codeMatch = remaining.match(/`([^`]+)`/)
-    if (codeMatch) candidates.push({ match: codeMatch, type: 'code' })
-    // Images ("![alt](url)") are matched separately from plain links so they render as an
-    // <img> instead of a clickable text link — animated GIFs need no special handling beyond
-    // this, a plain <img> plays them natively.
-    const imageMatch = remaining.match(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/)
-    if (imageMatch) candidates.push({ match: imageMatch, type: 'image' })
-    // Markdown links are checked before bare URLs so "[label](url)" wins the tie over the
-    // bare-url match that would otherwise fire on the URL portion inside it.
-    const linkMatch = remaining.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/)
-    if (linkMatch) candidates.push({ match: linkMatch, type: 'link' })
-    const urlMatch = remaining.match(/https?:\/\/[^\s<>()[\]"']+/)
-    if (urlMatch) candidates.push({ match: urlMatch, type: 'url' })
-
-    if (candidates.length === 0) {
-      parts.push(remaining)
-      break
-    }
-
-    const { match, type } = candidates.reduce((earliest, c) => (c.match.index! < earliest.match.index! ? c : earliest))
-
-    if (match.index! > 0) {
-      parts.push(remaining.slice(0, match.index))
-    }
-    let consumed = match[0].length
-    if (type === 'bold') {
-      parts.push(<strong key={key++} className="font-semibold">{match[1]}</strong>)
-    } else if (type === 'code') {
-      parts.push(<code key={key++} className="px-1 py-0.5 rounded text-xs bg-gray-800">{match[1]}</code>)
-    } else if (type === 'image') {
-      parts.push(
-        <a key={key++} href={match[2]} target="_blank" rel="noopener noreferrer" className="block mt-2">
-          <img src={match[2]} alt={match[1]} className="max-w-full rounded-lg" />
-        </a>
-      )
-    } else if (type === 'link') {
-      parts.push(
-        <a key={key++} href={match[2]} target="_blank" rel="noopener noreferrer" className={LINK_CLASSES}>
-          {match[1]}
-        </a>
-      )
-    } else {
-      // A trailing sentence-ending character (".", "See https://x.com.") isn't part of the
-      // URL — strip it from the link itself and leave it in `remaining` as plain text.
-      const url = match[0].replace(/[.,;!?]+$/, '')
-      consumed = url.length
-      parts.push(
-        <a key={key++} href={url} target="_blank" rel="noopener noreferrer" className={LINK_CLASSES}>
-          {url}
-        </a>
-      )
-    }
-    remaining = remaining.slice(match.index! + consumed)
-  }
-
-  return parts
+const components: Components = {
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={LINK_CLASSES}>
+      {children}
+    </a>
+  ),
+  img: ({ src, alt }) => (
+    <a href={typeof src === 'string' ? src : undefined} target="_blank" rel="noopener noreferrer" className="block mt-2">
+      <img src={typeof src === 'string' ? src : undefined} alt={alt} className="max-w-full rounded-lg" />
+    </a>
+  ),
+  // react-markdown no longer tells us "inline" directly — a fenced code block always has
+  // a newline (even without a language tag) or a `language-*` className; anything else is
+  // inline code. Block code's outer <pre> gets the visible background/padding below.
+  code: ({ className, children }) => {
+    const text = String(children).replace(/\n$/, '')
+    const isBlock = className?.startsWith('language-') || text.includes('\n')
+    if (isBlock) return <code className={className}>{children}</code>
+    return <code className="px-1 py-0.5 rounded text-xs bg-gray-800">{children}</code>
+  },
+  pre: ({ children }) => (
+    <pre className="mt-2 p-2 rounded text-xs whitespace-pre-wrap break-words bg-gray-900 overflow-x-auto">{children}</pre>
+  ),
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+  h1: ({ children }) => <h3 className="text-sm font-bold mt-2 mb-1">{children}</h3>,
+  h2: ({ children }) => <h3 className="text-sm font-bold mt-2 mb-1">{children}</h3>,
+  h3: ({ children }) => <h4 className="text-sm font-semibold mt-2 mb-1">{children}</h4>,
+  table: ({ children }) => (
+    <div className="overflow-x-auto my-2">
+      <table className="text-xs border-collapse w-full">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => <th className="border border-gray-700 px-2 py-1 bg-gray-800 text-left">{children}</th>,
+  td: ({ children }) => <td className="border border-gray-700 px-2 py-1">{children}</td>,
 }
 
-/** Renders code blocks (```...```) and inline bold/code formatting for a message's content. */
+/** Renders an assistant message's markdown content (GFM tables, headers, lists, links, images, code). */
 export function renderMessageContent(content: string): ReactNode {
-  const parts = content.split(/(```[\s\S]*?```)/g)
-
-  return parts.map((part, i) => {
-    if (part.startsWith('```')) {
-      const match = part.match(/```(\w+)?\n?([\s\S]*?)```/)
-      if (match) {
-        const [, lang, code] = match
-        return (
-          <pre key={i} className="mt-2 p-2 rounded text-xs whitespace-pre-wrap break-words bg-gray-900">
-            <code className={`language-${lang || 'text'}`}>{code.trim()}</code>
-          </pre>
-        )
-      }
-    }
-
-    return (
-      <span key={i}>
-        {part.split('\n').map((line, j) => (
-          <span key={j}>
-            {j > 0 && <br />}
-            {formatInline(line)}
-          </span>
-        ))}
-      </span>
-    )
-  })
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      {content}
+    </ReactMarkdown>
+  )
 }
