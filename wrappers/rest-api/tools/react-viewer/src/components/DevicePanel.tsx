@@ -988,7 +988,9 @@ function ControlSection({
             </button>
           )}
           {sectionSwitch && (
-            <ToggleSwitch enabled={sectionSwitch.enabled} onToggle={sectionSwitch.onToggle} />
+            <span className="pr-1">
+              <ToggleSwitch enabled={sectionSwitch.enabled} onToggle={sectionSwitch.onToggle} />
+            </span>
           )}
         </>
       }
