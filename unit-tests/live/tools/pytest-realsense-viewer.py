@@ -17,10 +17,8 @@ frame_prefix = re.compile( rb'^\[\d{4}\] ', re.MULTILINE )
 
 pytestmark = [
     pytest.mark.device_each("D400*"),
-    # D5xx is not run here yet: the exposure and options controls are gated behind safety
-    # Service mode on a safety camera, the Control Panel item lookup misses on a
-    # five-sensor device, and the test helpers advance imgui's simulated clock rather than
-    # real time, so a D555 runs out of reconnect budget after a hardware reset.
+    # D500 is currently disabled until all tests pass there
+    #pytest.mark.device_each("D500*"),
     pytest.mark.context("nightly"),
     pytest.mark.context("gui"),
     # Opt out of retries: this launches the realsense-viewer GUI and is long-running /
