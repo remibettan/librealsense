@@ -21,6 +21,9 @@ pytestmark = [
     #pytest.mark.device_each("D500*"),
     pytest.mark.context("nightly"),
     pytest.mark.context("gui"),
+    # Override the 200s default from conftest.py: the suite runs long by design
+    # because mem_leak_depth_start_stop is a 5-minute soak (20 * (10s + 5s) real).
+    pytest.mark.timeout(700),
     # Opt out of retries: this launches the realsense-viewer GUI and is long-running /
     # not reliably retryable, so a rerun just doubles CI time without adding signal.
     pytest.mark.flaky(reruns=0),
@@ -60,9 +63,9 @@ def _run_viewer_tests( test_filter=None ):
     if test_filter:
         cmd += ['-r', test_filter]
     log.debug( 'running: %s', ' '.join( cmd ) )
-    # Cap the child below the global pytest-timeout (200s default in conftest.py) so the
-    # subprocess is reaped here rather than leaked when the outer test thread is killed.
-    child_timeout = 180
+    # Cap the child below the per-test pytest.mark.timeout(700) above so the subprocess
+    # is reaped here rather than leaked when the outer test thread is killed.
+    child_timeout = 660
     p = subprocess.Popen( cmd,
                           stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE,
