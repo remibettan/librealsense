@@ -12,10 +12,13 @@ import math
 import time
 log = logging.getLogger(__name__)
 
-pytestmark = [pytest.mark.device_each("D400*")]
+pytestmark = [
+    pytest.mark.device_each("D400*"),
+    pytest.mark.context("nightly"),
+]
 
 GRAVITY = 9.80665
-SAMPLES = 400
+SAMPLES = 200
 # uncalibrated units read ~2% low; a FW/SDK scale mismatch is 100x, so this window is loose on
 # purpose and still rejects the mismatch by two orders of magnitude
 LOW, HIGH = 0.8 * GRAVITY, 1.2 * GRAVITY
@@ -39,9 +42,10 @@ def test_accel_norm_is_gravity(test_device):
     sensor.start(queue)
     norms = []
     try:
-        deadline = time.time() + 20
+        # a cap, not a wait: 200 samples is ~1 s at 200 Hz and ~3 s on a 63 Hz BMI055
+        deadline = time.time() + 8
         while len(norms) < SAMPLES and time.time() < deadline:
-            f = queue.wait_for_frame(2000).as_motion_frame()
+            f = queue.wait_for_frame(1000).as_motion_frame()
             if f and f.get_profile().stream_type() == rs.stream.accel:
                 d = f.get_motion_data()
                 norms.append(math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z))

@@ -195,7 +195,8 @@ namespace librealsense
                 get_raw_motion_sensor()->set_gyro_scale_factor( 10000.0 );
             // Windows MF receives accel in G and rebuilds FW counts; derive the factor from the
             // same scale the transform uses so the two can never disagree (1000 legacy, 100000 new)
-            get_raw_motion_sensor()->set_accel_scale_factor( 1.0 / get_accel_default_scale() );
+            if (hid_ep)
+                get_raw_motion_sensor()->set_accel_scale_factor( 1.0 / get_accel_default_scale() );
 #endif
         }
         catch (const std::exception& e)
