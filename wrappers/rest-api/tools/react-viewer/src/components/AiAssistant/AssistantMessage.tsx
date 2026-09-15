@@ -24,9 +24,9 @@ export function AssistantMessageBubble({ message, isLatestAssistant }: Assistant
   const [copied, setCopied] = useState(false)
   const isUser = message.role === 'user'
 
-  const handleReaction = (value: 1 | -1) => {
-    setReactionSent(value)
-    sendAssistantReaction(value)
+  const handleReaction = async (value: 1 | -1) => {
+    const succeeded = await sendAssistantReaction(value)
+    if (succeeded) setReactionSent(value)
   }
 
   const handleCopy = async () => {

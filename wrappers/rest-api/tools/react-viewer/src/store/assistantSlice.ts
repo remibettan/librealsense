@@ -214,11 +214,13 @@ export const createAssistantSlice: StateCreator<AppState, [], [], AssistantSlice
 
   sendAssistantReaction: async (value: 1 | -1 | 0) => {
     const { assistantConversationId } = get()
-    if (!assistantConversationId) return
+    if (!assistantConversationId) return false
     try {
       await sendAssistantReactionApi(assistantConversationId, value)
+      return true
     } catch (error) {
       console.warn('Failed to send assistant reaction:', error)
+      return false
     }
   },
 
