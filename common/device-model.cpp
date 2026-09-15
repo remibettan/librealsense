@@ -223,9 +223,11 @@ namespace rs2
 
         auto name = get_device_name(dev);
 
+#ifdef CHECK_FOR_UPDATES
         // Inhibit on DQT / Playback device
         if( _allow_remove && ( ! dev.is< playback >() ) )
             check_for_device_updates(viewer);
+#endif
 
         if ((bool)config_file::instance().get(configurations::update::recommend_calibration))
         {
@@ -1031,11 +1033,6 @@ namespace rs2
 
     void device_model::check_for_device_updates(viewer_model& viewer, bool activated_by_user )
     {
-#ifndef CHECK_FOR_UPDATES
-        // BUILD_WITH_LIBCURL (and therefore the http_downloader this relies on) may still be on
-        // because of ENABLE_STATS; this flag stays the sole on/off switch for update checking.
-        return;
-#else
         std::weak_ptr< updates_model > updates_model_protected( viewer.updates );
         std::weak_ptr< dev_updates_profile::update_profile > update_profile_protected(
             _updates_profile );
@@ -1172,7 +1169,6 @@ namespace rs2
                 auto error = e.what();
             }
         } );
-#endif
     }
 
     float device_model::draw_device_panel(float panel_width,
@@ -1434,6 +1430,7 @@ namespace rs2
                         RsImGui::CustomTooltip("%s", tooltip.c_str());
                     }
 
+#ifdef CHECK_FOR_UPDATES
                     if( dev.supports( RS2_CAMERA_INFO_PRODUCT_LINE )
                         && ( dev.get_info( RS2_CAMERA_INFO_PRODUCT_LINE ) ) )
                     {
@@ -1456,6 +1453,7 @@ namespace rs2
                         std::string tooltip = rsutils::string::from() << "Check for SW / FW updates";
                         RsImGui::CustomTooltip("%s", tooltip.c_str());
                     }
+#endif
                 }
 
                 bool is_locked = true;
