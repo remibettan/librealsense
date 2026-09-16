@@ -34,7 +34,8 @@ namespace rs2
     enum class ruler_range_mode : int
     {
         auto_dynamic = 0,   // percentile-driven, hysteresis-smoothed
-        fixed_4m     = 1,   // legacy 0..4 m behavior
+        // Value 1 was fixed_4m (legacy 0..4 m). Removed 2026-09 — a persisted
+        // 1 falls back to auto_dynamic via the load-path validation.
         fixed_user   = 2,   // user-typed min/max
     };
 

@@ -30,9 +30,10 @@ namespace rs2
             int mode_val = config_file::instance().get_or_default(
                 configurations::viewer::ruler_range_mode,
                 static_cast<int>(ruler_range_mode::auto_dynamic));
-            if (mode_val < static_cast<int>(ruler_range_mode::auto_dynamic) ||
-                mode_val > static_cast<int>(ruler_range_mode::fixed_user))
+            if (mode_val != static_cast<int>(ruler_range_mode::auto_dynamic) &&
+                mode_val != static_cast<int>(ruler_range_mode::fixed_user))
             {
+                // Includes the removed value 1 (fixed_4m legacy) and anything else.
                 mode_val = static_cast<int>(ruler_range_mode::auto_dynamic);
             }
             ruler_mode = static_cast<ruler_range_mode>(mode_val);
@@ -689,11 +690,14 @@ namespace rs2
                 ImGui::Separator();
                 int mode_i = static_cast<int>(ruler_mode);
                 bool mode_changed = false;
-                mode_changed |= ImGui::RadioButton("Auto (adaptive)##rulerAuto",  &mode_i, 0);
+                mode_changed |= ImGui::RadioButton("Auto (adaptive)##rulerAuto",
+                                                   &mode_i,
+                                                   static_cast<int>(ruler_range_mode::auto_dynamic));
                 if (ImGui::IsItemHovered())
                     RsImGui::CustomTooltip("Percentile-driven, smoothed across frames");
-                mode_changed |= ImGui::RadioButton("Fixed 0-4 m (legacy)##rulerLegacy", &mode_i, 1);
-                mode_changed |= ImGui::RadioButton("Fixed custom range##rulerCustom", &mode_i, 2);
+                mode_changed |= ImGui::RadioButton("Fixed custom range##rulerCustom",
+                                                   &mode_i,
+                                                   static_cast<int>(ruler_range_mode::fixed_user));
 
                 if (mode_changed)
                 {

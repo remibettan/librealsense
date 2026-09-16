@@ -1829,10 +1829,23 @@ namespace rs2
     }
 
     namespace {
-        // The one nice-step ladder. Both the snap grid (nice_step_for_range,
-        // used by the bounds smoothing) and the tick-label picker in
-        // draw_color_ruler iterate this same array — extending it changes both.
-        static constexpr float k_step_ladder[] = {
+        // Two ladders, deliberately different scopes:
+        //
+        // k_snap_ladder — used by nice_step_for_range for the *bounds smoothing*
+        // snap grid. Its finest entry is 0.05 m; a finer snap grid would make
+        // the deadband very tight (½·step) and let sub-cm smoothed jitter cross
+        // it, defeating the hysteresis. So the snap grid stays coarse.
+        //
+        // k_label_ladder — used by the *tick-label picker* in draw_color_ruler.
+        // Extended with sub-cm steps so a narrow ruler (~1 cm) still gets 3-6
+        // labeled ticks instead of a single "5.00" floating alone. The label
+        // grid can safely be finer than the snap grid — labels are cosmetic and
+        // change only when the snapped bounds themselves cross a snap-step.
+        static constexpr float k_snap_ladder[] = {
+            0.05f, 0.10f, 0.25f, 0.5f, 1.f, 2.f, 5.f, 10.f, 20.f, 50.f, 100.f
+        };
+        static constexpr float k_label_ladder[] = {
+            0.001f, 0.002f, 0.005f, 0.01f, 0.02f,
             0.05f, 0.10f, 0.25f, 0.5f, 1.f, 2.f, 5.f, 10.f, 20.f, 50.f, 100.f
         };
 
@@ -1841,11 +1854,11 @@ namespace rs2
         // that, extrapolates sensibly (100 m → 10 m step instead of the old 5 m).
         float nice_step_for_range(float range)
         {
-            for (float s : k_step_ladder)
+            for (float s : k_snap_ladder)
             {
                 if (range <= s * 10.f) return s;
             }
-            return k_step_ladder[sizeof(k_step_ladder)/sizeof(k_step_ladder[0]) - 1];
+            return k_snap_ladder[sizeof(k_snap_ladder)/sizeof(k_snap_ladder[0]) - 1];
         }
 
         // p in [0,1]. Modifies the vector via nth_element — cheap and avoids a full sort.
@@ -1938,35 +1951,50 @@ namespace rs2
         glVertex2f(right_x_colored_ruler, bottom_y_ruler);
         glEnd();
 
-        // Numbered ruler: labels sit only on nice-step multiples that fall inside
-        // the bar. No forced min/max — a range whose ends aren't on the step grid
-        // (e.g. min=0.15, max=2.5 with step=1) shows "1" and "2" and nothing else,
-        // never duplicating a tick label as a rounded-off endpoint. Cap at 5 ticks.
+        // Numbered ruler. Labels sit only on nice-step multiples that fall inside
+        // the bar — no forced min/max, no rounded-off duplicate at either end.
+        // Aim for 3-6 labels; walk the ladder fine→coarse and take the smallest
+        // step whose tick count is ≤ 6. If that step happens to give < 3 labels
+        // (only possible when the range is under the finest ladder entry), fall
+        // back one entry (finer) so a narrow ruler still gets ~7-11 sub-cm
+        // labels rather than a single lonely one.
         const float x_ruler_val = right_x_colored_ruler + 4.0f;
         const auto  font_size   = ImGui::GetFontSize();
+        const int   n_ladder    = static_cast<int>(sizeof(k_label_ladder)/sizeof(k_label_ladder[0]));
 
         auto tick_count = [ruler_min, ruler_max](float s) {
             const float first = std::ceil(ruler_min / s - 1e-4f) * s;
             if (first > ruler_max + 1e-4f) return 0;
             return static_cast<int>(std::floor((ruler_max + 1e-4f - first) / s)) + 1;
         };
-        float draw_step = k_step_ladder[sizeof(k_step_ladder)/sizeof(k_step_ladder[0]) - 1];
-        for (float s : k_step_ladder)
+
+        float draw_step = k_label_ladder[0];
+        for (int i = 0; i < n_ladder; ++i)
         {
-            if (tick_count(s) <= 5) { draw_step = s; break; }
+            const int n = tick_count(k_label_ladder[i]);
+            if (n > 6) continue;
+            draw_step = (n >= 3 || i == 0) ? k_label_ladder[i] : k_label_ladder[i - 1];
+            break;
         }
 
-        // Decimals: minimum that still faithfully represents every step multiple.
-        const int decimals = (draw_step >= 1.f  - 1e-4f) ? 0
-                           : (draw_step >= 0.1f - 1e-4f) ? 1
-                                                        : 2;
+        // Decimals: fewest that still distinguish adjacent step multiples.
+        // ≥1 m → 0; ≥0.1 → 1; ≥0.01 → 2; smaller (0.001/0.002/0.005) → 3.
+        const int decimals = (draw_step >= 1.f   - 1e-5f) ? 0
+                           : (draw_step >= 0.1f  - 1e-5f) ? 1
+                           : (draw_step >= 0.01f - 1e-6f) ? 2
+                                                         : 3;
         auto fmt_label = [decimals](float v) {
             std::stringstream ss;
             ss << std::fixed << std::setprecision(decimals) << v;
             return ss.str();
         };
 
-        const float first_tick = std::ceil(ruler_min / draw_step - 1e-4f) * draw_step;
+        // Overlap guard: skip a tick if its glyph would collide with the last
+        // placed one. Loop runs small v → large v, i.e. bottom → top in screen
+        // space, so `last_ly` (previous, larger y) is always below the next.
+        const float first_tick   = std::ceil(ruler_min / draw_step - 1e-4f) * draw_step;
+        const float min_vertical = font_size + 2.f;
+        float       last_ly      = 1e30f;   // sentinel; first tick always passes the gap check
         for (float v = first_tick; v <= ruler_max + 1e-4f; v += draw_step)
         {
             const float y = bottom_y_ruler - (v - ruler_min) * ratio;
@@ -1975,8 +2003,10 @@ namespace rs2
             float ly = y - font_size / 2.f;
             if (ly < top_y_ruler)                ly = top_y_ruler;
             if (ly > bottom_y_ruler - font_size) ly = bottom_y_ruler - font_size;
+            if (last_ly - ly < min_vertical) continue;
             ImGui::SetCursorScreenPos({ x_ruler_val, ly });
             ImGui::TextUnformatted(fmt_label(v).c_str());
+            last_ly = ly;
         }
 
         auto total_depth_scale = rgb_per_distance_vec.back().depth_val - rgb_per_distance_vec.front().depth_val;
@@ -2041,16 +2071,7 @@ namespace rs2
     {
         assert(!distances.empty());
 
-        // 1) User override / legacy modes short-circuit the data-driven path.
-        if (s_model.ruler_mode == ruler_range_mode::fixed_4m)
-        {
-            s_model.ruler_state.snapped_min = 0.f;
-            s_model.ruler_state.snapped_max = 4.f;
-            s_model.ruler_state.smoothed_min = 0.f;
-            s_model.ruler_state.smoothed_max = 4.f;
-            s_model.ruler_state.initialized = true;
-            return { 0.f, 4.f };
-        }
+        // 1) User override short-circuits the data-driven path.
         if (s_model.ruler_mode == ruler_range_mode::fixed_user)
         {
             float lo = std::max(0.f, s_model.ruler_fixed_min);
