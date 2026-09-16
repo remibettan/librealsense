@@ -227,7 +227,7 @@ namespace librealsense
             edge_enhancement( p );
             break;
         case RS2_RS400_VISUAL_PRESET_REMOVE_IR_PATTERN: {
-            if( ! _dev->supports_feature( remove_ir_pattern_feature::ID ) )
+            if( ! is_preset_supported( preset ) )
                 throw invalid_value_exception( "apply_preset(...) failed! The device does not support remove IR pattern feature" );
 
             switch( device_pid )
@@ -253,6 +253,13 @@ namespace librealsense
                                            << "apply_preset(...) failed! Invalid preset! (" << preset << ")" );
         }
         set_all( p );
+    }
+
+    bool ds_advanced_mode_base::is_preset_supported( rs2_rs400_visual_preset preset ) const
+    {
+        if( preset == RS2_RS400_VISUAL_PRESET_REMOVE_IR_PATTERN )
+            return _dev->supports_feature( remove_ir_pattern_feature::ID );
+        return true;
     }
 
     void ds_advanced_mode_base::get_depth_control_group( STDepthControlGroup * ptr, int mode ) const
@@ -1163,7 +1170,10 @@ namespace librealsense
     {
         try
         {
-            return rs2_rs400_visual_preset_to_string( to_preset( val ) );
+            auto preset = to_preset( val );
+            if( ! _advanced.is_preset_supported( preset ) )
+                return nullptr;
+            return rs2_rs400_visual_preset_to_string( preset );
         }
         catch( std::out_of_range )
         {

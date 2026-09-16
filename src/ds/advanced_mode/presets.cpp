@@ -871,7 +871,7 @@ namespace librealsense
         p.cc.colorCorrection12 = -0.1914059966803f;
     }
 
-    // D435 preset tuned for stronger edge preservation
+    // D400 preset tuned for stronger edge preservation
     void edge_enhancement(preset& p)
     {
         p.depth_controls.deepSeaMedianThreshold = 500;
