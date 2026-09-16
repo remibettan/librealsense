@@ -251,12 +251,14 @@ bool option_model::is_enum() const
     if( range.step < 0.9f )
         return false;
 
+    // A value with no description is hidden for this device (see get_combo_labels), not evidence
+    // that the option isn't an enum — only bail if not a single value describes itself.
     for( auto i = range.min; i <= range.max; i += range.step )
     {
-        if( endpoint->get_option_value_description( opt, i ) == nullptr )
-            return false;
+        if( endpoint->get_option_value_description( opt, i ) != nullptr )
+            return true;
     }
-    return true;
+    return false;
 }
 
 std::vector< const char * > option_model::get_combo_labels( int * p_selected, std::vector< float > * p_values ) const

@@ -1147,11 +1147,16 @@ namespace librealsense
                                            << "set(advanced_mode_preset_option) failed! Given value " << value
                                            << " is out of range." );
 
+        auto preset = to_preset( value );
+        if( ! _advanced.is_preset_supported( preset, get_device_pid( _ep ) ) )
+            throw invalid_value_exception( rsutils::string::from()
+                                           << "set(advanced_mode_preset_option) failed! Device does not support preset "
+                                           << rs2_rs400_visual_preset_to_string( preset ) );
+
         if( ! _advanced.is_enabled() )
             throw wrong_api_call_sequence_exception(
                 rsutils::string::from() << "set(advanced_mode_preset_option) failed! Device is not in Advanced-Mode." );
 
-        auto preset = to_preset( value );
         if( preset == RS2_RS400_VISUAL_PRESET_CUSTOM )
         {
             _last_preset = preset;
