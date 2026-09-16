@@ -35,7 +35,17 @@ const components: Components = {
   ),
   img: ({ src, alt }) => (
     <a href={typeof src === 'string' ? src : undefined} target="_blank" rel="noopener noreferrer" className="block mt-2">
-      <img src={typeof src === 'string' ? src : undefined} alt={alt} className="max-w-full rounded-lg" />
+      <img
+        src={typeof src === 'string' ? src : undefined}
+        alt={alt}
+        className="max-w-full rounded-lg"
+        // An unreachable image (404, CORS block) would otherwise show a broken-image icon
+        // with no explanation — hide the whole link (not just the <img>) instead.
+        onError={(e) => {
+          const link = e.currentTarget.parentElement
+          if (link) link.style.display = 'none'
+        }}
+      />
     </a>
   ),
   // react-markdown no longer tells us "inline" directly — a fenced code block always has
