@@ -128,9 +128,14 @@ namespace rs2
         rect curr_info_rect{};
         temporal_event _stream_not_alive;
         bool show_map_ruler = true;
+        // Per-device ruler settings — loaded/saved under a key rooted at
+        // `viewer_model.ruler.<device name>.<sensor name>`. The root is set in
+        // begin_stream once the subdevice is attached; empty for non-depth
+        // streams (they never open the popover).
         ruler_range_mode ruler_mode = ruler_range_mode::auto_dynamic;
         float ruler_fixed_min = 0.f;
         float ruler_fixed_max = 4.f;
+        std::string ruler_config_key_root;
         depth_ruler_state ruler_state;
         bool show_metadata = false;
         bool show_safety_zones_2d = true;

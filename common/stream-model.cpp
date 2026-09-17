@@ -26,24 +26,9 @@ namespace rs2
     {
         show_map_ruler = config_file::instance().get_or_default(
             configurations::viewer::show_map_ruler, true);
-        {
-            int mode_val = config_file::instance().get_or_default(
-                configurations::viewer::ruler_range_mode,
-                static_cast<int>(ruler_range_mode::auto_dynamic));
-            if (mode_val != static_cast<int>(ruler_range_mode::auto_dynamic) &&
-                mode_val != static_cast<int>(ruler_range_mode::fixed_user))
-            {
-                // Includes the removed value 1 (fixed_4m legacy) and anything else.
-                mode_val = static_cast<int>(ruler_range_mode::auto_dynamic);
-            }
-            ruler_mode = static_cast<ruler_range_mode>(mode_val);
-            ruler_fixed_min = config_file::instance().get_or_default(
-                configurations::viewer::ruler_fixed_min, 0.f);
-            ruler_fixed_max = config_file::instance().get_or_default(
-                configurations::viewer::ruler_fixed_max, 4.f);
-            if (ruler_fixed_max <= ruler_fixed_min + k_min_ruler_gap)
-                ruler_fixed_max = ruler_fixed_min + k_min_ruler_gap;
-        }
+        // Ruler mode / fixed range are loaded per-device in begin_stream once
+        // we know which SKU + sensor this stream belongs to. Defaults stay in
+        // the field initializers so a stream without a subdevice still behaves.
         show_stream_details = config_file::instance().get_or_default(
             configurations::viewer::show_stream_details, false);
         show_safety_zones_2d = config_file::instance().get_or_default(
@@ -230,6 +215,37 @@ namespace rs2
     {
         dev = d;
         original_profile = p;
+
+        // Per-device ruler settings: same key layout as post_processing entries.
+        if (p.stream_type() == RS2_STREAM_DEPTH
+            && d && d->dev.supports(RS2_CAMERA_INFO_NAME)
+            && d->s  && d->s->supports(RS2_CAMERA_INFO_NAME))
+        {
+            std::stringstream ss;
+            ss << configurations::viewer::ruler_key_root
+               << "." << d->dev.get_info(RS2_CAMERA_INFO_NAME)
+               << "." << d->s->get_info(RS2_CAMERA_INFO_NAME);
+            ruler_config_key_root = ss.str();
+
+            auto& cf = config_file::instance();
+            const std::string mode_key = ruler_config_key_root + "." + configurations::viewer::ruler_range_mode_key;
+            const std::string min_key  = ruler_config_key_root + "." + configurations::viewer::ruler_fixed_min_key;
+            const std::string max_key  = ruler_config_key_root + "." + configurations::viewer::ruler_fixed_max_key;
+
+            int mode_val = cf.get_or_default(mode_key.c_str(),
+                                             static_cast<int>(ruler_range_mode::auto_dynamic));
+            if (mode_val != static_cast<int>(ruler_range_mode::auto_dynamic) &&
+                mode_val != static_cast<int>(ruler_range_mode::fixed_user))
+            {
+                mode_val = static_cast<int>(ruler_range_mode::auto_dynamic);
+            }
+            ruler_mode = static_cast<ruler_range_mode>(mode_val);
+            ruler_fixed_min = cf.get_or_default(min_key.c_str(), 0.f);
+            ruler_fixed_max = cf.get_or_default(max_key.c_str(), 4.f);
+            if (ruler_fixed_max <= ruler_fixed_min + k_min_ruler_gap)
+                ruler_fixed_max = ruler_fixed_min + k_min_ruler_gap;
+            ruler_state.initialized = false;  // reseed smoothing for the new device
+        }
 
         profile = p;
         texture->colorize = d->depth_colorizer;
@@ -702,7 +718,12 @@ namespace rs2
                 if (mode_changed)
                 {
                     ruler_mode = static_cast<ruler_range_mode>(mode_i);
-                    config_file::instance().set(configurations::viewer::ruler_range_mode, mode_i);
+                    if (!ruler_config_key_root.empty())
+                    {
+                        const std::string k = ruler_config_key_root + "." +
+                                              configurations::viewer::ruler_range_mode_key;
+                        config_file::instance().set(k.c_str(), mode_i);
+                    }
                     ruler_state.initialized = false; // re-seed on next frame
                 }
 
@@ -722,8 +743,16 @@ namespace rs2
                     if (ruler_fixed_min < 0.f) ruler_fixed_min = 0.f;
                     if (ruler_fixed_max <= ruler_fixed_min + k_min_ruler_gap)
                         ruler_fixed_max = ruler_fixed_min + k_min_ruler_gap;
-                    config_file::instance().set(configurations::viewer::ruler_fixed_min, ruler_fixed_min);
-                    config_file::instance().set(configurations::viewer::ruler_fixed_max, ruler_fixed_max);
+                    if (!ruler_config_key_root.empty())
+                    {
+                        auto& cf = config_file::instance();
+                        const std::string min_k = ruler_config_key_root + "." +
+                                                  configurations::viewer::ruler_fixed_min_key;
+                        const std::string max_k = ruler_config_key_root + "." +
+                                                  configurations::viewer::ruler_fixed_max_key;
+                        cf.set(min_k.c_str(), ruler_fixed_min);
+                        cf.set(max_k.c_str(), ruler_fixed_max);
+                    }
                     ruler_state.initialized = false;
                 }
                 ImGui::EndPopup();
