@@ -14,6 +14,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include "imgui-fonts-karla.hpp"
+#include "imgui-fonts-karla-bold.hpp"
 #include "imgui-fonts-fontawesome.hpp"
 #include "imgui-fonts-monofont.hpp"
 #include <realsense_imgui.h>
@@ -44,7 +45,7 @@ namespace rs2
         ~disable_guard() { end(); }
     };
 
-    void imgui_easy_theming(ImFont*& font_dynamic, ImFont*& font_18, ImFont*& monofont, int& font_size)
+    void imgui_easy_theming(ImFont*& font_dynamic, ImFont*& font_18, ImFont*& monofont, ImFont*& font_bold, int& font_size)
     {
         ImGuiStyle& style = ImGui::GetStyle();
 
@@ -100,6 +101,22 @@ namespace rs2
             config_glyphs.OversampleV = OVERSAMPLE;
             config_glyphs.OversampleH = OVERSAMPLE;
             monofont = io.Fonts->AddFontFromMemoryCompressedTTF(font_awesome_compressed_data,
+                font_awesome_compressed_size, 14.f, &config_glyphs, icons_ranges);
+        }
+
+        // Load bold font (for **strong** markdown emphasis).
+        {
+            ImFontConfig config_words;
+            config_words.OversampleV = OVERSAMPLE;
+            config_words.OversampleH = OVERSAMPLE;
+            font_bold = io.Fonts->AddFontFromMemoryCompressedTTF(karla_bold_compressed_data,
+                karla_bold_compressed_size, (float)font_size, &config_words);
+
+            ImFontConfig config_glyphs;
+            config_glyphs.MergeMode = true;
+            config_glyphs.OversampleV = OVERSAMPLE;
+            config_glyphs.OversampleH = OVERSAMPLE;
+            font_bold = io.Fonts->AddFontFromMemoryCompressedTTF(font_awesome_compressed_data,
                 font_awesome_compressed_size, 14.f, &config_glyphs, icons_ranges);
         }
 
