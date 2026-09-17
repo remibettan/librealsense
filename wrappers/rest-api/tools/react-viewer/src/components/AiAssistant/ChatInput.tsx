@@ -57,11 +57,10 @@ export function ChatInput({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!hasContent || isLoading) return
-    const message = inputValue.trim()
+    const hasAttachments = Boolean(pendingImages.length || pendingFiles.length)
+    const message = inputValue.trim() || (hasAttachments ? 'Please analyze the attached file(s).' : '')
     setInputValue('')
-    const attachments = (pendingImages.length || pendingFiles.length)
-      ? { imageDataUris: pendingImages, fileDataUris: pendingFiles }
-      : undefined
+    const attachments = hasAttachments ? { imageDataUris: pendingImages, fileDataUris: pendingFiles } : undefined
     clearAttachments()
     onSend(message, attachments)
   }
