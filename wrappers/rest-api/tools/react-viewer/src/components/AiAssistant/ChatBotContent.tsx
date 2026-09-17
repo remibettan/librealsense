@@ -3,39 +3,25 @@
 //
 // Body content (message list + settings preview + input) for the device-config chatbot mode,
 // rendered inside the shared AssistantPanel shell. Reuses the untouched ChatBot message bubble
-// and settings-preview components — only the header/frame around it is shared with the
-// RealSense AI Assistant mode. Uses its own amber accent (instead of rs-blue) so the two modes
-// are visually distinguishable at a glance, without having to read the header title.
+// and settings-preview components — only the header/frame and the input footer (ChatInput) are
+// shared with the RealSense AI Assistant mode. Uses its own amber accent (instead of rs-blue) so
+// the two modes are visually distinguishable at a glance, without having to read the header title.
 
-import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, Wrench } from 'lucide-react'
+import { useRef, useEffect } from 'react'
+import { Loader2, Wrench } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { ChatMessageBubble } from '../ChatBot/ChatMessage'
 import { SettingsPreview } from '../ChatBot/SettingsPreview'
-import { StopGeneratingButton } from './StopGeneratingButton'
+import { ChatInput } from './ChatInput'
 
 export function ChatBotContent() {
   const { isChatLoading, chatMessages, pendingSettings, sendChatMessage, stopChatMessage } = useAppStore()
 
-  const [inputValue, setInputValue] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
-
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const message = inputValue.trim()
-    if (!message || isChatLoading) return
-    setInputValue('')
-    sendChatMessage(message)
-  }
 
   return (
     <>
@@ -62,30 +48,14 @@ export function ChatBotContent() {
 
       {pendingSettings && <SettingsPreview settings={pendingSettings} />}
 
-      <form onSubmit={handleSubmit} className="p-3 border-t bg-rs-darker border-gray-700">
-        <div className="flex items-center gap-2">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Ask about camera settings..."
-            disabled={isChatLoading}
-            className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-amber-500 text-sm bg-gray-800 border-gray-600 text-white placeholder-gray-500"
-          />
-          <button
-            type="submit"
-            disabled={!inputValue.trim() || isChatLoading}
-            className="p-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-1 mt-2">
-          <StopGeneratingButton onClick={stopChatMessage} disabled={!isChatLoading} />
-        </div>
-      </form>
+      <ChatInput
+        placeholder="Ask about camera settings..."
+        accent="amber"
+        isLoading={isChatLoading}
+        attachmentsEnabled={false}
+        onSend={(message) => sendChatMessage(message)}
+        onStop={stopChatMessage}
+      />
     </>
   )
 }
