@@ -664,6 +664,12 @@ namespace rs2
 
         if (RS2_STREAM_DEPTH == profile.stream_type())
         {
+            // Scope the button + popover ID to this stream instance. Without this,
+            // two visible depth streams would collide on both the "##Color map"
+            // button ID and the "##ColorMapRulerPopup" popup ID, and right-
+            // clicking either button would mutate the other stream's ruler state.
+            ImGui::PushID(static_cast<const void*>(this));
+
             label = rsutils::string::from() << textual_icons::bar_chart << "##Color map";
             if (show_map_ruler)
             {
@@ -758,6 +764,7 @@ namespace rs2
                 ImGui::EndPopup();
             }
 
+            ImGui::PopID();
             ImGui::SameLine();
         }
 
