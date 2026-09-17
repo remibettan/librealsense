@@ -139,6 +139,14 @@ namespace rs2
             static const char* log_severity{ "viewer_model.log_severity" };
             static const char* post_processing{ "viewer_model.post_processing" };
             static const char* show_map_ruler{ "viewer_model.show_map_ruler" };
+            // Per-device ruler settings are stored under
+            //   viewer_model.ruler.<device name>.<sensor name>.{range_mode,fixed_min,fixed_max}
+            // — mirrors the layout used for post_processing so each SKU keeps its own
+            // preference (D455 vs D435 vs D585 don't share a fixed range).
+            static const char* ruler_key_root      { "viewer_model.ruler" };
+            static const char* ruler_range_mode_key{ "range_mode" };
+            static const char* ruler_fixed_min_key { "fixed_min" };
+            static const char* ruler_fixed_max_key { "fixed_max" };
             static const char* show_stream_details{ "viewer_model.show_stream_details" };
             static const char* metric_system{ "viewer_model.metric_system" };
             static const char* shading_mode{ "viewer_model.shading_mode" };
