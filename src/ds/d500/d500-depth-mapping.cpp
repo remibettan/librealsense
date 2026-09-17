@@ -28,9 +28,7 @@ using rs_fourcc = rsutils::type::fourcc;
 
 namespace librealsense
 {
-    // Use the same validated capture identity as the timestamp reader, including
-    // LPCL's MAP1 fallback when the host strips UVC extension metadata. Pure
-    // Occupancy relies exclusively on UVC metadata.
+    // Use the same validated UVC capture identity as the Mapping timestamp reader.
     class mapping_capture_parser : public md_attribute_parser_base
     {
         rs2_frame_metadata_value const _attribute;

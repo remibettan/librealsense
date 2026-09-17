@@ -4,145 +4,93 @@
 
 #include "../catch.h"
 #include <src/ds/d500/mapping-timing.h>
-#include <src/stream.h>
+#include <src/metadata-parser.h>
 
 using namespace librealsense;
 
 namespace
 {
-template <class T, class Allocator> void put( std::vector<uint8_t, Allocator> &bytes, size_t offset, T value )
+frame mapping_frame( md_type type, uint32_t counter, uint64_t aicv_timestamp, uint32_t hif_pts )
 {
-    std::memcpy( bytes.data() + offset, &value, sizeof( value ) );
-}
+    frame f;
+    platform::uvc_header uvc{};
+    uvc.length = sizeof( uvc ) + sizeof( md_occupancy );
+    uvc.timestamp = hif_pts;
+    std::memcpy( f.additional_data.metadata_blob.data(), &uvc, sizeof( uvc ) );
 
-std::shared_ptr<frame> lpcl_map1_frame( uint32_t counter, uint64_t timestamp )
-{
-    auto f = std::make_shared<frame>();
-    auto profile = std::make_shared<video_stream_profile>();
-    profile->set_format( RS2_FORMAT_Y8 );
-    profile->set_stream_type( RS2_STREAM_LABELED_POINT_CLOUD );
-    f->set_stream( profile );
-    auto &b = f->data;
-    b.resize( 70 ); // two labeled vertices
-    put<uint32_t>( b, 0, 0x3150414d );
-    put<uint16_t>( b, 4, 0x0100 );
-    b[6] = 1;
-    put<uint32_t>( b, 8, b.size() - 20 );
-    put<uint16_t>( b, 12, 0x0101 );
-    put<uint16_t>( b, 20, 2 );
-    put<uint16_t>( b, 22, 1 );
-    put<uint16_t>( b, 24, 12 );
-    put<uint16_t>( b, 26, 1 );
-    put<uint32_t>( b, 28, 2 );
-    put<uint32_t>( b, 32, counter );
-    put<uint64_t>( b, 36, timestamp );
-    f->additional_data.metadata_size = 12; // Linux UVCH strips extension bytes
-    f->additional_data.metadata_blob[0] = 148;
-    return f;
-}
-
-std::shared_ptr<frame> pure_occupancy_frame()
-{
-    auto f = std::make_shared<frame>();
-    auto profile = std::make_shared<video_stream_profile>();
-    profile->set_format( RS2_FORMAT_Y8 );
-    profile->set_stream_type( RS2_STREAM_OCCUPANCY );
-    f->set_stream( profile );
-    f->data.resize( 320 * 256, 0 );
-    f->additional_data.metadata_size = 12; // base UVC header only
-    f->additional_data.metadata_blob[0] = 148;
+    md_occupancy md{};
+    md.header.md_type_id = type;
+    md.header.md_size = sizeof( md );
+    md.flags = static_cast< uint32_t >( md_occupancy_attributes::frame_counter_attribute )
+        | static_cast< uint32_t >( md_occupancy_attributes::frame_timestamp_attribute );
+    md.frame_counter = counter;
+    md.frame_timestamp = aicv_timestamp;
+    std::memcpy( f.additional_data.metadata_blob.data() + platform::uvc_header_size, &md, sizeof( md ) );
+    f.additional_data.metadata_size = platform::uvc_header_size + sizeof( md );
     return f;
 }
 } // namespace
 
-TEST_CASE( "LPCL MAP1 preserves hardware FPS across dropped deliveries", "[mapping-timing]" )
+TEST_CASE( "Mapping keeps HIF PTS and AICV sensor timestamp distinct", "[mapping-timing]" )
 {
-    auto first = lpcl_map1_frame( 101, 6400000000ULL );
-    auto next = lpcl_map1_frame( 103, 6400066667ULL );
+    constexpr uint32_t hif_pts = 123456;
+    constexpr uint64_t aicv_timestamp = 6400000000ULL;
+    auto f = mapping_frame( md_type::META_DATA_INTEL_OCCUPANCY_ID, 99, aicv_timestamp, hif_pts );
+
+    rs2_metadata_type frame_timestamp = 0;
+    auto hif_parser = make_uvc_header_parser( &platform::uvc_header::timestamp );
+    REQUIRE( hif_parser->find( f, &frame_timestamp ) );
+    CHECK( frame_timestamp == hif_pts );
+
+    uint32_t counter = 0;
+    uint64_t sensor_timestamp = 0;
+    REQUIRE( get_mapping_capture_timing( f, counter, sensor_timestamp ) );
+    CHECK( counter == 99 );
+    CHECK( sensor_timestamp == aicv_timestamp );
+    CHECK( sensor_timestamp != frame_timestamp );
+}
+
+TEST_CASE( "Mapping hardware identity preserves FPS across dropped deliveries", "[mapping-timing]" )
+{
+    auto first = mapping_frame( md_type::META_DATA_INTEL_OCCUPANCY_ID, 101, 6400000000ULL, 1000 );
+    auto next = mapping_frame( md_type::META_DATA_INTEL_OCCUPANCY_ID, 103, 6400066667ULL, 2000 );
     uint32_t first_counter = 0, next_counter = 0;
     uint64_t first_timestamp = 0, next_timestamp = 0;
-    REQUIRE( get_mapping_capture_timing( *first, first_counter, first_timestamp ) );
-    REQUIRE( get_mapping_capture_timing( *next, next_counter, next_timestamp ) );
-    CHECK( first_counter == 101 );
-    CHECK( next_counter == 103 );
-    next->additional_data.frame_number = next_counter;
-    next->additional_data.last_frame_number = first_counter;
-    next->additional_data.timestamp = next_timestamp * 0.001;
-    next->additional_data.last_timestamp = first_timestamp * 0.001;
-    CHECK( next->calc_actual_fps() == Catch::Approx( 30. ).margin( 0.001 ) );
-    // The synchronous timestamp probe borrows the backend buffer, not a copy.
-    frame borrowed;
-    borrowed.set_stream( next->get_stream() );
-    borrowed.set_data_size( next->data.size() );
-    borrowed.attach_continuation( frame_continuation( []() {}, next->data.data() ) );
-    uint32_t counter = 0;
-    uint64_t timestamp = 0;
-    REQUIRE( get_mapping_capture_timing( borrowed, counter, timestamp ) );
-    CHECK( counter == 103 );
-    CHECK( timestamp == 6400066667ULL );
+    REQUIRE( get_mapping_capture_timing( first, first_counter, first_timestamp ) );
+    REQUIRE( get_mapping_capture_timing( next, next_counter, next_timestamp ) );
+    next.additional_data.frame_number = next_counter;
+    next.additional_data.last_frame_number = first_counter;
+    next.additional_data.timestamp = next_timestamp * 0.001;
+    next.additional_data.last_timestamp = first_timestamp * 0.001;
+    CHECK( next.calc_actual_fps() == Catch::Approx( 30. ).margin( 0.001 ) );
 }
 
-TEST_CASE( "LPCL MAP1 validates extent, layout and missing capture time", "[mapping-timing]" )
+TEST_CASE( "Mapping accepts complete metadata and rejects invalid extensions", "[mapping-timing]" )
 {
-    uint32_t counter = 0;
-    uint64_t timestamp = 0;
-    auto good = lpcl_map1_frame( 7, 1000000 );
-    for ( size_t size = 0; size < good->data.size(); ++size )
+    for( auto type : { md_type::META_DATA_INTEL_OCCUPANCY_ID,
+                       md_type::META_DATA_INTEL_POINT_CLOUD_ID } )
     {
-        auto short_frame = lpcl_map1_frame( 7, 1000000 );
-        short_frame->data.resize( size );
-        CHECK_FALSE( get_mapping_capture_timing( *short_frame, counter, timestamp ) );
-    }
-    for ( size_t offset : { size_t( 0 ), size_t( 4 ), size_t( 6 ), size_t( 8 ), size_t( 12 ),
-                            size_t( 20 ), size_t( 26 ) } )
-    {
-        auto bad = lpcl_map1_frame( 7, 1000000 );
-        bad->data[offset] ^= 1;
-        CHECK_FALSE( get_mapping_capture_timing( *bad, counter, timestamp ) );
-    }
-    auto zero = lpcl_map1_frame( 7, 0 );
-    CHECK_FALSE( get_mapping_capture_timing( *zero, counter, timestamp ) );
-}
-
-TEST_CASE( "Pure Occupancy has no in-band timing fallback", "[mapping-timing]" )
-{
-    auto f = pure_occupancy_frame();
-    uint32_t counter = 0;
-    uint64_t timestamp = 0;
-    CHECK_FALSE( get_mapping_capture_timing( *f, counter, timestamp ) );
-}
-
-TEST_CASE( "Mapping retains validated Safety UVC timing and rejects truncated extensions",
-           "[mapping-timing]" )
-{
-    for ( auto type : { md_type::META_DATA_INTEL_OCCUPANCY_ID, md_type::META_DATA_INTEL_POINT_CLOUD_ID } )
-    {
-        frame f;
-        md_occupancy md{};
-        md.header.md_type_id = type;
-        md.header.md_size = sizeof( md );
-        md.flags = 7;
-        md.frame_counter = 99;
-        md.frame_timestamp = 6400000000ULL;
-        std::memcpy( f.additional_data.metadata_blob.data() + 12, &md, sizeof( md ) );
-        f.additional_data.metadata_size = 12 + sizeof( md );
+        auto f = mapping_frame( type, 99, 6400000000ULL, 123456 );
         uint32_t counter = 0;
         uint64_t timestamp = 0;
         REQUIRE( get_mapping_capture_timing( f, counter, timestamp ) );
-        CHECK( counter == 99 );
-        CHECK( timestamp == 6400000000ULL );
-        for ( unsigned size = 0; size < 12 + sizeof( md ); ++size )
+
+        for( unsigned size = 0; size < platform::uvc_header_size + sizeof( md_occupancy ); ++size )
         {
             f.additional_data.metadata_size = size;
             CHECK_FALSE( get_mapping_capture_timing( f, counter, timestamp ) );
         }
-        f.additional_data.metadata_size = 12 + sizeof( md );
-        for ( size_t offset : { size_t( 0 ), size_t( 4 ), size_t( 12 ) } )
-        {
-            auto &b = f.additional_data.metadata_blob;
-            b[12 + offset] ^= 4;
-            CHECK_FALSE( get_mapping_capture_timing( f, counter, timestamp ) );
-            b[12 + offset] ^= 4;
-        }
+
+        f = mapping_frame( type, 99, 6400000000ULL, 123456 );
+        auto *md = reinterpret_cast< md_occupancy * >(
+            f.additional_data.metadata_blob.data() + platform::uvc_header_size );
+        md->header.md_size = sizeof( md_occupancy ) - 1;
+        CHECK_FALSE( get_mapping_capture_timing( f, counter, timestamp ) );
+        md->header.md_size = sizeof( md_occupancy );
+        md->flags &= ~static_cast< uint32_t >( md_occupancy_attributes::frame_counter_attribute );
+        CHECK_FALSE( get_mapping_capture_timing( f, counter, timestamp ) );
+        md->flags |= static_cast< uint32_t >( md_occupancy_attributes::frame_counter_attribute );
+        md->frame_timestamp = 0;
+        CHECK_FALSE( get_mapping_capture_timing( f, counter, timestamp ) );
     }
 }
