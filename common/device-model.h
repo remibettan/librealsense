@@ -327,7 +327,8 @@ namespace rs2
         void refresh_notifications(viewer_model& viewer);
 
         int draw_playback_panel(ux_window& window, ImFont* font, viewer_model& view);
-        bool draw_advanced_controls(viewer_model& view, ux_window& window, std::string& error_message, bool is_streaming = false);
+        bool draw_advanced_controls(viewer_model& view, ux_window& window, std::string& error_message,
+            bool is_streaming, std::string const & filter, std::vector<std::function<void()>>& draw_later);
         void draw_controls(float panel_width, float panel_height,
             ux_window& window,
             std::string& error_message,
@@ -428,14 +429,8 @@ namespace rs2
         bool draw_device_panel_auto_calib_d400(viewer_model& viewer, bool& something_to_show, std::string& error_message);
         bool draw_device_panel_auto_calib_d500(viewer_model& viewer, bool& something_to_show, std::string& error_message);
 
-        void draw_processing_blocks(std::shared_ptr<subdevice_model> sub, float windows_width,
-            ux_window& window, viewer_model& viewer,
-            std::string& error_message, std::string& label,
-            std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options);
-
-        void draw_embedded_filters(std::shared_ptr<subdevice_model> sub, float windows_width,
-            ux_window& window, viewer_model& viewer, std::string& error_message, std::string& label,
-            std::vector<std::function<void()>>& draw_later, const bool& update_read_only_options);
+        void draw_processing_blocks(std::shared_ptr<subdevice_model> sub, control_draw_context& ctx);
+        void draw_embedded_filters(std::shared_ptr<subdevice_model> sub, control_draw_context& ctx);
 
         std::thread check_for_device_updates_thread;
         std::mutex dev_mutex;
