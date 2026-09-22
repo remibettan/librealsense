@@ -256,6 +256,7 @@ namespace rs2
         }
 
         profile = p;
+        ui_key = p.unique_id();  // viewer_model::begin_stream overrides it for a split stream's passive tile
         texture->colorize = d->depth_colorizer;
         texture->yuy2rgb = d->yuy2rgb;
         texture->m420_to_rgb = d->m420_to_rgb;
@@ -523,7 +524,7 @@ namespace rs2
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, header_window_bg);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, header_window_bg);
 
-        std::string label = rsutils::string::from() << "Stream of " << profile.unique_id();
+        std::string label = rsutils::string::from() << "Stream of " << ui_key;
 
         ImGui::GetWindowDrawList()->AddRectFilled({ stream_rect.x, stream_rect.y - top_bar_height },
             { stream_rect.x + stream_rect.w, stream_rect.y }, ImColor(sensor_bg));
@@ -600,7 +601,7 @@ namespace rs2
         
         if (graph)
         {
-            label = rsutils::string::from() << textual_icons::bar_chart << "##graph view" << profile.unique_id();
+            label = rsutils::string::from() << textual_icons::bar_chart << "##graph view" << ui_key;
             if (show_graph)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
@@ -630,7 +631,7 @@ namespace rs2
             ImGui::SameLine();
         }
         
-        label = rsutils::string::from() << textual_icons::list_ul << "##Metadata" << profile.unique_id();
+        label = rsutils::string::from() << textual_icons::list_ul << "##Metadata" << ui_key;
         if (show_metadata)
         {
             ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
@@ -660,7 +661,7 @@ namespace rs2
 
         if (profile.as<rs2::video_stream_profile>()) // Grid/crosshair overlay is only meaningful on 2D video streams
         {
-            label = rsutils::string::from() << textual_icons::grid << "##Grid " << profile.unique_id();
+            label = rsutils::string::from() << textual_icons::grid << "##Grid " << ui_key;
             if (show_crosshair)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
@@ -794,7 +795,7 @@ namespace rs2
 
         if (RS2_STREAM_OCCUPANCY == profile.stream_type() && _normalized_zoom.w == 1) // hide polygons button when zooming in
         {
-            label = rsutils::string::from() << textual_icons::draw_polygon << "##Safety zones " << profile.unique_id();
+            label = rsutils::string::from() << textual_icons::draw_polygon << "##Safety zones " << ui_key;
             if (show_safety_zones_2d)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
@@ -827,7 +828,7 @@ namespace rs2
 
         if (show_distance_grid_button)
         {
-            label = rsutils::string::from() << textual_icons::grid << "##Distance grid " << profile.unique_id();
+            label = rsutils::string::from() << textual_icons::grid << "##Distance grid " << ui_key;
             if (show_distance_grid_2d)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
@@ -848,7 +849,7 @@ namespace rs2
                 ImGui::PushStyleColor(ImGuiCol_FrameBg, header_window_bg);
                 // Edits the member directly - a fresh local copy each frame fought with ImGui's
                 // in-progress edit buffer while typing.
-                std::string cell_size_id = rsutils::string::from() << "##Distance grid cell size " << profile.unique_id();
+                std::string cell_size_id = rsutils::string::from() << "##Distance grid cell size " << ui_key;
                 if (ImGui::InputInt(cell_size_id.c_str(), &distance_grid_cell_size_cm, 0, 0))
                 {
                     distance_grid_cell_size_cm = clamp_distance_grid_cell_size(distance_grid_cell_size_cm);
@@ -879,7 +880,7 @@ namespace rs2
         {
             ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
             ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue);
-            label = rsutils::string::from() << textual_icons::play << "##Resume " << profile.unique_id();
+            label = rsutils::string::from() << textual_icons::play << "##Resume " << ui_key;
             if (ImGui::Button(label.c_str(), { 24, top_bar_height }))
             {
                 dev->resume();
@@ -893,7 +894,7 @@ namespace rs2
         }
         else
         {
-            label = rsutils::string::from() << textual_icons::pause << "##Pause " << profile.unique_id();
+            label = rsutils::string::from() << textual_icons::pause << "##Pause " << ui_key;
             if (ImGui::Button(label.c_str(), { 24, top_bar_height }))
             {
                 dev->pause();
@@ -906,7 +907,7 @@ namespace rs2
         }
         ImGui::SameLine();
 
-        label = rsutils::string::from() << textual_icons::camera << "##Snapshot " << profile.unique_id();
+        label = rsutils::string::from() << textual_icons::camera << "##Snapshot " << ui_key;
         if (ImGui::Button(label.c_str(), { 24, top_bar_height }))
         {
             auto filename = file_dialog_open(save_file, "Portable Network Graphics (PNG)\0*.png\0", nullptr, nullptr);
@@ -922,7 +923,7 @@ namespace rs2
         }
         ImGui::SameLine();
 
-        label = rsutils::string::from() << textual_icons::info_circle << "##Info " << profile.unique_id();
+        label = rsutils::string::from() << textual_icons::info_circle << "##Info " << ui_key;
         if (show_stream_details)
         {
             ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
@@ -962,7 +963,7 @@ namespace rs2
         {
             if (!viewer.fullscreen)
             {
-                label = rsutils::string::from() << textual_icons::window_maximize << "##Maximize " << profile.unique_id();
+                label = rsutils::string::from() << textual_icons::window_maximize << "##Maximize " << ui_key;
 
                 if (ImGui::Button(label.c_str(), { 24, top_bar_height }))
                 {
@@ -981,7 +982,7 @@ namespace rs2
                 ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
                 ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue);
 
-                label = rsutils::string::from() << textual_icons::window_restore << "##Restore " << profile.unique_id();
+                label = rsutils::string::from() << textual_icons::window_restore << "##Restore " << ui_key;
 
                 if (ImGui::Button(label.c_str(), { 24, top_bar_height }))
                 {
@@ -1003,7 +1004,7 @@ namespace rs2
 
         if (viewer.allow_stream_close)
         {
-            label = rsutils::string::from() << textual_icons::times << "##Stop " << profile.unique_id();
+            label = rsutils::string::from() << textual_icons::times << "##Stop " << ui_key;
             if (ImGui::Button(label.c_str(), { 24, top_bar_height }))
             {
                 dev->stop(viewer.not_model);
@@ -1305,7 +1306,7 @@ namespace rs2
         ImGui::SetCursorScreenPos( { stream_rect.x, stream_rect.y } );
 
         // Creating layer for metadata
-        std::string metadata_layer_id = rsutils::string::from() << "##Metadata-" << profile.unique_id();
+        std::string metadata_layer_id = rsutils::string::from() << "##Metadata-" << ui_key;
         ImGui::BeginChild( metadata_layer_id.c_str(), ImVec2( stream_rect.w + 2, stream_rect.h ) );
         auto screen_pos = ImGui::GetCursorScreenPos( );
         const float space_between_columns = 20.f;
@@ -1343,7 +1344,7 @@ namespace rs2
                     ImGui::SetCursorScreenPos( { screen_pos.x + space_from_left, line_y } ); // create space from left for metadata labels column.
                     ImGui::PushItemWidth(warning_size.x + 5);
 
-                    std::string metadata_id = rsutils::string::from() << "##" << at.name << "-" << profile.unique_id();
+                    std::string metadata_id = rsutils::string::from() << "##" << at.name << "-" << ui_key;
                     ImGui::InputText( metadata_id.c_str(),
                                       (char *)warning_lines[i].c_str(),
                                       warning_lines[i].size(),
@@ -1369,7 +1370,7 @@ namespace rs2
 
                 ImGui::PushItemWidth(label_size.x + 5);  // Set input text width for label.
 
-                std::string label_id = rsutils::string::from() << "##" << at.name << "-" << profile.unique_id();
+                std::string label_id = rsutils::string::from() << "##" << at.name << "-" << ui_key;
                 ImGui::InputText( label_id.c_str(),
                                   (char *)text.c_str(),
                                   text.size(),
@@ -1399,7 +1400,7 @@ namespace rs2
 
                 ImGui::PushItemWidth(value_size.x + 5);  // Set input text width for label value.
 
-                std::string value_id = rsutils::string::from() << "##" << at.name << "-" << at.value << "-" << profile.unique_id();
+                std::string value_id = rsutils::string::from() << "##" << at.name << "-" << at.value << "-" << ui_key;
                 ImGui::InputText( value_id.c_str(),
                                   (char *)text.c_str(),
                                   text.size(),
@@ -1856,7 +1857,7 @@ namespace rs2
 
             ImGui::SetCursorScreenPos({ pos.x + 10, pos.y + 5 });
 
-            std::string label = rsutils::string::from() << "Footer for stream of " << profile.unique_id();
+            std::string label = rsutils::string::from() << "Footer for stream of " << ui_key;
 
             ImGui::PushStyleColor(ImGuiCol_Text, light_grey);
             ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, white);
@@ -1900,7 +1901,7 @@ namespace rs2
                 y_offset += 30;
             }
 
-            std::string label = rsutils::string::from() << "IMU Stream Info of " << profile.unique_id();
+            std::string label = rsutils::string::from() << "IMU Stream Info of " << ui_key;
 
             int const line_h = 18;
 
@@ -1952,7 +1953,7 @@ namespace rs2
 
                 ImGui::PushItemWidth(100);
                 ImGui::SetCursorPos({ rc.x + 27 + motion.nameExtraSpace, rc.y + 1 });
-                std::string label = rsutils::string::from() << "##" << profile.unique_id() << "." << rc.y << " " << motion.name.c_str();
+                std::string label = rsutils::string::from() << "##" << ui_key << "." << rc.y << " " << motion.name.c_str();
                 std::string coordinate = rsutils::string::from() << std::fixed << std::setprecision(precision) << std::showpos << motion.coordinate;
                 ImGui::InputText(label.c_str(), (char*)coordinate.c_str(), coordinate.size() + 1, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
                 ImGui::PopItemWidth();
@@ -1982,7 +1983,7 @@ namespace rs2
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, header_window_bg);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, header_window_bg);
 
-        std::string label = rsutils::string::from() << "Pose Stream Info of " << profile.unique_id();
+        std::string label = rsutils::string::from() << "Pose Stream Info of " << ui_key;
 
         ImVec2 pos{ stream_rect.x, stream_rect.y + y_offset };
         ImGui::SetCursorScreenPos({ pos.x + 5, pos.y + 5 });
@@ -2067,7 +2068,7 @@ namespace rs2
             }
 
             ImGui::SetCursorPos({ rc.x + 100 + (fullScreen ? pose.nameExtraSpace : 0), rc.y + 1 });
-            std::string label = rsutils::string::from() << "##" << profile.unique_id() << " " << pose.name.c_str();
+            std::string label = rsutils::string::from() << "##" << ui_key << " " << pose.name.c_str();
             std::string data = "";
 
             if (pose.strData.empty())

@@ -63,15 +63,25 @@ def test_passive_depth_rejects_out_of_range(depth_sensor):
 
 def test_passive_depth_rejected_while_streaming(depth_sensor):
     # The mode is applied at stream start; the shared imagers make any streaming activity block the set.
+    assert not depth_sensor.is_option_read_only(PASSIVE_DEPTH)
     depth_sensor.open(depth_profile(depth_sensor))
     depth_sensor.start(lambda frame: None)
     try:
+        assert depth_sensor.is_option_read_only(PASSIVE_DEPTH)  # so the viewer greys it out
+        if depth_sensor.supports(AE_MODE):
+            assert depth_sensor.is_option_read_only(AE_MODE)
+        # the emitter belongs to the exposure schedule the firmware fixes at stream start
+        assert depth_sensor.is_option_read_only(rs.option.emitter_enabled)
+        with pytest.raises(Exception):
+            depth_sensor.set_option(rs.option.emitter_enabled, 0)
         with pytest.raises(Exception):
             depth_sensor.set_option(PASSIVE_DEPTH, MODES.full)
         assert depth_sensor.get_option(PASSIVE_DEPTH) == MODES.disabled
     finally:
         depth_sensor.stop()
         depth_sensor.close()
+    assert not depth_sensor.is_option_read_only(PASSIVE_DEPTH)
+    assert not depth_sensor.is_option_read_only(rs.option.emitter_enabled)
 
 
 def test_full_passive_locks_the_laser(depth_sensor):
@@ -90,6 +100,18 @@ def test_full_passive_locks_the_laser(depth_sensor):
     depth_sensor.set_option(PASSIVE_DEPTH, MODES.disabled)
     for opt in supported:
         assert not depth_sensor.is_option_read_only(opt)
+
+
+def test_full_passive_switches_ae_to_color_priority(depth_sensor):
+    # Firmware runs Full Passive on Color Priority but keeps reporting the previous policy, so the host moves it.
+    if not depth_sensor.supports(AE_MODE):
+        pytest.skip("auto exposure policy not exposed on this device")
+
+    for policy in (POLICIES.auto, POLICIES.depth_priority, POLICIES.hybrid):
+        depth_sensor.set_option(PASSIVE_DEPTH, MODES.disabled)
+        depth_sensor.set_option(AE_MODE, policy)
+        depth_sensor.set_option(PASSIVE_DEPTH, MODES.full)
+        assert depth_sensor.get_option(AE_MODE) == POLICIES.color_priority
 
 
 def test_full_passive_hides_hybrid_ae(depth_sensor):

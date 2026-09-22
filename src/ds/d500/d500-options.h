@@ -187,16 +187,20 @@ namespace librealsense
 
     // A control that Full Passive Depth takes over: the firmware forces the laser off there, so the host
     // refuses changes and reports the control locked instead of letting a write silently do nothing.
+    // raw_ep is passed for a control the firmware also fixes for the duration of a stream.
     class passive_depth_locked_option : public proxy_option
     {
     public:
-        passive_depth_locked_option( std::shared_ptr< option > proxy, const std::weak_ptr< option > & passive_depth_mode );
+        passive_depth_locked_option( std::shared_ptr< option > proxy,
+                                     const std::weak_ptr< option > & passive_depth_mode,
+                                     const std::weak_ptr< uvc_sensor > & raw_ep = {} );
 
         void set( float value ) override;
         bool is_read_only() const override;
 
     private:
         std::weak_ptr< option > _passive_depth_mode;
+        std::weak_ptr< uvc_sensor > _raw_ep;
     };
 
     // Auto-exposure policy of a dual-RGB depth sensor. Full Passive Depth locks the policy to Color Priority in
@@ -210,9 +214,28 @@ namespace librealsense
 
         void set( float value ) override;
         option_range get_range() const override;
+        bool is_read_only() const override;
 
     private:
         std::weak_ptr< option > _passive_depth_mode;
+    };
+
+    // Which exposure classes produce depth. The firmware applies the mode at stream start, and in Full Passive
+    // it takes the laser and the AE policy over - the policy is moved to Color Priority along with the mode,
+    // since the firmware keeps reporting whatever was selected before.
+    class passive_depth_mode_option : public uvc_xu_option< uint8_t >
+    {
+    public:
+        passive_depth_mode_option( const std::weak_ptr< uvc_sensor > & raw_ep,
+                                   const std::map< float, std::string > & description_per_value );
+
+        void set( float value ) override;
+        bool is_read_only() const override;
+
+        void set_ae_policy_option( const std::weak_ptr< option > & ae_policy ) { _ae_policy = ae_policy; }
+
+    private:
+        std::weak_ptr< option > _ae_policy;
     };
 
     class power_line_freq_option : public uvc_pu_option

@@ -250,24 +250,35 @@ namespace librealsense
         return strong && strong->query() == RS2_PASSIVE_DEPTH_MODE_FULL;
     }
 
+    // Firmware applies these at stream start, so there is nothing for the user to change while streaming.
+    static bool sensor_is_streaming( const std::weak_ptr< uvc_sensor > & ep )
+    {
+        auto sensor = ep.lock();
+        return sensor && sensor->is_streaming();
+    }
+
     passive_depth_locked_option::passive_depth_locked_option( std::shared_ptr< option > proxy,
-                                                              const std::weak_ptr< option > & passive_depth_mode )
+                                                              const std::weak_ptr< option > & passive_depth_mode,
+                                                              const std::weak_ptr< uvc_sensor > & raw_ep )
         : proxy_option( proxy )
         , _passive_depth_mode( passive_depth_mode )
+        , _raw_ep( raw_ep )
     {
     }
 
     void passive_depth_locked_option::set( float value )
     {
         if( in_full_passive_depth( _passive_depth_mode ) )
-            throw invalid_value_exception( "Laser controls are owned by the firmware in Full Passive Depth!" );
+            throw invalid_value_exception( "Laser controls cannot be changed in Passive Depth mode 'Full'!" );
+        if( sensor_is_streaming( _raw_ep ) )
+            throw invalid_value_exception( "This control cannot be changed while streaming!" );
 
         proxy_option::set( value );
     }
 
     bool passive_depth_locked_option::is_read_only() const
     {
-        return in_full_passive_depth( _passive_depth_mode ) || proxy_option::is_read_only();
+        return in_full_passive_depth( _passive_depth_mode ) || sensor_is_streaming( _raw_ep ) || proxy_option::is_read_only();
     }
 
     colored_ir_ae_policy_option::colored_ir_ae_policy_option( const std::weak_ptr< uvc_sensor > & raw_ep,
@@ -297,6 +308,49 @@ namespace librealsense
         if( in_full_passive_depth( _passive_depth_mode ) )
             range.max = RS2_COLORED_IR_AUTO_EXPOSURE_COLOR_PRIORITY;
         return range;
+    }
+
+    bool colored_ir_ae_policy_option::is_read_only() const
+    {
+        return sensor_is_streaming( _ep );
+    }
+
+    passive_depth_mode_option::passive_depth_mode_option( const std::weak_ptr< uvc_sensor > & raw_ep,
+                                                          const std::map< float, std::string > & description_per_value )
+        : uvc_xu_option< uint8_t >( raw_ep,
+                                    ds::depth_xu,
+                                    ds::d500_xu_id::PASSIVE_DEPTH,
+                                    "Which exposure classes produce depth: active only, alternating active and passive, or passive only",
+                                    description_per_value,
+                                    false ) // Not settable while streaming
+    {
+    }
+
+    void passive_depth_mode_option::set( float value )
+    {
+        uvc_xu_option< uint8_t >::set( value );
+
+        if( value != RS2_PASSIVE_DEPTH_MODE_FULL )
+            return;
+
+        // Firmware runs Full Passive on Color Priority but leaves the reported policy alone, so move it here -
+        // otherwise the control keeps showing a policy the device is not using.
+        if( auto ae_policy = _ae_policy.lock() )
+        {
+            try
+            {
+                ae_policy->set( RS2_COLORED_IR_AUTO_EXPOSURE_COLOR_PRIORITY );
+            }
+            catch( const std::exception & e )
+            {
+                LOG_WARNING( "Could not move the AE policy to Color Priority for Full Passive Depth: " << e.what() );
+            }
+        }
+    }
+
+    bool passive_depth_mode_option::is_read_only() const
+    {
+        return sensor_is_streaming( _ep );
     }
 
     power_line_freq_option::power_line_freq_option(const std::weak_ptr< uvc_sensor >& ep, rs2_option id,

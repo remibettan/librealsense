@@ -160,10 +160,13 @@ namespace librealsense
                                                            { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_DEPTH_PRIORITY ), "Depth Priority" },
                                                            { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_COLOR_PRIORITY ), "Color Priority" },
                                                            { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_HYBRID ), "Hybrid" } };
-        get_depth_sensor().register_option( RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE,
-                                            std::make_shared< colored_ir_ae_policy_option >( get_raw_depth_sensor(),
-                                                                                             options_map,
-                                                                                             _passive_depth_mode ) );
+        auto ae_policy = std::make_shared< colored_ir_ae_policy_option >( get_raw_depth_sensor(),
+                                                                          options_map,
+                                                                          _passive_depth_mode );
+        get_depth_sensor().register_option( RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE, ae_policy );
+
+        if( _passive_depth_mode )
+            _passive_depth_mode->set_ae_policy_option( ae_policy );
     }
 
     // Selects which exposure classes produce depth. USB only for now - the GMSL driver has no matching CID yet.
@@ -175,12 +178,7 @@ namespace librealsense
         auto options_map = std::map< float, std::string >{ { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_DISABLED ), "Disabled" },
                                                            { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_ALTERNATING ), "Alternating" },
                                                            { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_FULL ), "Full" } };
-        auto mode = std::make_shared< uvc_xu_option< uint8_t > >( get_raw_depth_sensor(),
-                                                                  ds::depth_xu,
-                                                                  ds::d500_xu_id::PASSIVE_DEPTH,
-                                                                  "Which exposure classes produce depth: active only, alternating active and passive, or passive only",
-                                                                  options_map,
-                                                                  false ); // Not settable while streaming
+        auto mode = std::make_shared< passive_depth_mode_option >( get_raw_depth_sensor(), options_map );
         try
         {
             mode->query();  // firmware without the control fails here, and the option stays unregistered
@@ -195,10 +193,16 @@ namespace librealsense
         auto & depth_sensor = get_depth_sensor();
         depth_sensor.register_option( RS2_OPTION_PASSIVE_DEPTH_MODE, mode );
 
-        // Full Passive Depth forces the laser off in firmware, so the host must stop offering it.
-        for( auto id : { RS2_OPTION_EMITTER_ENABLED, RS2_OPTION_LASER_POWER, RS2_OPTION_EMITTER_ALWAYS_ON, RS2_OPTION_EMITTER_ON_OFF } )
+        // Full Passive Depth forces the laser off in firmware, so the host must stop offering the laser controls.
+        for( auto id : { RS2_OPTION_LASER_POWER, RS2_OPTION_EMITTER_ALWAYS_ON, RS2_OPTION_EMITTER_ON_OFF } )
             if( auto laser = depth_sensor.get_option_handler( id ) )
                 depth_sensor.register_option( id, std::make_shared< passive_depth_locked_option >( laser, _passive_depth_mode ) );
+
+        // The emitter is part of the exposure schedule the firmware fixes at stream start, so it locks there too.
+        if( auto emitter = depth_sensor.get_option_handler( RS2_OPTION_EMITTER_ENABLED ) )
+            depth_sensor.register_option( RS2_OPTION_EMITTER_ENABLED,
+                                          std::make_shared< passive_depth_locked_option >( emitter, _passive_depth_mode,
+                                                                                           get_raw_depth_sensor() ) );
     }
 
     // D585 2C dual-color topology: on the depth-function UVC interface, the RGB streams' PU chain

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "d500-device.h"
+#include "d500-options.h"
 #include "stream.h"
 #include <src/platform/stream-profile.h>
 
@@ -27,7 +28,7 @@ namespace librealsense
         // topology node instead (WMF) - RGB options then use the depth raw endpoint.
         std::shared_ptr< uvc_sensor > _raw_rgb_ep;
         // Dual RGB Passive Depth mode; null when the firmware does not publish the control.
-        std::shared_ptr< option > _passive_depth_mode;
+        std::shared_ptr< passive_depth_mode_option > _passive_depth_mode;
 
     private:
         // Stream-combination rules for the shared imagers, registered as validators at construction.

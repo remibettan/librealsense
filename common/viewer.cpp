@@ -2221,7 +2221,7 @@ namespace rs2
                 show_icon(font2, "warning_icon", message.c_str(),
                     static_cast<int>(stream_rect.center().x - 100),
                     static_cast<int>(stream_rect.center().y - 25),
-                    stream_mv.profile.unique_id(),
+                    stream_mv.ui_key,
                     blend(dark_red, alpha),
                     "Did not receive frames from the platform within a reasonable time window,\nplease try reducing the FPS or the resolution");
             }
@@ -2238,11 +2238,11 @@ namespace rs2
 
             if (stream_mv.dev->_is_being_recorded)
             {
-                show_recording_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.profile.unique_id(), alpha);
+                show_recording_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.ui_key, alpha);
                 posX += 23;
             }
             if (stream_mv.dev->is_paused() || (p && p.current_status() == RS2_PLAYBACK_STATUS_PAUSED))
-                show_paused_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.profile.unique_id());
+                show_paused_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.ui_key);
 
             auto stream_type = stream_mv.profile.stream_type();
 
@@ -4031,6 +4031,7 @@ namespace rs2
                 auto & passive = streams[passive_key];
                 passive.begin_stream( d, p, *this );
                 passive.passive = true;
+                passive.ui_key = passive_key;
                 passive_streams[p.unique_id()] = passive_key;
             }
             else
