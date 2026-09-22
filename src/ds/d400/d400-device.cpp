@@ -407,19 +407,9 @@ namespace librealsense
 
     float d400_depth_sensor::get_preset_max_value() const
     {
-        float preset_max_value = RS2_RS400_VISUAL_PRESET_COUNT - 1;
-        switch (_owner->_pid)
-        {
-        case ds::RS400_PID:
-        case ds::RS410_PID:
-        case ds::RS415_PID:
-        case ds::RS460_PID:
-            preset_max_value = static_cast<float>(RS2_RS400_VISUAL_PRESET_REMOVE_IR_PATTERN);
-            break;
-        default:
-            preset_max_value = static_cast<float>(RS2_RS400_VISUAL_PRESET_MEDIUM_DENSITY);
-        }
-        return preset_max_value;
+        // Edge Enhancement is the highest preset supported across all D400 devices; per-pid gating
+        // below REMOVE_IR_PATTERN (only D400/D410/D415/D460) is enforced by the feature check in apply_preset()
+        return static_cast<float>(RS2_RS400_VISUAL_PRESET_EDGE_ENHANCEMENT);
     }
 
     class ds5u_depth_sensor : public d400_depth_sensor
@@ -632,7 +622,7 @@ namespace librealsense
     {
         // Signal background loops (polling_error_handler) so they exit cleanly on the
         // next tick instead of firing one more failing FW query before being joined.
-        _device_alive->store( false );
+        _is_alive->store( false );
     }
 
     void d400_device::init(std::shared_ptr<context> ctx,
@@ -837,7 +827,7 @@ namespace librealsense
 
                     _polling_error_handler = std::make_shared<polling_error_handler>(1000,
                         error_control,
-                        std::weak_ptr<std::atomic<bool>>( _device_alive ),
+                        std::weak_ptr<std::atomic<bool>>( _is_alive ),
                         raw_depth_sensor->get_notifications_processor(),
                         std::make_shared< ds_notification_decoder >( d400_fw_error_report ) );
 
@@ -845,10 +835,19 @@ namespace librealsense
                 }
             }
 
-            if ((val_in_range(_pid, { RS455_PID })) && (_fw_version >= firmware_version("5.12.11.0")))
+            // D455 drives the thermal loop over its depth XU control, D457 over the HWM TC_CMD
+            // opcode - gated on the last major release rather than the D455 XU baseline.
+            const bool thermal_compensation_supported
+                = ( _pid == RS455_PID && _fw_version >= firmware_version( "5.12.11.0" ) )
+               || ( _pid == RS457_PID && _fw_version >= firmware_version( "5.17.0.10" ) );
+            if( thermal_compensation_supported )
             {
-                auto thermal_compensation_toggle = std::make_shared<protected_xu_option<uint8_t>>( raw_depth_sensor, depth_xu,
-                    ds::DS5_THERMAL_COMPENSATION, "Toggle Thermal Compensation Mechanism");
+                std::shared_ptr< option > thermal_compensation_toggle;
+                if( _is_mipi_device )
+                    thermal_compensation_toggle = std::make_shared< thermal_compensation_option_mipi >( _hw_monitor );
+                else
+                    thermal_compensation_toggle = std::make_shared<protected_xu_option<uint8_t>>( raw_depth_sensor, depth_xu,
+                        ds::DS5_THERMAL_COMPENSATION, "Toggle Thermal Compensation Mechanism");
 
                 auto temperature_sensor = depth_sensor.get_option_handler(RS2_OPTION_ASIC_TEMPERATURE);
 

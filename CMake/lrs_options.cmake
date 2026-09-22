@@ -55,9 +55,15 @@ option(FORCE_WINUSB_UVC "Explicitly turn-on winusb_uvc (for win7) backend - depr
 option(ANDROID_USB_HOST_UVC "Build UVC backend for Android - deprecated, use FORCE_RSUSB_BACKEND instead" OFF)
 # This feature requires OpenSSL installation on Linux/OSX, OSX normally does not come with OpenSSL integrated(Thats why default is OFF on OSX)
 if (NOT APPLE)
-    option(CHECK_FOR_UPDATES "Checks for versions updates" ON) 
+    option(CHECK_FOR_UPDATES "Checks for versions updates" ON)
 else()
-    option(CHECK_FOR_UPDATES "Checks for versions updates" OFF) 
+    option(CHECK_FOR_UPDATES "Checks for versions updates" OFF)
+endif()
+# Same libcurl/OpenSSL dependency profile as CHECK_FOR_UPDATES above, so the same per-OS default applies.
+if (NOT APPLE)
+    option(ENABLE_AI_ASSISTANT "Build the AI Assistant chat panel into the viewer" ON)
+else()
+    option(ENABLE_AI_ASSISTANT "Build the AI Assistant chat panel into the viewer" OFF)
 endif()
 option(BUILD_WITH_CPU_EXTENSIONS "Enable compiler optimizations using CPU extensions (such as AVX)" ON)
 # Enable NEON option only on 64-bit ARM platforms (ARM64/AArch64)
@@ -80,4 +86,5 @@ option(USE_EXTERNAL_LZ4 "Use externally build LZ4 library instead of building an
 option(USE_EXTERNAL_NLOHMANN_JSON "Use an externally built nlohmann-json development package instead of downloading it as part of this build" OFF)
 option(BUILD_ASAN "Enable AddressSanitizer" OFF)
 option(BUILD_ROSBAG2 "Build and use rosbag2 recording system" ON) # temporary flag, should be removed when deprecated ROSBAG1 recording system is removed
+option(ENABLE_STATS "Enable RUM (Real User Monitoring) usage-statistics collection" ON)
 mark_as_advanced(BUILD_ASAN)

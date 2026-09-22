@@ -233,20 +233,17 @@ typedef enum rs2_matchers
    RS2_MATCHER_DI,      //compare depth and ir based on frame number
 
    RS2_MATCHER_DI_C,    //compare depth and ir based on frame number,
-                        //compare the pair of corresponding depth and ir with color based on closest timestamp,
+                        //compare the pair of corresponding depth and ir with color based on closest timestamp
 
    RS2_MATCHER_DLR_C,   //compare depth, left and right ir based on frame number,
-                        //compare the set of corresponding depth, left and right with color based on closest timestamp,
-                        //commonly used by RS415, RS435
+                        //compare the set of corresponding depth, left and right with color based on closest timestamp
 
-   RS2_MATCHER_DLR,     //compare depth, left and right ir based on frame number,
-                        //commonly used by RS400, RS405, RS410, RS420, RS430
+   RS2_MATCHER_DLR,     //compare depth, left and right ir based on frame number
 
-   RS2_MATCHER_DIC,     //compare depth, ir and confidence based on frame number used by RS500
+   RS2_MATCHER_DIC,     //compare depth, ir and confidence based on frame number
 
    RS2_MATCHER_DIC_C,    //compare depth, ir and confidence based on frame number,
                          //compare the set of corresponding depth, ir and confidence with color based on closest timestamp,
-                         //commonly used by RS515
 
    RS2_MATCHER_DEFAULT, //the default matcher compare all the streams based on closest timestamp
 
@@ -325,6 +322,7 @@ typedef struct rs2_embedded_filter rs2_embedded_filter;
 typedef struct rs2_embedded_filter_list rs2_embedded_filter_list;
 typedef struct rs2_options rs2_options;
 typedef struct rs2_options_list rs2_options_list;
+typedef struct rs2_composite_options_list rs2_composite_options_list;
 typedef struct rs2_options_changed_callback rs2_options_changed_callback;
 typedef struct rs2_devices_changed_callback rs2_devices_changed_callback;
 typedef struct rs2_notification rs2_notification;

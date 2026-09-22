@@ -23,6 +23,7 @@ namespace librealsense
         // devices under RealSense VID
         const uint16_t D500_RECOVERY_PID      = 0x0CFD; // Shared across the D500 family
         const uint16_t D500_USB2_RECOVERY_PID = 0x0CFE; // Fallback for USB2 hosts
+        const uint16_t D500_MIPI_RECOVERY_PID = 0xBBDD; // D500 MIPI/GMSL DFU recovery (synthetic; no USB enumeration)
         const uint16_t D535_2C_PID            = 0x0C01;
         const uint16_t D535_3C_PID            = 0x0C02;
         const uint16_t D535F_PID              = 0x0C03; // 3C with IR only L/R cover
@@ -106,6 +107,7 @@ namespace librealsense
             { D585S_RECOVERY_PID,     "RealSense D585S Recovery"},
             { D500_RECOVERY_PID,      "RealSense D500 Recovery"},
             { D500_USB2_RECOVERY_PID, "RealSense D500 Recovery"},
+            { D500_MIPI_RECOVERY_PID, "RealSense D5xx MIPI Recovery"},
             { D535_2C_PID,            "RealSense D535 Dual RGB" },
             { D535_3C_PID,            "RealSense D535" },
             { D535F_PID,              "RealSense D535F" },
@@ -119,6 +121,7 @@ namespace librealsense
         // D500-only HWM opcodes. Shared opcodes are in ds::fw_cmd (ds/ds-private.h).
         enum d500_fw_cmd : uint8_t
         {
+            CUSTOM_CMD               = 0x80, // Custom FW command, sub-command given in param1
             HKR_THERMAL_COMPENSATION = 0x84, // Control HKR thermal compensation
             SAFETY_PRESET_READ       = 0x94, // Read safety preset from given index
             SAFETY_PRESET_WRITE      = 0x95, // Write safety preset to given index
@@ -137,6 +140,7 @@ namespace librealsense
         {
             switch (state)
             {
+                ENUM2STR(CUSTOM_CMD);
                 ENUM2STR(HKR_THERMAL_COMPENSATION);
                 ENUM2STR(SAFETY_PRESET_READ);
                 ENUM2STR(SAFETY_PRESET_WRITE);
