@@ -3,14 +3,14 @@
 
 use std::process::Child;
 use std::sync::{Arc, Mutex};
-use tauri::{State, Manager, AppHandle};
+use tauri::{AppHandle, Manager, State};
 
 #[cfg(not(debug_assertions))]
-use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader};
 #[cfg(not(debug_assertions))]
 use std::path::PathBuf;
 #[cfg(not(debug_assertions))]
-use std::io::{BufRead, BufReader};
+use std::process::{Command, Stdio};
 
 // Global state to hold FastAPI subprocess
 #[derive(Clone)]
@@ -28,6 +28,7 @@ fn main() {
     };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .manage(app_state)
         .setup(|app| {
             // Start FastAPI subprocess on app startup (in production only)
@@ -46,12 +47,12 @@ fn main() {
 
             Ok(())
         })
-        .on_window_event(|event| match event.event() {
+        .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
-                let app_handle = event.window().app_handle();
+                let app_handle = window.app_handle();
                 let app_state = app_handle.state::<AppState>();
-                
+
                 // Gracefully shutdown API server
                 let mut process = app_state.api_process.lock().unwrap();
                 if let Some(mut child) = process.take() {
@@ -75,7 +76,12 @@ fn main() {
 
 /// Start the FastAPI backend subprocess
 #[cfg(not(debug_assertions))]
-async fn start_api_server(api_process: Arc<Mutex<Option<Child>>>, _api_port: Arc<Mutex<u16>>, backend_logs: Arc<Mutex<Vec<String>>>, app_handle: AppHandle) {
+async fn start_api_server(
+    api_process: Arc<Mutex<Option<Child>>>,
+    _api_port: Arc<Mutex<u16>>,
+    backend_logs: Arc<Mutex<Vec<String>>>,
+    app_handle: AppHandle,
+) {
     // Determine the path to the FastAPI executable
     let exe_name = if cfg!(target_os = "windows") {
         "realsense_api.exe"
@@ -85,13 +91,13 @@ async fn start_api_server(api_process: Arc<Mutex<Option<Child>>>, _api_port: Arc
 
     // Try to find the executable in bundled resources or current directory
     let exe_path = find_api_executable(exe_name, &app_handle);
-    
+
     match exe_path {
         Some(path) => {
             let log_msg = format!("[Tauri] Found FastAPI executable at: {:?}", path);
             println!("{}", log_msg);
             backend_logs.lock().unwrap().push(log_msg);
-            
+
             match spawn_api_process(&path, 8000, Arc::clone(&backend_logs)) {
                 Ok(child) => {
                     {
@@ -109,12 +115,13 @@ async fn start_api_server(api_process: Arc<Mutex<Option<Child>>>, _api_port: Arc
                     let error_msg = format!("[Tauri] Failed to spawn FastAPI process: {}", e);
                     eprintln!("{}", error_msg);
                     backend_logs.lock().unwrap().push(error_msg);
-                    
+
                     let path_msg = format!("[Tauri] Path: {:?}", path);
                     eprintln!("{}", path_msg);
                     backend_logs.lock().unwrap().push(path_msg);
-                    
-                    let perm_msg = "[Tauri] Ensure the executable has execute permissions".to_string();
+
+                    let perm_msg =
+                        "[Tauri] Ensure the executable has execute permissions".to_string();
                     eprintln!("{}", perm_msg);
                     backend_logs.lock().unwrap().push(perm_msg);
                 }
@@ -124,7 +131,7 @@ async fn start_api_server(api_process: Arc<Mutex<Option<Child>>>, _api_port: Arc
             let error_msg = "[Tauri] CRITICAL: FastAPI executable not found!".to_string();
             eprintln!("{}", error_msg);
             backend_logs.lock().unwrap().push(error_msg);
-            
+
             let expected_msg = "[Tauri] Expected at: bundled resources (realsense_api/), ../build/tauri-resources/realsense_api/, ./realsense_api/, ./resources/realsense_api/, ../rest-api/dist/realsense_api/".to_string();
             eprintln!("{}", expected_msg);
             backend_logs.lock().unwrap().push(expected_msg);
@@ -138,19 +145,25 @@ fn find_api_executable(exe_name: &str, app_handle: &AppHandle) -> Option<PathBuf
     // In production, try to get the resource directory from the app handle
     if let Some(resource_dir) = app_handle.path_resolver().resource_dir() {
         let candidates = vec![
-            resource_dir.join("realsense_api").join(exe_name),                // packaged dir (preferred)
-            resource_dir.join(exe_name),                                       // legacy root location
-            resource_dir.join("resources").join("realsense_api").join(exe_name), // safety fallback if resources are nested
+            resource_dir.join("realsense_api").join(exe_name), // packaged dir (preferred)
+            resource_dir.join(exe_name),                       // legacy root location
+            resource_dir
+                .join("resources")
+                .join("realsense_api")
+                .join(exe_name), // safety fallback if resources are nested
         ];
 
         for candidate in candidates {
             if candidate.exists() {
-                println!("[Tauri] Found FastAPI executable in bundled resources: {:?}", candidate);
+                println!(
+                    "[Tauri] Found FastAPI executable in bundled resources: {:?}",
+                    candidate
+                );
                 return Some(candidate);
             }
         }
     }
-    
+
     // Fallback: Try relative paths for development/testing
     let potential_paths = vec![
         PathBuf::from("realsense_api").join(exe_name),
@@ -166,20 +179,29 @@ fn find_api_executable(exe_name: &str, app_handle: &AppHandle) -> Option<PathBuf
         }
     }
 
-    eprintln!("[Tauri] FastAPI executable '{}' not found in any location", exe_name);
+    eprintln!(
+        "[Tauri] FastAPI executable '{}' not found in any location",
+        exe_name
+    );
     None
 }
 
 #[cfg(not(debug_assertions))]
 /// Spawn the FastAPI process with environment variables
-fn spawn_api_process(path: &std::path::Path, port: u16, backend_logs: Arc<Mutex<Vec<String>>>) -> Result<Child, std::io::Error> {
+fn spawn_api_process(
+    path: &std::path::Path,
+    port: u16,
+    backend_logs: Arc<Mutex<Vec<String>>>,
+) -> Result<Child, std::io::Error> {
     println!("[Tauri] Spawning FastAPI process from: {:?}", path);
 
     // Resolve to an absolute, existing path in one syscall; also normalises relative fallbacks from find_api_executable().
-    let path = path.canonicalize().map_err(|e| std::io::Error::new(
-        e.kind(),
-        format!("Failed to resolve executable path {:?}: {}", path, e),
-    ))?;
+    let path = path.canonicalize().map_err(|e| {
+        std::io::Error::new(
+            e.kind(),
+            format!("Failed to resolve executable path {:?}: {}", path, e),
+        )
+    })?;
 
     if port < 1024 {
         return Err(std::io::Error::new(
@@ -209,7 +231,7 @@ fn spawn_api_process(path: &std::path::Path, port: u16, backend_logs: Arc<Mutex<
         Ok(mut child) => {
             let pid = child.id();
             println!("[Tauri] FastAPI process spawned with PID: {}", pid);
-            
+
             // Capture stdout in background thread
             if let Some(stdout) = child.stdout.take() {
                 let logs = Arc::clone(&backend_logs);
@@ -224,7 +246,7 @@ fn spawn_api_process(path: &std::path::Path, port: u16, backend_logs: Arc<Mutex<
                     }
                 });
             }
-            
+
             // Capture stderr in background thread
             if let Some(stderr) = child.stderr.take() {
                 let logs = Arc::clone(&backend_logs);
@@ -239,7 +261,7 @@ fn spawn_api_process(path: &std::path::Path, port: u16, backend_logs: Arc<Mutex<
                     }
                 });
             }
-            
+
             Ok(child)
         }
         Err(e) => {
@@ -256,14 +278,20 @@ async fn wait_for_api_ready(port: u16, backend_logs: Arc<Mutex<Vec<String>>>) {
     let max_retries = 60; // ~30 seconds with 500ms intervals
     let mut retries = 0;
 
-    println!("[Tauri] Waiting for FastAPI server to be ready on port {}...", port);
+    println!(
+        "[Tauri] Waiting for FastAPI server to be ready on port {}...",
+        port
+    );
 
     loop {
         if retries >= max_retries {
-            let timeout_msg = format!("[Tauri] CRITICAL: FastAPI server did not respond after {} retries (~30 seconds)", max_retries);
+            let timeout_msg = format!(
+                "[Tauri] CRITICAL: FastAPI server did not respond after {} retries (~30 seconds)",
+                max_retries
+            );
             eprintln!("{}", timeout_msg);
             backend_logs.lock().unwrap().push(timeout_msg);
-            
+
             let diag_msg = format!("[Tauri] DIAGNOSTICS: Check if realsense_api.exe is running, verify RealSense SDK, ensure USB devices, check port {} conflicts", port);
             eprintln!("{}", diag_msg);
             backend_logs.lock().unwrap().push(diag_msg);
@@ -284,14 +312,20 @@ async fn wait_for_api_ready(port: u16, backend_logs: Arc<Mutex<Vec<String>>>) {
             }
             Ok(resp) => {
                 if retries % 10 == 0 {
-                    println!("[Tauri] Server responded with status {}, waiting...", resp.status());
+                    println!(
+                        "[Tauri] Server responded with status {}, waiting...",
+                        resp.status()
+                    );
                 }
                 retries += 1;
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
             Err(e) => {
                 if retries % 10 == 0 {
-                    println!("[Tauri] Health check attempt {} failed: {} (waiting...)", retries, e);
+                    println!(
+                        "[Tauri] Health check attempt {} failed: {} (waiting...)",
+                        retries, e
+                    );
                 }
                 retries += 1;
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -325,7 +359,10 @@ async fn test_api_connection() -> Result<String, String> {
             if resp.status().is_success() {
                 Ok("✅ API server is accessible and responding".to_string())
             } else {
-                Err(format!("❌ API server responded with status: {}", resp.status()))
+                Err(format!(
+                    "❌ API server responded with status: {}",
+                    resp.status()
+                ))
             }
         }
         Err(e) => Err(format!("❌ Cannot reach API server: {}", e)),
@@ -344,7 +381,7 @@ fn get_backend_status(state: State<AppState>) -> serde_json::Value {
     let mut process = state.api_process.lock().unwrap();
     let port = *state.api_port.lock().unwrap();
     let logs = state.backend_logs.lock().unwrap().clone();
-    
+
     // Check if process is actually still running (not just if we have a handle)
     let is_running = if let Some(ref mut child) = *process {
         match child.try_wait() {
@@ -368,7 +405,7 @@ fn get_backend_status(state: State<AppState>) -> serde_json::Value {
     } else {
         false
     };
-    
+
     serde_json::json!({
         "is_running": is_running,
         "port": port,
