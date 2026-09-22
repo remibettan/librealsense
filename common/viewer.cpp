@@ -1088,6 +1088,29 @@ namespace rs2
                 ppf.frames_queue.erase(i);
             }
         }
+
+        // The depth source can stop and other streams stream (e.g. color or IR only), in which case its stream model
+        // is not removed above. Drop the point cloud it produced, otherwise the 3D view keeps rendering that stale
+        // geometry - now textured by whichever stream is still alive.
+        if (last_points && !is_depth_source_streaming())
+        {
+            last_points = points();
+            ppf.depth_stream_active = false;
+        }
+    }
+
+    bool viewer_model::is_depth_source_streaming() const
+    {
+        auto stream_it = streams.find(selected_depth_source_uid);
+        if (stream_it == streams.end() || !stream_it->second.dev)
+            return false;
+
+        auto& sub = *stream_it->second.dev;
+        if (sub.is_paused())
+            return true;
+
+        auto enabled_it = sub.stream_enabled.find(selected_depth_source_uid);
+        return sub.streaming && enabled_it != sub.stream_enabled.end() && enabled_it->second;
     }
 
     bool rs2::viewer_model::is_option_skipped(rs2_option opt) const

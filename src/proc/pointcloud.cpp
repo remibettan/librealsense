@@ -191,17 +191,31 @@ namespace librealsense
         if (_extrinsics.has_value() && other.get_profile().get() == _other_stream.get_profile().get())
             return;
 
+        if (!_other_stream || other.get_profile().get() != _other_stream.get_profile().get())
+            _other_intrinsics_missing = false;   // a different texture stream, re-evaluate
+
         _other_stream = other;
         _other_intrinsics = optional_value<rs2_intrinsics>();
         _extrinsics = optional_value<rs2_extrinsics>();
 
-        if (!_other_intrinsics)
+        if (!_other_intrinsics && !_other_intrinsics_missing)
         {
             auto stream_profile = _other_stream.get_profile();
             if (auto video = stream_profile.as<rs2::video_stream_profile>())
             {
-                _other_intrinsics = video.get_intrinsics();
-                _occlusion_filter->set_texel_intrinsics(_other_intrinsics.value());
+                try
+                {
+                    _other_intrinsics = video.get_intrinsics();
+                    _occlusion_filter->set_texel_intrinsics(_other_intrinsics.value());
+                }
+                catch (const std::exception& e)
+                {
+                    // Calibration formats (e.g. unrectified Y16) expose no intrinsics. The point cloud is still
+                    // produced, only without texture mapping, so report once per profile rather than per frame.
+                    _other_intrinsics_missing = true;
+                    LOG_WARNING("Texture mapping disabled for " << stream_profile.stream_name() << " "
+                        << rs2_format_to_string(stream_profile.format()) << ": " << e.what());
+                }
             }
         }
 

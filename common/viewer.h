@@ -145,6 +145,7 @@ namespace rs2
             ImFont *font1, ImFont *font2, size_t dev_model_num, const mouse_info &mouse, std::string& error_message);
 
         void gc_streams();
+        bool is_depth_source_streaming() const;
 
         bool is_option_skipped(rs2_option opt) const;
 
