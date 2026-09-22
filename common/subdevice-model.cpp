@@ -145,6 +145,18 @@ namespace rs2
         }
     }
 
+    bool sensor_has_color_stream( const std::vector< stream_profile > & profiles )
+    {
+        return std::any_of( profiles.begin(), profiles.end(),
+                            []( const stream_profile & p ) { return p.stream_type() == RS2_STREAM_COLOR; } );
+    }
+
+    bool sensor_has_depth_stream( const std::vector< stream_profile > & profiles )
+    {
+        return std::any_of( profiles.begin(), profiles.end(),
+                            []( const stream_profile & p ) { return p.stream_type() == RS2_STREAM_DEPTH; } );
+    }
+
     subdevice_model::subdevice_model(
         device& dev,
         std::shared_ptr<sensor> s,
@@ -2069,13 +2081,14 @@ namespace rs2
             streaming_map[RS2_STREAM_INFRARED] = false;
         }
 
-        if (profiles[0].stream_type() == RS2_STREAM_COLOR)
+        if (sensor_has_color_stream(profiles))
         {
             std::lock_guard< std::mutex > lock(detected_objects->mutex);
             detected_objects->clear();
             detected_objects->sensor_is_on = false;
         }
-        else if (profiles[0].stream_type() == RS2_STREAM_DEPTH)
+        // Separate check: on dual-RGB the one sensor carries both, so depth must still be handled
+        if (sensor_has_depth_stream(profiles))
         {
             viewer.disable_measurements();
         }
@@ -2253,7 +2266,7 @@ namespace rs2
             }
         }
 
-        if (s->is< color_sensor >())
+        if (sensor_has_color_stream(this->profiles))
         {
             std::lock_guard< std::mutex > lock(detected_objects->mutex);
             detected_objects->sensor_is_on = true;
