@@ -185,6 +185,36 @@ namespace librealsense
         std::vector< std::function< void( bool ) > > _observers;
     };
 
+    // A control that Full Passive Depth takes over: the firmware forces the laser off there, so the host
+    // refuses changes and reports the control locked instead of letting a write silently do nothing.
+    class passive_depth_locked_option : public proxy_option
+    {
+    public:
+        passive_depth_locked_option( std::shared_ptr< option > proxy, const std::weak_ptr< option > & passive_depth_mode );
+
+        void set( float value ) override;
+        bool is_read_only() const override;
+
+    private:
+        std::weak_ptr< option > _passive_depth_mode;
+    };
+
+    // Auto-exposure policy of a dual-RGB depth sensor. Full Passive Depth locks the policy to Color Priority in
+    // firmware, so Hybrid drops out of the reported range and is refused while that mode is active.
+    class colored_ir_ae_policy_option : public uvc_xu_option< uint8_t >
+    {
+    public:
+        colored_ir_ae_policy_option( const std::weak_ptr< uvc_sensor > & raw_ep,
+                                     const std::map< float, std::string > & description_per_value,
+                                     const std::weak_ptr< option > & passive_depth_mode );
+
+        void set( float value ) override;
+        option_range get_range() const override;
+
+    private:
+        std::weak_ptr< option > _passive_depth_mode;
+    };
+
     class power_line_freq_option : public uvc_pu_option
     {
     public:

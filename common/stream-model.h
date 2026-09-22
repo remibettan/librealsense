@@ -117,6 +117,8 @@ namespace rs2
         frame_metadata      frame_md;
         bool                capturing_roi       = false;    // active modification of roi
         std::shared_ptr<subdevice_model> dev;
+        // Tile fed by the laser-off frames of a stream split by Alternating Passive Depth.
+        bool passive = false;
         float _frame_timeout = RS2_DEFAULT_TIMEOUT;
         float _min_timeout = 167.0f;
 

@@ -242,6 +242,63 @@ namespace librealsense
             observer( aligned );
     }
 
+    // Full Passive Depth hands the laser and the AE policy to the firmware; an expired or unregistered mode
+    // option means the device has no such mode and nothing is gated.
+    static bool in_full_passive_depth( const std::weak_ptr< option > & mode )
+    {
+        auto strong = mode.lock();
+        return strong && strong->query() == RS2_PASSIVE_DEPTH_MODE_FULL;
+    }
+
+    passive_depth_locked_option::passive_depth_locked_option( std::shared_ptr< option > proxy,
+                                                              const std::weak_ptr< option > & passive_depth_mode )
+        : proxy_option( proxy )
+        , _passive_depth_mode( passive_depth_mode )
+    {
+    }
+
+    void passive_depth_locked_option::set( float value )
+    {
+        if( in_full_passive_depth( _passive_depth_mode ) )
+            throw invalid_value_exception( "Laser controls are owned by the firmware in Full Passive Depth!" );
+
+        proxy_option::set( value );
+    }
+
+    bool passive_depth_locked_option::is_read_only() const
+    {
+        return in_full_passive_depth( _passive_depth_mode ) || proxy_option::is_read_only();
+    }
+
+    colored_ir_ae_policy_option::colored_ir_ae_policy_option( const std::weak_ptr< uvc_sensor > & raw_ep,
+                                                              const std::map< float, std::string > & description_per_value,
+                                                              const std::weak_ptr< option > & passive_depth_mode )
+        : uvc_xu_option< uint8_t >( raw_ep,
+                                    ds::depth_xu,
+                                    ds::d500_xu_id::COLORED_IR_AE_POLICY,
+                                    "Auto exposure policy for sensor with both color and depth streams",
+                                    description_per_value,
+                                    false ) // Not settable while streaming
+        , _passive_depth_mode( passive_depth_mode )
+    {
+    }
+
+    void colored_ir_ae_policy_option::set( float value )
+    {
+        if( value == RS2_COLORED_IR_AUTO_EXPOSURE_HYBRID && in_full_passive_depth( _passive_depth_mode ) )
+            throw invalid_value_exception( "Hybrid auto exposure is not available in Full Passive Depth!" );
+
+        uvc_xu_option< uint8_t >::set( value );
+    }
+
+    option_range colored_ir_ae_policy_option::get_range() const
+    {
+        auto range = uvc_xu_option< uint8_t >::get_range();
+        if( in_full_passive_depth( _passive_depth_mode ) )
+            range.max = RS2_COLORED_IR_AUTO_EXPOSURE_COLOR_PRIORITY;
+        return range;
+    }
+
     power_line_freq_option::power_line_freq_option(const std::weak_ptr< uvc_sensor >& ep, rs2_option id,
         const std::map< float, std::string >& description_per_value) :
         uvc_pu_option(ep, id, description_per_value) {}

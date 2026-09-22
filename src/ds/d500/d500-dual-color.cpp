@@ -9,6 +9,7 @@
 #include <src/proc/identity-processing-block.h>
 #include <src/uvc-sensor.h>
 #include <src/platform/uvc-option.h>
+#include <src/ds/d500/d500-options.h>
 #include <src/metadata-parser.h>
 #include <src/ds/ds-color-common.h>
 #include <src/ds/ds-timestamp.h>
@@ -90,6 +91,7 @@ namespace librealsense
 
         register_color_extrinsics();
         register_color_metadata();
+        register_passive_depth_option();
         register_ae_policy_option();
         register_color_options( dev_info );
     }
@@ -159,12 +161,44 @@ namespace librealsense
                                                            { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_COLOR_PRIORITY ), "Color Priority" },
                                                            { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_HYBRID ), "Hybrid" } };
         get_depth_sensor().register_option( RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE,
-                                            std::make_shared< uvc_xu_option< uint8_t > >( get_raw_depth_sensor(),
-                                                                                          ds::depth_xu,
-                                                                                          ds::d500_xu_id::COLORED_IR_AE_POLICY,
-                                                                                          "Auto exposure policy for sensor with both color and depth streams",
-                                                                                          options_map,
-                                                                                          false ) ); // Not settable while streaming
+                                            std::make_shared< colored_ir_ae_policy_option >( get_raw_depth_sensor(),
+                                                                                             options_map,
+                                                                                             _passive_depth_mode ) );
+    }
+
+    // Selects which exposure classes produce depth. USB only for now - the GMSL driver has no matching CID yet.
+    void d500_dual_color::register_passive_depth_option()
+    {
+        if( _is_mipi_device )
+            return;
+
+        auto options_map = std::map< float, std::string >{ { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_DISABLED ), "Disabled" },
+                                                           { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_ALTERNATING ), "Alternating" },
+                                                           { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_FULL ), "Full" } };
+        auto mode = std::make_shared< uvc_xu_option< uint8_t > >( get_raw_depth_sensor(),
+                                                                  ds::depth_xu,
+                                                                  ds::d500_xu_id::PASSIVE_DEPTH,
+                                                                  "Which exposure classes produce depth: active only, alternating active and passive, or passive only",
+                                                                  options_map,
+                                                                  false ); // Not settable while streaming
+        try
+        {
+            mode->query();  // firmware without the control fails here, and the option stays unregistered
+        }
+        catch( const std::exception & e )
+        {
+            LOG_DEBUG( "Passive Depth is not supported by this firmware: " << e.what() );
+            return;
+        }
+
+        _passive_depth_mode = mode;
+        auto & depth_sensor = get_depth_sensor();
+        depth_sensor.register_option( RS2_OPTION_PASSIVE_DEPTH_MODE, mode );
+
+        // Full Passive Depth forces the laser off in firmware, so the host must stop offering it.
+        for( auto id : { RS2_OPTION_EMITTER_ENABLED, RS2_OPTION_LASER_POWER, RS2_OPTION_EMITTER_ALWAYS_ON, RS2_OPTION_EMITTER_ON_OFF } )
+            if( auto laser = depth_sensor.get_option_handler( id ) )
+                depth_sensor.register_option( id, std::make_shared< passive_depth_locked_option >( laser, _passive_depth_mode ) );
     }
 
     // D585 2C dual-color topology: on the depth-function UVC interface, the RGB streams' PU chain

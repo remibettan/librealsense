@@ -546,7 +546,12 @@ namespace rs2
             std::string dev_name = dev->dev.get_info(RS2_CAMERA_INFO_NAME);
             std::string dev_serial = dev->dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
             std::string sensor_name = dev->s->get_info(RS2_CAMERA_INFO_NAME);
+            // A split stream fills two tiles off one profile, so the exposure class has to tell them apart.
             std::string stream_name = profile.stream_name();
+            if( passive )
+                stream_name += " Passive";
+            else if( viewer.passive_streams.count( profile.unique_id() ) )
+                stream_name += " Active";
             std::string stream_index_str;
 
             tooltip = rsutils::string::from() << dev_name << " s.n:" << dev_serial << " | " << sensor_name << ", " << stream_name << stream_index_str << " stream";
