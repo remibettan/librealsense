@@ -239,17 +239,9 @@ namespace librealsense
         auto md_prop_offset = metadata_raw_mode_offset +
             offsetof(md_mapping_mode, intel_occupancy);
 
-        raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_FRAME_COUNTER,
-            make_attribute_parser(&md_occupancy::frame_counter,
-                md_occupancy_attributes::frame_counter_attribute, md_prop_offset));
-
         raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_SAFETY_DEPTH_FRAME_COUNTER,
             make_attribute_parser(&md_occupancy::depth_frame_counter,
                 md_occupancy_attributes::depth_frame_counter_attribute, md_prop_offset));
-
-        raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_SENSOR_TIMESTAMP,
-            make_attribute_parser(&md_occupancy::frame_timestamp,
-                md_occupancy_attributes::frame_timestamp_attribute, md_prop_offset));
 
         raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_FLOOR_DETECTION,
             make_attribute_parser(&md_occupancy::floor_detection,
@@ -414,17 +406,9 @@ namespace librealsense
         auto md_prop_offset = metadata_raw_mode_offset +
             offsetof(md_mapping_mode, intel_point_cloud);
 
-        raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_FRAME_COUNTER,
-            make_attribute_parser(&md_point_cloud::frame_counter,
-                md_point_cloud_attributes::frame_counter_attribute, md_prop_offset));
-
         raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_SAFETY_DEPTH_FRAME_COUNTER,
             make_attribute_parser(&md_point_cloud::depth_frame_counter,
                 md_point_cloud_attributes::depth_frame_counter_attribute, md_prop_offset));
-
-        raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_SENSOR_TIMESTAMP,
-            make_attribute_parser(&md_point_cloud::frame_timestamp,
-                md_point_cloud_attributes::frame_timestamp_attribute, md_prop_offset));
 
         raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_FLOOR_DETECTION,
             make_attribute_parser(&md_point_cloud::floor_detection,
