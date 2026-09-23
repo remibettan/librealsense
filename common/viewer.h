@@ -153,6 +153,9 @@ namespace rs2
         std::mutex streams_mutex;
         std::map<int, stream_model> streams;
         std::map<int, int> streams_origin;
+        // Alternating Passive Depth interleaves laser-on and laser-off frames on one profile, so each
+        // depth/IR stream gets a second tile for the passive class - mapped here from the stream's uid.
+        std::map<int, int> passive_streams;
         bool fullscreen = false;
         stream_model* selected_stream = nullptr;
         // When true, stream tiles can be re-arranged by dragging one onto another (toggled from the top bar)
@@ -293,6 +296,7 @@ namespace rs2
         void init_labeled_points_uid();
         void draw_3d_labeled_points(const rect& viewer_rect, rs2::labeled_points labeled_points);
         bool should_texture_frame_be_updated(const rs2::frame& f) const;
+        bool is_passive_frame(const rs2::frame& f) const;
 
         streams_layout _layout;
         streams_layout _old_layout;

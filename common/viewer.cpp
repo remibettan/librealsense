@@ -363,7 +363,7 @@ namespace rs2
         int i = 0;
         for (auto&& s : streams)
         {
-            if (s.second.is_stream_visible() &&
+            if (s.second.is_stream_visible() && ! s.second.passive &&
                 (s.second.profile.stream_type() == RS2_STREAM_COLOR ||
                  s.second.profile.stream_type() == RS2_STREAM_INFRARED ||
                  s.second.profile.stream_type() == RS2_STREAM_CONFIDENCE ||
@@ -523,7 +523,7 @@ namespace rs2
             i = 0;
             for (auto&& s : streams)
             {
-                if (s.second.is_stream_visible() &&
+                if (s.second.is_stream_visible() && ! s.second.passive &&
                     s.second.texture->get_last_frame() &&
                     s.second.profile.stream_type() == RS2_STREAM_DEPTH)
                 {
@@ -1066,6 +1066,8 @@ namespace rs2
             }
         }
         for (auto&& i : streams_to_remove) {
+            passive_streams.erase(i);
+
             if(selected_depth_source_uid == i)
             {
                 last_points = points();
@@ -1367,7 +1369,7 @@ namespace rs2
     {
         if (!sm) return {};
         return std::to_string(static_cast<int>(sm->profile.stream_type())) + "_" +
-               std::to_string(sm->profile.stream_index());
+               std::to_string(sm->profile.stream_index()) + (sm->passive ? "_p" : "");
     }
 
     // The tile title bar is drawn in the reserved strip above the frame rect. The drag grab
@@ -2242,7 +2244,7 @@ namespace rs2
                 show_icon(font2, "warning_icon", message.c_str(),
                     static_cast<int>(stream_rect.center().x - 100),
                     static_cast<int>(stream_rect.center().y - 25),
-                    stream_mv.profile.unique_id(),
+                    stream_mv.ui_key,
                     blend(dark_red, alpha),
                     "Did not receive frames from the platform within a reasonable time window,\nplease try reducing the FPS or the resolution");
             }
@@ -2259,11 +2261,11 @@ namespace rs2
 
             if (stream_mv.dev->_is_being_recorded)
             {
-                show_recording_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.profile.unique_id(), alpha);
+                show_recording_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.ui_key, alpha);
                 posX += 23;
             }
             if (stream_mv.dev->is_paused() || (p && p.current_status() == RS2_PLAYBACK_STATUS_PAUSED))
-                show_paused_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.profile.unique_id());
+                show_paused_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.ui_key);
 
             auto stream_type = stream_mv.profile.stream_type();
 
@@ -4026,12 +4028,40 @@ namespace rs2
         mouse.prev_cursor = mouse.cursor;
     }
 
+    // Keys the passive tile of a split stream; kept clear of the unique ids the SDK hands out.
+    static const int PASSIVE_STREAM_KEY_OFFSET = 0x10000000;
+
+    // Only Alternating Passive Depth interleaves the two exposure classes on one profile. Full Passive
+    // delivers passive frames alone, so they stay on the stream's own tile.
+    static bool splits_passive_depth( const std::shared_ptr<subdevice_model>& d, const rs2::stream_profile& p )
+    {
+        if( p.stream_type() != RS2_STREAM_DEPTH && p.stream_type() != RS2_STREAM_INFRARED )
+            return false;
+        if( ! d || ! d->s || ! d->s->supports( RS2_OPTION_PASSIVE_DEPTH_MODE ) )
+            return false;
+        return d->s->get_option( RS2_OPTION_PASSIVE_DEPTH_MODE ) == RS2_PASSIVE_DEPTH_MODE_ALTERNATING;
+    }
+
     void viewer_model::begin_stream(std::shared_ptr<subdevice_model> d, rs2::stream_profile p)
     {
         {
             std::lock_guard< std::mutex > lock( streams_mutex );
-            streams[p.unique_id()].begin_stream(d, p, *this);
+            auto & active = streams[p.unique_id()];
+            active.begin_stream(d, p, *this);
             ppf.frames_queue.emplace(p.unique_id(), rs2::frame_queue(5));
+
+            if( splits_passive_depth( d, p ) )
+            {
+                int const passive_key = p.unique_id() + PASSIVE_STREAM_KEY_OFFSET;
+                auto & passive = streams[passive_key];
+                passive.begin_stream( d, p, *this );
+                passive.passive = passive.split = true;
+                passive.ui_key = passive_key;
+                active.split = true;
+                passive_streams[p.unique_id()] = passive_key;
+            }
+            else
+                passive_streams.erase( p.unique_id() );  // a mode change may have left the last run's split behind
         }
 
         // Starting post processing filter rendering thread
@@ -4104,6 +4134,17 @@ namespace rs2
         auto index = f.get_profile().unique_id();
         auto mapped_index = streams_origin[index];
 
+        // While the stream is split the point cloud follows the active class; Full Passive is not split,
+        // so its passive frames still feed the 3D view. Reached from the frame callback and the
+        // post-processing thread, so the lookup needs the lock begin_stream writes under.
+        bool split = false;
+        {
+            std::lock_guard< std::mutex > lock( streams_mutex );
+            split = passive_streams.count( index ) || passive_streams.count( mapped_index );
+        }
+        if( split && is_passive_frame( f ) )
+            return false;
+
         if(index == selected_depth_source_uid || mapped_index  == selected_depth_source_uid
                 ||(selected_depth_source_uid == -1 && f.get_profile().stream_type() == RS2_STREAM_DEPTH))
             return true;
@@ -4119,9 +4160,22 @@ namespace rs2
 
         std::lock_guard<std::mutex> lock(streams_mutex);
         auto stream_origin_iter = streams_origin.find(index);
-        if ( stream_origin_iter != streams_origin.end() && streams.find( stream_origin_iter->second ) != streams.end())
-            return streams[stream_origin_iter->second].upload_frame(std::move(f));
-        else return nullptr;
+        if( stream_origin_iter == streams_origin.end() || streams.find( stream_origin_iter->second ) == streams.end() )
+            return nullptr;
+
+        int key = stream_origin_iter->second;
+        auto passive_iter = passive_streams.find( key );
+        if( passive_iter != passive_streams.end() && streams.count( passive_iter->second ) && is_passive_frame( f ) )
+            key = passive_iter->second;
+
+        return streams[key].upload_frame(std::move(f));
+    }
+
+    // Depth and IR frames report the emitter state they were captured with; laser off is a passive frame.
+    bool viewer_model::is_passive_frame(const rs2::frame& f) const
+    {
+        return f.supports_frame_metadata( RS2_FRAME_METADATA_FRAME_EMITTER_MODE )
+            && f.get_frame_metadata( RS2_FRAME_METADATA_FRAME_EMITTER_MODE ) == RS2_EMITTER_MODE_OFF;
     }
 
     std::shared_ptr< subdevice_model > viewer_model::get_frame_subdevice( rs2::frame const & frame ) const
@@ -4531,7 +4585,7 @@ namespace rs2
 
         for (auto&& s : streams)
         {
-            if (s.second.is_stream_visible() &&
+            if (s.second.is_stream_visible() && ! s.second.passive &&
                 s.second.profile.stream_type() == RS2_STREAM_DEPTH)
             {
                 auto stream_origin_iter = streams_origin.find(s.second.profile.unique_id());
