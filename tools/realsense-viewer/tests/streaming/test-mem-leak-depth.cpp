@@ -116,7 +116,10 @@ void select_depth_only( std::shared_ptr< rs2::subdevice_model > sub )
 
 VIEWER_TEST( "streaming", "mem_leak_depth_start_stop" )
 {
-    constexpr int   ITERATIONS      = 20;
+    // 10 iters × 15 s = ~2.5 min wall-clock, which fits the pytest wrapper's cap and
+    // still leaves n=7 post-warmup samples for the OLS slope — enough for a regression
+    // guard, less than the previous 20 iters (n=17) at closer noise-to-signal margin.
+    constexpr int   ITERATIONS      = 10;
     constexpr float STREAM_DURATION = 10.0f;  // longer cycles amplify any per-cycle leak
     constexpr float IDLE_DURATION   = 5.0f;
 
@@ -222,7 +225,7 @@ VIEWER_TEST( "streaming", "mem_leak_depth_start_stop" )
         sum_xx += x * x;
         ++n;
     }
-    // Guard the OLS denominator. With ITERATIONS=20, WARMUP_ITERS=3 we get n=17 here,
+    // Guard the OLS denominator. With ITERATIONS=10, WARMUP_ITERS=3 we get n=7 here,
     // but a future tweak to these constants could degenerate the fit — fail loudly
     // rather than producing NaN (which would silently fail the slope IM_CHECK below).
     IM_CHECK( n >= 2 );
