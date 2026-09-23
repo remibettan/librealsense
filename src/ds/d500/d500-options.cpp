@@ -323,8 +323,17 @@ namespace librealsense
                                     "Which exposure classes produce depth: active only, alternating active and passive, or passive only",
                                     description_per_value,
                                     false ) // Not settable while streaming
-        , _full_passive( uvc_xu_option< uint8_t >::query() == RS2_PASSIVE_DEPTH_MODE_FULL )
+        , _full_passive( false )
     {
+        // Seeded here so the cache is valid from the start. The caller only builds this on firmware that
+        // carries the control, so the guard is for a firmware that reports the version but not the XU.
+        try
+        {
+            _full_passive = ( uvc_xu_option< uint8_t >::query() == RS2_PASSIVE_DEPTH_MODE_FULL );
+        }
+        catch( const std::exception & )
+        {
+        }
     }
 
     void passive_depth_mode_option::set( float value )

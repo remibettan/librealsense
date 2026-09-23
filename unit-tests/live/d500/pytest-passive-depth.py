@@ -11,6 +11,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.device_each("D585"),
+    pytest.mark.device_exclude("D585S"),  # safety owns the projector: no passive depth control there
     pytest.mark.skip(reason="No D585 dual-RGB camera in CI"),  # verified locally against a D585 Proto Dual RGB (PID 0x0C07)
 ]
 
