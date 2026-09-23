@@ -985,12 +985,56 @@ namespace rs2
         return res;
     }
 
+    // Embedded decimation mandates a fixed depth+IR (and color, when dual-color) pairing:
+    // depth 640x360 with IR/color 1280x720. Returns {0,0} for streams with no such mandate.
+    static std::pair<int, int> decimation_mandated_res(rs2_stream stream)
+    {
+        switch (stream)
+        {
+        case RS2_STREAM_DEPTH:    return { 640, 360 };
+        case RS2_STREAM_INFRARED: return { 1280, 720 };
+        case RS2_STREAM_COLOR:    return { 1280, 720 };
+        default:                  return { 0, 0 };
+        }
+    }
+
+    bool subdevice_model::decimation_restricts_stream(rs2_stream stream) const
+    {
+        // D585S (PID 0B6B): FW-side decimation kicks in only when depth is 640x360,
+        // so depth is free and IR/color are pinned only in that specific case.
+        const bool is_d585s = dev.supports(RS2_CAMERA_INFO_PRODUCT_ID)
+            && std::string(dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID)) == "0B6B";
+        if (is_d585s)
+        {
+            if (stream == RS2_STREAM_DEPTH) return false;
+            auto it = ui.selected_stream_to_res.find(RS2_STREAM_DEPTH);
+            return it != ui.selected_stream_to_res.end()
+                && it->second == decimation_mandated_res(RS2_STREAM_DEPTH);
+        }
+        // Other D500 with the user-toggle decimation on (that is what put us in the
+        // split UI): FW mandates depth 640x360 + IR/color 1280x720 - restrict every stream.
+        return true;
+    }
+
     bool subdevice_model::draw_resolutions_combo_box_multiple_resolutions(std::string& error_message, std::string& label, std::function<void()> streaming_tooltip, float col0, float col1,
         rs2_stream stream_type)
     {
         bool res = false;
 
         auto res_pairs = resolutions_per_stream[stream_type];
+        // Constrain the combo to the single decimation-mandated resolution when the
+        // FW will not accept anything else (see decimation_restricts_stream for the
+        // per-SKU rule). Also snap the current selection to that value so a construction-
+        // time or refresh path that seeded a different one can't leave
+        // get_res_id_in_resolutions_array looking up a value the combo no longer offers.
+        auto mandated = decimation_mandated_res(stream_type);
+        if (mandated.first != 0 && mandated.second != 0
+            && decimation_restricts_stream(stream_type)
+            && std::find(res_pairs.begin(), res_pairs.end(), mandated) != res_pairs.end())
+        {
+            res_pairs = { mandated };
+            ui.selected_stream_to_res[stream_type] = mandated;
+        }
         std::vector<std::string> resolutions_str;
         for (int i = 0; i < res_pairs.size(); ++i)
         {
@@ -1895,25 +1939,21 @@ namespace rs2
 
     void subdevice_model::apply_decimation_resolution_defaults()
     {
-        // Viewer-only convenience for the split-resolution UI: the embedded decimation
-        // filter (FW-side) only accepts depth at 640x360 and pairs it with IR at 1280x720.
-        // Landing the combo boxes on these values here avoids the streaming-time error
-        // in avoid_streaming_on_embedded_filters_not_matching_configuration().
-        // Dual-color carries color on this same sensor, so pin it alongside IR
-        static const std::pair< int, int > DEPTH_RES{ 640, 360 };
-        static const std::pair< int, int > IR_RES{ 1280, 720 };
-        static const std::pair< int, int > COLOR_RES{ 1280, 720 };
-
-        auto force = [&]( rs2_stream stream, const std::pair< int, int > & res ) {
+        // Viewer-only convenience for the split-resolution UI: land the combo boxes on
+        // the FW-mandated decimation pairing (see decimation_mandated_res) so streaming
+        // starts cleanly. Dual-color carries color on this same sensor, so pin it too.
+        auto force = [&]( rs2_stream stream ) {
+            auto res = decimation_mandated_res( stream );
+            if( res.first == 0 || res.second == 0 ) return;
             auto it = resolutions_per_stream.find( stream );
             if( it == resolutions_per_stream.end() ) return;
             auto & options = it->second;
             if( std::find( options.begin(), options.end(), res ) == options.end() ) return;
             ui.selected_stream_to_res[stream] = res;
         };
-        force( RS2_STREAM_DEPTH, DEPTH_RES );
-        force( RS2_STREAM_INFRARED, IR_RES );
-        force( RS2_STREAM_COLOR, COLOR_RES );
+        force( RS2_STREAM_DEPTH );
+        force( RS2_STREAM_INFRARED );
+        force( RS2_STREAM_COLOR );
     }
 
     std::pair<int, int> subdevice_model::get_max_resolution(rs2_stream stream) const
@@ -2185,23 +2225,39 @@ namespace rs2
             }
             if (decimation_enabled)
             {
-                // check if resolution is different from 640 X 360
-                int width = 0;
-                int height = 0;
-                if (!ui.is_multiple_resolutions)
+                // Guard uses the same per-SKU rule as the combo (decimation_restricts_stream):
+                // 3C/2C - depth+IR+color all mandated; D585S - depth free, IR/color pinned only
+                // when depth is 640x360. This prevents an API/profile-restore path bypassing the
+                // combo constraints in draw_resolutions_combo_box_multiple_resolutions.
+                if (decimation_restricts_stream(RS2_STREAM_DEPTH))
                 {
-                    width = res_values[ui.selected_res_id].first;
-                    height = res_values[ui.selected_res_id].second;
+                    std::pair<int, int> depth_res{ 0, 0 };
+                    if (!ui.is_multiple_resolutions)
+                        depth_res = res_values[ui.selected_res_id];
+                    else
+                        depth_res = ui.selected_stream_to_res.at(RS2_STREAM_DEPTH);
+                    auto depth_mandated = decimation_mandated_res(RS2_STREAM_DEPTH);
+                    if (depth_res != depth_mandated)
+                        throw std::runtime_error(rsutils::string::from()
+                            << "Cannot start streaming: Embedded Decimation filter to be used only with resolution "
+                            << depth_mandated.first << "x" << depth_mandated.second << ".");
                 }
-                else
+
+                if (ui.is_multiple_resolutions)
                 {
-                    auto res_pair = ui.selected_stream_to_res.at(RS2_STREAM_DEPTH);
-                    width = res_pair.first;
-                    height = res_pair.second;
-                }
-                if (width != 640 || height != 360)
-                {
-                    throw std::runtime_error("Cannot start streaming: Embedded Decimation filter to be used only with resolution 640x360.");
+                    for (auto stream : { RS2_STREAM_INFRARED, RS2_STREAM_COLOR })
+                    {
+                        auto mandated = decimation_mandated_res(stream);
+                        if (mandated.first == 0) continue;
+                        if (!decimation_restricts_stream(stream)) continue;
+                        auto it = ui.selected_stream_to_res.find(stream);
+                        if (it == ui.selected_stream_to_res.end()) continue;
+                        if (it->second != mandated)
+                            throw std::runtime_error(rsutils::string::from()
+                                << "Cannot start streaming: Embedded Decimation filter requires "
+                                << rs2_stream_to_string(stream) << " at "
+                                << mandated.first << "x" << mandated.second << ".");
+                    }
                 }
             }
         }
