@@ -2,6 +2,8 @@
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
 #include "composite-xu-option.h"
+#include "composite-usb-xu-option.h"
+#include "composite-mipi-xu-option.h"
 
 #include <src/librealsense-exception.h>
 #include <rsutils/string/from.h>
@@ -21,6 +23,22 @@ composite_xu_option::composite_xu_option( std::weak_ptr< uvc_sensor > ep,
 {
 }
 
+/* static */ std::shared_ptr< composite_xu_option >
+composite_xu_option::create( bool is_mipi,
+                             std::weak_ptr< uvc_sensor > ep,
+                             platform::extension_unit xu,
+                             uint8_t ctrl_id,
+                             uint32_t wire_size,
+                             std::string description,
+                             const dpp_control_desc & desc )
+{
+    if( is_mipi )
+        return std::make_shared< composite_mipi_xu_option >( std::move( ep ), xu, ctrl_id, wire_size,
+                                                             std::move( description ), desc );
+    return std::make_shared< composite_usb_xu_option >( std::move( ep ), xu, ctrl_id, wire_size,
+                                                        std::move( description ) );
+}
+
 std::vector< uint8_t > composite_xu_option::get_raw() const
 {
     auto ep = _ep.lock();
@@ -28,15 +46,7 @@ std::vector< uint8_t > composite_xu_option::get_raw() const
         throw wrong_api_call_sequence_exception( "composite option is not available: sensor is not alive" );
 
     return ep->invoke_powered(
-        [this]( platform::uvc_device & dev ) -> std::vector< uint8_t >
-        {
-            std::vector< uint8_t > data( _wire_size );
-            // Exactly one get_xu() call - the whole payload arrives atomically.
-            if( ! dev.get_xu( _xu, _ctrl_id, data.data(), (int)_wire_size ) )
-                throw invalid_value_exception( rsutils::string::from()
-                                                << "get_xu(id=" << (int)_ctrl_id << ") failed!" );
-            return data;
-        } );
+        [this]( platform::uvc_device & dev ) -> std::vector< uint8_t > { return read_from_device( dev ); } );
 }
 
 void composite_xu_option::set_raw( const void * data, size_t size )
@@ -54,13 +64,7 @@ void composite_xu_option::set_raw( const void * data, size_t size )
         throw wrong_api_call_sequence_exception( "composite option is not available: sensor is not alive" );
 
     ep->invoke_powered(
-        [this, data]( platform::uvc_device & dev )
-        {
-            // Exactly one set_xu() call - the whole payload sent together, atomically.
-            if( ! dev.set_xu( _xu, _ctrl_id, reinterpret_cast< const uint8_t * >( data ), (int)_wire_size ) )
-                throw invalid_value_exception( rsutils::string::from()
-                                                << "set_xu(id=" << (int)_ctrl_id << ") failed!" );
-        } );
+        [this, data, size]( platform::uvc_device & dev ) { write_to_device( dev, data, size ); } );
 }
 
 std::vector< uint8_t > composite_xu_option::get_raw_range() const
@@ -70,7 +74,7 @@ std::vector< uint8_t > composite_xu_option::get_raw_range() const
         throw wrong_api_call_sequence_exception( "composite option is not available: sensor is not alive" );
 
     auto uvc_range = ep->invoke_powered(
-        [this]( platform::uvc_device & dev ) { return dev.get_xu_range( _xu, _ctrl_id, (int)_wire_size ); } );
+        [this]( platform::uvc_device & dev ) { return read_range_from_device( dev ); } );
 
     if( uvc_range.min.size() != _wire_size || uvc_range.max.size() != _wire_size || uvc_range.step.size() != _wire_size
         || uvc_range.def.size() != _wire_size )

@@ -165,6 +165,10 @@ namespace librealsense
         void init( std::shared_ptr< context > ctx, const platform::backend_device_group & group );
         void register_connection_info( platform::usb_spec usb_spec );
         void register_features();
+        // Registers the DPP composite embedded filters (decimation, temporal, close range) shared by
+        // every non-safety D5X5 subclass. Gated per transport - USB and MIPI publish these on
+        // different FW versions. Called from each subclass ctor; no-op below the required FW.
+        void register_dpp_embedded_filters();
         void set_imu_type( const std::vector< uint8_t > & gvd_buf, ds::d500_gvd_parsed_fields * parsed_fields );
         friend class d500_depth_sensor;
 

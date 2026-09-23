@@ -2924,15 +2924,31 @@ namespace librealsense
 
         bool v4l_mipi_device::set_xu(const extension_unit& xu, uint8_t control, const uint8_t* data, int size)
         {
-            v4l2_ext_control xctrl{v4l_mipi_logic::xu_to_cid(xu,control,is_d5xx_product_line(_info.pid)), uint32_t(size), 0, 0};
-            switch (size)
+            const uint32_t cid = v4l_mipi_logic::xu_to_cid(xu,control,is_d5xx_product_line(_info.pid));
+            v4l2_ext_control xctrl{cid, uint32_t(size), 0, 0};
+
+            // size > 8 cannot fit in xctrl.value/value64 - always the byte pointer. For size <= 8
+            // the compound-vs-scalar choice is ambiguous (e.g. D500 DPP decimation is 2 * u32 = 8
+            // bytes but must go through p_u8, not value64) - query V4L2_CTRL_FLAG_HAS_PAYLOAD to
+            // disambiguate. If the query fails the CID is unlikely to exist and the S_EXT_CTRLS
+            // below will fail anyway; falling back to the size-based scalar routing is fine there.
+            bool use_pointer = size > 8;
+            if( ! use_pointer )
+            {
+                v4l2_query_ext_ctrl qctrl{};
+                qctrl.id = cid;
+                if( ioctl(_fd, VIDIOC_QUERY_EXT_CTRL, &qctrl) == 0 )
+                    use_pointer = (qctrl.flags & V4L2_CTRL_FLAG_HAS_PAYLOAD) != 0;
+            }
+            if (use_pointer)
+                xctrl.p_u8 = const_cast<uint8_t*>(data);
+            else switch (size)
             {
                 case 1: xctrl.value   = *(reinterpret_cast<const uint8_t*>(data)); break;
                 case 2: xctrl.value   = *reinterpret_cast<const uint16_t*>(data); break; // TODO check signed/unsigned
                 case 4: xctrl.value   = *reinterpret_cast<const int32_t*>(data); break;
                 case 8: xctrl.value64 = *reinterpret_cast<const int64_t*>(data); break;
-                default:
-                    xctrl.p_u8 = const_cast<uint8_t*>(data); // TODO aggregate initialization with union
+                default: xctrl.p_u8 = const_cast<uint8_t*>(data); // unreachable: use_pointer is true when size > 8
             }
 
             if (v4l_mipi_logic::is_auto_exposure_control(control))
