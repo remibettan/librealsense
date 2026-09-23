@@ -145,6 +145,18 @@ namespace rs2
         }
     }
 
+    bool sensor_has_color_stream( const std::vector< stream_profile > & profiles )
+    {
+        return std::any_of( profiles.begin(), profiles.end(),
+                            []( const stream_profile & p ) { return p.stream_type() == RS2_STREAM_COLOR; } );
+    }
+
+    bool sensor_has_depth_stream( const std::vector< stream_profile > & profiles )
+    {
+        return std::any_of( profiles.begin(), profiles.end(),
+                            []( const stream_profile & p ) { return p.stream_type() == RS2_STREAM_DEPTH; } );
+    }
+
     subdevice_model::subdevice_model(
         device& dev,
         std::shared_ptr<sensor> s,
@@ -816,7 +828,14 @@ namespace rs2
                     auto tmp = stream_enabled;
                     label = rsutils::string::from() << stream_display_names[f.first] << "##" << f.first;
                     // Grey out streams invalid in the current D401 GMSL mode (see is_stream_mode_locked).
-                    const bool mode_locked = is_stream_mode_locked(f.first);
+                    // Cannot select the aligned depth stream when its is off
+                    const bool aligned_off = is_aligned_depth_stream_off(f.first);
+                    if (aligned_off && stream_enabled[f.first])
+                    {
+                        stream_enabled[f.first] = false;
+                        res = true;
+                    }
+                    const bool mode_locked = is_stream_mode_locked(f.first) || aligned_off;
                     if (mode_locked) ImGui::BeginDisabled();
                     if (ImGui::Checkbox(label.c_str(), &stream_enabled[f.first]))
                     {
@@ -1062,7 +1081,14 @@ namespace rs2
                     res = true;
                     auto tmp = stream_enabled;
                     label = rsutils::string::from() << stream_display_names[f.first] << "##" << f.first;
-                    const bool mode_locked = is_stream_mode_locked(f.first);
+                    // Cannot select the aligned depth stream before its mode is on - and drop it if the mode went off while it was selected
+                    const bool aligned_off = is_aligned_depth_stream_off(f.first);
+                    if (aligned_off && stream_enabled[f.first])
+                    {
+                        stream_enabled[f.first] = false;
+                        res = true;
+                    }
+                    const bool mode_locked = is_stream_mode_locked(f.first) || aligned_off;
                     if (mode_locked) ImGui::BeginDisabled();
                     if (ImGui::Checkbox(label.c_str(), &stream_enabled[f.first]))
                     {
@@ -1736,6 +1762,19 @@ namespace rs2
         return false;                                       // depth and Color 0 work in both modes - never lock
     }
 
+    bool subdevice_model::is_aligned_depth_stream_off(int unique_id) const
+    {
+        // The aligned stream is the second depth stream; on USB aligned depth replaces the only one
+        if( stream_type_of( unique_id ) != RS2_STREAM_DEPTH || stream_index_of( unique_id ) == 0 )
+            return false;
+
+        auto it = options_metadata.find( RS2_OPTION_ENABLE_ALIGNED_DEPTH );
+        if( it == options_metadata.end() || ! it->second.supported )
+            return false;
+
+        return it->second.value_as_float() <= 0.f;
+    }
+
     bool subdevice_model::is_depth_calibration_profile() const
     {
         // Check if D555 at depth resolution of 1280x800
@@ -2042,13 +2081,14 @@ namespace rs2
             streaming_map[RS2_STREAM_INFRARED] = false;
         }
 
-        if (profiles[0].stream_type() == RS2_STREAM_COLOR)
+        if (sensor_has_color_stream(profiles))
         {
             std::lock_guard< std::mutex > lock(detected_objects->mutex);
             detected_objects->clear();
             detected_objects->sensor_is_on = false;
         }
-        else if (profiles[0].stream_type() == RS2_STREAM_DEPTH)
+        // Separate check: on dual-RGB the one sensor carries both, so depth must still be handled
+        if (sensor_has_depth_stream(profiles))
         {
             viewer.disable_measurements();
         }
@@ -2226,7 +2266,7 @@ namespace rs2
             }
         }
 
-        if (s->is< color_sensor >())
+        if (sensor_has_color_stream(this->profiles))
         {
             std::lock_guard< std::mutex > lock(detected_objects->mutex);
             detected_objects->sensor_is_on = true;
@@ -2331,14 +2371,6 @@ namespace rs2
                 draw_option(opt, update_read_only_options, error_message, notifications);
             }
         }
-    }
-
-    uint64_t subdevice_model::num_supported_non_default_options() const
-    {
-        return (uint64_t)std::count_if(
-            std::begin(options_metadata),
-            std::end(options_metadata),
-            [&](const std::pair<int, option_model>& p) {return p.second.supported && !viewer.is_option_skipped(p.second.opt); });
     }
 
     bool subdevice_model::supports_on_chip_calib()
