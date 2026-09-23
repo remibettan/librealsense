@@ -119,6 +119,8 @@ namespace rs2
         std::shared_ptr<subdevice_model> dev;
         // Tile fed by the laser-off frames of a stream split by Alternating Passive Depth.
         bool passive = false;
+        // Set on both tiles of a split stream, so each title can name the class it shows.
+        bool split = false;
         // Key of this tile in viewer_model::streams. Two tiles can share one profile, so widget ids
         // and per-tile overlays are identified by this rather than by the profile.
         int ui_key = 0;

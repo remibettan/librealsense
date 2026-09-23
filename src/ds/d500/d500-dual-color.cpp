@@ -178,10 +178,11 @@ namespace librealsense
         auto options_map = std::map< float, std::string >{ { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_DISABLED ), "Disabled" },
                                                            { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_ALTERNATING ), "Alternating" },
                                                            { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_FULL ), "Full" } };
-        auto mode = std::make_shared< passive_depth_mode_option >( get_raw_depth_sensor(), options_map );
+        std::shared_ptr< passive_depth_mode_option > mode;
         try
         {
-            mode->query();  // firmware without the control fails here, and the option stays unregistered
+            // the constructor reads the control, so firmware without it fails here and nothing is registered
+            mode = std::make_shared< passive_depth_mode_option >( get_raw_depth_sensor(), options_map );
         }
         catch( const std::exception & e )
         {

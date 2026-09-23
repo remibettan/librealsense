@@ -4022,7 +4022,8 @@ namespace rs2
     {
         {
             std::lock_guard< std::mutex > lock( streams_mutex );
-            streams[p.unique_id()].begin_stream(d, p, *this);
+            auto & active = streams[p.unique_id()];
+            active.begin_stream(d, p, *this);
             ppf.frames_queue.emplace(p.unique_id(), rs2::frame_queue(5));
 
             if( splits_passive_depth( d, p ) )
@@ -4030,8 +4031,9 @@ namespace rs2
                 int const passive_key = p.unique_id() + PASSIVE_STREAM_KEY_OFFSET;
                 auto & passive = streams[passive_key];
                 passive.begin_stream( d, p, *this );
-                passive.passive = true;
+                passive.passive = passive.split = true;
                 passive.ui_key = passive_key;
+                active.split = true;
                 passive_streams[p.unique_id()] = passive_key;
             }
             else
@@ -4109,8 +4111,14 @@ namespace rs2
         auto mapped_index = streams_origin[index];
 
         // While the stream is split the point cloud follows the active class; Full Passive is not split,
-        // so its passive frames still feed the 3D view.
-        if( ( passive_streams.count( index ) || passive_streams.count( mapped_index ) ) && is_passive_frame( f ) )
+        // so its passive frames still feed the 3D view. Reached from the frame callback and the
+        // post-processing thread, so the lookup needs the lock begin_stream writes under.
+        bool split = false;
+        {
+            std::lock_guard< std::mutex > lock( streams_mutex );
+            split = passive_streams.count( index ) || passive_streams.count( mapped_index );
+        }
+        if( split && is_passive_frame( f ) )
             return false;
 
         if(index == selected_depth_source_uid || mapped_index  == selected_depth_source_uid

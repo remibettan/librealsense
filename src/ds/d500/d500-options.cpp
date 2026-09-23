@@ -244,10 +244,10 @@ namespace librealsense
 
     // Full Passive Depth hands the laser and the AE policy to the firmware; an expired or unregistered mode
     // option means the device has no such mode and nothing is gated.
-    static bool in_full_passive_depth( const std::weak_ptr< option > & mode )
+    static bool in_full_passive_depth( const std::weak_ptr< passive_depth_mode_option > & mode )
     {
         auto strong = mode.lock();
-        return strong && strong->query() == RS2_PASSIVE_DEPTH_MODE_FULL;
+        return strong && strong->is_full_passive();
     }
 
     // Firmware applies these at stream start, so there is nothing for the user to change while streaming.
@@ -258,7 +258,7 @@ namespace librealsense
     }
 
     passive_depth_locked_option::passive_depth_locked_option( std::shared_ptr< option > proxy,
-                                                              const std::weak_ptr< option > & passive_depth_mode,
+                                                              const std::weak_ptr< passive_depth_mode_option > & passive_depth_mode,
                                                               const std::weak_ptr< uvc_sensor > & raw_ep )
         : proxy_option( proxy )
         , _passive_depth_mode( passive_depth_mode )
@@ -283,7 +283,7 @@ namespace librealsense
 
     colored_ir_ae_policy_option::colored_ir_ae_policy_option( const std::weak_ptr< uvc_sensor > & raw_ep,
                                                               const std::map< float, std::string > & description_per_value,
-                                                              const std::weak_ptr< option > & passive_depth_mode )
+                                                              const std::weak_ptr< passive_depth_mode_option > & passive_depth_mode )
         : uvc_xu_option< uint8_t >( raw_ep,
                                     ds::depth_xu,
                                     ds::d500_xu_id::COLORED_IR_AE_POLICY,
@@ -323,12 +323,29 @@ namespace librealsense
                                     "Which exposure classes produce depth: active only, alternating active and passive, or passive only",
                                     description_per_value,
                                     false ) // Not settable while streaming
+        , _full_passive( uvc_xu_option< uint8_t >::query() == RS2_PASSIVE_DEPTH_MODE_FULL )
     {
     }
 
     void passive_depth_mode_option::set( float value )
     {
-        uvc_xu_option< uint8_t >::set( value );
+        {
+            std::lock_guard< std::mutex > lock( _set_mutex );
+            uvc_xu_option< uint8_t >::set( value );
+
+            // Read back rather than cache what we asked for, so the gated controls follow what the firmware
+            // took. A read-back that fails must not leave the previous mode cached, so fall back to the
+            // value we just wrote - the write itself succeeded, so it is the better of the two guesses.
+            try
+            {
+                _full_passive = ( uvc_xu_option< uint8_t >::query() == RS2_PASSIVE_DEPTH_MODE_FULL );
+            }
+            catch( const std::exception & e )
+            {
+                _full_passive = ( value == RS2_PASSIVE_DEPTH_MODE_FULL );
+                LOG_WARNING( "Passive Depth mode set but could not be read back: " << e.what() );
+            }
+        }
 
         if( value != RS2_PASSIVE_DEPTH_MODE_FULL )
             return;
