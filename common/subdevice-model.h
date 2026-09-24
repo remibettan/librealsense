@@ -278,6 +278,7 @@ namespace rs2
         bool is_multiple_resolutions_supported() const;
         void refresh_multiple_resolutions_state();
         void apply_decimation_resolution_defaults();
+        bool decimation_restricts_stream(rs2_stream stream) const;
         int get_res_id_in_resolutions_array(const std::vector<const char*>& res_chars, const std::pair<int, int>& res) const;
         std::pair<int, int> get_resolution_from_res_chars_id(const std::vector<const char*>& res_chars, int id_in_res_chars) const;
         std::pair<int, int> get_max_resolution(rs2_stream stream) const;
