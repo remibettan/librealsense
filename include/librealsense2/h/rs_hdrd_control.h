@@ -34,7 +34,7 @@ typedef struct rs2_hdrd_control
                                      * 1 = 64px, 2 = manual (see shift_pixels). Default 0 */
     int32_t  shift_pixels;          /**< Used when shift_mode == Manual. Range [0,256]. Default 126 */
     int32_t  threshold_mode;        /**< 0 = Zero range, 1 = MinZ range (FW-computed, not exposed
-                                     * to the host), 2 = Manual (see threshold_mm). Default 0 */
+                                     * to the host), 2 = Manual (see threshold_mm). Default 1 */
     int32_t  threshold_mm;          /**< Used when threshold_mode == Manual. Range [0,65535].
                                      * Default 0 */
 

@@ -57,6 +57,12 @@ namespace librealsense
             static constexpr uint32_t RS_CAMERA_CID_DEVICE_MODE             = ( RS_CAMERA_CID_BASE + 0x24 ); // Dual RGB (2C) vs dedicated color sensor (3C)
             static constexpr uint32_t RS_CAMERA_CID_2C_AE_POLICY            = ( RS_CAMERA_CID_BASE + 0x25 );
             static constexpr uint32_t RS_CAMERA_CID_GYRO_SENSITIVITY        = ( RS_CAMERA_CID_BASE + 0x26 );
+            // D500 DPP composite XU CIDs, matching the MIPI driver's D500_CAMERA_CID_*
+            // allocations (see realsense_mipi_platform_driver#658). The payload translation
+            // for these lives in composite_mipi_xu_option, not this file.
+            static constexpr uint32_t RS_CAMERA_CID_MINZ                    = ( RS_CAMERA_CID_BASE + 44 );
+            static constexpr uint32_t RS_CAMERA_CID_DECIMATION_FILTER_DPP   = ( RS_CAMERA_CID_BASE + 49 );
+            static constexpr uint32_t RS_CAMERA_CID_TEMPORAL_FILTER_DPP     = ( RS_CAMERA_CID_BASE + 51 );
 
             static constexpr uint8_t GVD_VALID_OPCODE = 0x10;
 
@@ -319,13 +325,14 @@ namespace librealsense
                         {
                         case RS_DUAL_RGB_MODE: return RS_CAMERA_CID_DEVICE_MODE;
                         case RS_COLORED_IR_AE_POLICY: return RS_CAMERA_CID_2C_AE_POLICY;
-                        // Selectors the D400 table below maps to something else entirely, and which have
-                        // no MIPI equivalent yet: ALIGN_DEPTH, and the decimation / temporal / close-range
-                        // DPP composites the driver splits into its own scalar CIDs.
+                        // D500 composite DPP controls - LibRS-side ctrl ids from ds-private.h that
+                        // route to the driver's D500_CAMERA_CID_MINZ / _DECIMATION_FILTER_DPP /
+                        // _TEMPORAL_FILTER_DPP composite CIDs. MINZ is what LibRS calls HDRD.
+                        case RS_DECIMATION_FILTER_DPP: return RS_CAMERA_CID_DECIMATION_FILTER_DPP;
+                        case RS_TEMPORAL_FILTER_DPP:   return RS_CAMERA_CID_TEMPORAL_FILTER_DPP;
+                        case RS_HDRD_CONTROL:          return RS_CAMERA_CID_MINZ;
+                        // No MIPI equivalent yet.
                         case RS_ALIGN_DEPTH:
-                        case RS_DECIMATION_FILTER_DPP:
-                        case RS_TEMPORAL_FILTER_DPP:
-                        case RS_HDRD_CONTROL:
                             throw linux_backend_exception( rsutils::string::from() << "no v4l2 mipi cid for D500 XU depth control " << std::dec << int( control ) );
                         default: break;  // the rest are common to both families
                         }
