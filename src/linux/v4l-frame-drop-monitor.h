@@ -12,8 +12,6 @@
 
 #include <sys/time.h>
 
-const double DEFAULT_KPI_FRAME_DROPS_PERCENTAGE = 0.05;
-
 namespace librealsense
 {
     namespace platform

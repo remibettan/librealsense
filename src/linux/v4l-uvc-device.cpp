@@ -3,7 +3,7 @@
 
 #include "v4l-uvc-device.h"
 
-#include "v4l-product-quirks.h"
+#include "v4l-product-ids.h"
 #include <src/platform/hid-data.h>
 #include <src/core/time-service.h>
 #include <src/core/notification.h>
@@ -29,6 +29,7 @@
 
 #pragma GCC diagnostic ignored "-Woverflow"
 
+const double DEFAULT_KPI_FRAME_DROPS_PERCENTAGE = 0.05;
 constexpr std::chrono::milliseconds DISCONNECT_RETRY_DELAY( 100 );
 
 namespace librealsense

@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "types.h"
-
 #include <linux/videodev2.h>
 
 #include <cstdint>

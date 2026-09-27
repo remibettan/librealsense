@@ -4,7 +4,7 @@
 #include "v4l-mipi-device.h"
 
 #include "v4l-mipi-logic.h"
-#include "v4l-product-quirks.h"
+#include "v4l-product-ids.h"
 #include <src/librealsense-exception.h>
 #include <rsutils/string/from.h>
 

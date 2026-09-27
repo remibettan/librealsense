@@ -1,7 +1,7 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-#include "v4l-product-quirks.h"
+#include "v4l-product-ids.h"
 
 namespace librealsense
 {
