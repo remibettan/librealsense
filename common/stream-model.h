@@ -31,6 +31,31 @@ namespace rs2
 
     bool draw_combo_box(const std::string& id, const std::vector<std::string>& device_names, int& new_index);
 
+    enum class ruler_range_mode : int
+    {
+        auto_dynamic = 0,   // percentile-driven, hysteresis-smoothed
+        // Value 1 was fixed_4m (legacy 0..4 m). Removed 2026-09 — a persisted
+        // 1 falls back to auto_dynamic via the load-path validation.
+        fixed_user   = 2,   // user-typed min/max
+    };
+
+    // Minimum span (m) between user-typed min and max in fixed_user mode.
+    // Enforced by both the load path, the popover, and calculate_ruler_bounds.
+    static constexpr float k_min_ruler_gap = 0.1f;
+
+    struct depth_ruler_state
+    {
+        // EMA-smoothed data-driven bounds (raw percentile values feed this).
+        float smoothed_min = 0.f;
+        float smoothed_max = 4.f;
+        // Currently-displayed nice-step-snapped bounds. Only refreshed when
+        // the smoothed value moves past a symmetric deadband away from these,
+        // so the ruler doesn't oscillate at a step boundary.
+        float snapped_min = 0.f;
+        float snapped_max = 4.f;
+        bool  initialized = false;
+    };
+
     class stream_model
     {
     public:
@@ -92,6 +117,13 @@ namespace rs2
         frame_metadata      frame_md;
         bool                capturing_roi       = false;    // active modification of roi
         std::shared_ptr<subdevice_model> dev;
+        // Tile fed by the laser-off frames of a stream split by Alternating Passive Depth.
+        bool passive = false;
+        // Set on both tiles of a split stream, so each title can name the class it shows.
+        bool split = false;
+        // Key of this tile in viewer_model::streams. Two tiles can share one profile, so widget ids
+        // and per-tile overlays are identified by this rather than by the profile.
+        int ui_key = 0;
         float _frame_timeout = RS2_DEFAULT_TIMEOUT;
         float _min_timeout = 167.0f;
 
@@ -103,8 +135,19 @@ namespace rs2
         rect curr_info_rect{};
         temporal_event _stream_not_alive;
         bool show_map_ruler = true;
+        // Per-device ruler settings — loaded/saved under a key rooted at
+        // `viewer_model.ruler.<device name>.<sensor name>`. The root is set in
+        // begin_stream once the subdevice is attached; empty for non-depth
+        // streams (they never open the popover).
+        ruler_range_mode ruler_mode = ruler_range_mode::auto_dynamic;
+        float ruler_fixed_min = 0.f;
+        float ruler_fixed_max = 4.f;
+        std::string ruler_config_key_root;
+        depth_ruler_state ruler_state;
         bool show_metadata = false;
         bool show_safety_zones_2d = true;
+        bool show_distance_grid_2d = true;
+        int distance_grid_cell_size_cm = 5;
 
         bool show_crosshair     = false;
         int  grid_h_lines  = 1;
@@ -131,8 +174,8 @@ namespace rs2
         bool should_show_in_hex(rs2_frame_metadata_value& md_val) const;
         void create_graph(rs2_stream stream_type);
         void show_metadata_by_default(const rs2::stream_profile& p);
-        void add_d585S_metadata_descriptions(std::map<rs2_frame_metadata_value, std::string>& descriptions) const;
-        std::string adapt_d585S_metadata_name(const std::string& name) const;
+        void add_depth_mapping_metadata_descriptions(std::map<rs2_frame_metadata_value, std::string>& descriptions) const;
+        std::string adapt_depth_mapping_metadata_name(const std::string& name) const;
         void add_dds_metadata_descriptions(std::map<rs2_frame_metadata_value, std::string>& descriptions) const;
         void deal_d585S_metadata_md_values_special_cases(const frame& f);
         std::string get_meaning(const rs2_frame_metadata_value& md_val, const std::vector<std::string>& reasons, const std::string& reason_for_zero = "") const;

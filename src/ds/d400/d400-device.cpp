@@ -66,8 +66,8 @@ namespace librealsense
         {fourcc('R','G','B','2'), RS2_FORMAT_BGR8},
         {fourcc('M','J','P','G'), RS2_FORMAT_MJPEG},
         {fourcc('B','Y','R','2'), RS2_FORMAT_RAW16},
-        {fourcc('B','A','8','1'), RS2_FORMAT_RAW8}   // D401 GMSL dual-RGB: SBGGR8 8-bit Bayer (RAW8 CSI passthrough, driver PR #459)
-
+        {fourcc('B','A','8','1'), RS2_FORMAT_RAW8},   // D401 GMSL dual-RGB: SBGGR8 (older MIPI driver)
+        {fourcc('p','B','A','A'), RS2_FORMAT_RAW10}   // D401 GMSL dual-RGB: SBGGR10P (MIPI driver 1.0.6.10+)
     };
     std::map<fourcc::value_type, rs2_stream> d400_depth_fourcc_to_rs2_stream = {
         {fourcc('Y','U','Y','2'), RS2_STREAM_COLOR},
@@ -83,23 +83,25 @@ namespace librealsense
         {fourcc('Z','1','6','H'), RS2_STREAM_DEPTH},
         {fourcc('B','Y','R','2'), RS2_STREAM_COLOR},
         {fourcc('M','J','P','G'), RS2_STREAM_COLOR},
-        {fourcc('B','A','8','1'), RS2_STREAM_COLOR}   // D401 GMSL dual-RGB: SBGGR8, expose each OV9782 imager as color
+        {fourcc('B','A','8','1'), RS2_STREAM_COLOR},   // D401 GMSL dual-RGB: SBGGR8 (older MIPI driver)
+        {fourcc('p','B','A','A'), RS2_STREAM_COLOR}    // D401 GMSL dual-RGB: SBGGR10P (MIPI driver 1.0.6.10+)
     };
 
-    // D401 GMSL dual-RGB stream-id resolver. The two OV9782 imagers each arrive on a separate backend pin,
-    // both advertising identical SBGGR8 (fourcc BA81). Rank the BA81 color pins by ascending pin_index and
-    // route them to Color 0 / Color 1 (distinct streams), mirroring the IR1/IR2 split. Uses the upstream
-    // per-pin _stream_id_resolver mechanism (cf. d500_dual_rgb::resolve_color_stream).
+    // D401 GMSL dual-RGB stream-id resolver: the two imagers arrive on separate backend pins with the same
+    // raw Bayer fourcc (SBGGR8/BA81 on older drivers, SBGGR10P/pBAA on 1.0.6.10+). Rank those pins by
+    // ascending pin_index -> Color 0 / Color 1 (cf. d500_dual_rgb::resolve_color_stream).
     static void resolve_d401_color_stream( const std::vector< platform::stream_profile > & all,
                                            const platform::stream_profile & p, rs2_stream & type, int & index )
     {
-        const auto ba81 = fourcc( 'B', 'A', '8', '1' );
-        if( p.format != ba81 )
+        const auto ba81 = fourcc( 'B', 'A', '8', '1' );   // SBGGR8  (older MIPI driver)
+        const auto pbaa = fourcc( 'p', 'B', 'A', 'A' );   // SBGGR10P (MIPI driver 1.0.6.10+)
+        auto is_raw_color = [&]( uint32_t f ) { return f == ba81 || f == pbaa; };
+        if( ! is_raw_color( p.format ) )
             return;  // not a D401 color pin - leave type/index as resolved by the fourcc map
 
         std::set< uint32_t > color_pins;
         for( auto & q : all )
-            if( q.format == ba81 )
+            if( is_raw_color( q.format ) )
                 color_pins.insert( q.pin_index );
 
         int rank = 0;
@@ -405,19 +407,9 @@ namespace librealsense
 
     float d400_depth_sensor::get_preset_max_value() const
     {
-        float preset_max_value = RS2_RS400_VISUAL_PRESET_COUNT - 1;
-        switch (_owner->_pid)
-        {
-        case ds::RS400_PID:
-        case ds::RS410_PID:
-        case ds::RS415_PID:
-        case ds::RS460_PID:
-            preset_max_value = static_cast<float>(RS2_RS400_VISUAL_PRESET_REMOVE_IR_PATTERN);
-            break;
-        default:
-            preset_max_value = static_cast<float>(RS2_RS400_VISUAL_PRESET_MEDIUM_DENSITY);
-        }
-        return preset_max_value;
+        // Edge Enhancement is the highest preset supported across all D400 devices; per-pid gating
+        // below REMOVE_IR_PATTERN (only D400/D410/D415/D460) is enforced by the feature check in apply_preset()
+        return static_cast<float>(RS2_RS400_VISUAL_PRESET_EDGE_ENHANCEMENT);
     }
 
     class ds5u_depth_sensor : public d400_depth_sensor
@@ -630,7 +622,7 @@ namespace librealsense
     {
         // Signal background loops (polling_error_handler) so they exit cleanly on the
         // next tick instead of firing one more failing FW query before being joined.
-        _device_alive->store( false );
+        _is_alive->store( false );
     }
 
     void d400_device::init(std::shared_ptr<context> ctx,
@@ -777,60 +769,17 @@ namespace librealsense
                     []() {return std::make_shared<y12i_to_y16y16_mipi>(); }
                 );
 
-                // D401 GMSL dual-RGB: the two OV9782 imagers stream 8-bit RGGB Bayer via the FW RAW8
-                // CSI passthrough. Expose each as a color stream - crop the transport padding
-                // (1612 -> 1288 px) and demosaic RGGB -> RGB8. The per-imager stream index (0/1) is
-                // carried through from the source profile, mirroring the IR1/IR2 split.
-                if( _pid == RS401_GMSL_PID )
+                // D401 GMSL dual-RGB: arm the raw-Bayer -> Color 0 / Color 1 routing (raw payload supported
+                // only on firmware with the RAW8/RAW10 CSI passthrough). Keep this guard identical to the
+                // block-registration guard in d400_color::register_processing_blocks().
+                if( _is_mipi_device && _pid == RS401_GMSL_PID && _fw_version >= firmware_version( "5.17.4.13" ) )
                 {
                     // Route the two identical BGGR color pins to Color 0 / Color 1 (ascending pin order).
                     raw_depth_sensor->set_stream_id_resolver( resolve_d401_color_stream );
-
-                    // Both imagers share one hardware frame counter; without a per-stream counter the
-                    // reported color FPS reads 2x.
+                    // Both imagers share one HW frame counter; without a per-stream counter FPS reads 2x.
                     raw_depth_sensor->enable_software_color_frame_numbers();
-
-                    // The camera always delivers one native color resolution (1288x808 after the
-                    // 1612 transport crop). For the user we expose the standard resolutions too: each
-                    // is produced by demosaicing to native then center-cropping to that aspect ratio
-                    // and bilinear-scaling (crop-to-aspect + scale, no stretch; see rggb_converter /
-                    // cuda-rggb). We mirror the depth resolution set so the viewer offers one shared
-                    // resolution across depth + Color 0/1 (no per-stream resolution UI needed).
-                    //
-                    // resolution_transform is a plain function pointer (no captures), so each output
-                    // resolution needs its own captureless transform; the converter factory (a
-                    // std::function) captures the target size. Index 0 = left imager, 1 = right; the
-                    // resolver tags the two RGGB sources 0/1 and formats-converter matches by index.
-                    static const int NATIVE_W = 1288;
-                    struct color_res { int w, h; void ( *xf )( uint32_t &, uint32_t & ); };
-                    // Mirror the depth resolution set exactly (top out at 1280x720, not the native
-                    // 1288x808) so color shares every resolution with depth/IR. That keeps the viewer
-                    // on a single shared Resolution dropdown and lets depth + IR + Color 0/1 always be
-                    // selected together (depth has no 1288x808 mode). The native 1288x808 is still the
-                    // internal capture/demosaic size; 1280x720 is its center-cropped 16:9 output.
-                    static const color_res color_resolutions[] = {
-                        { 1280, 720, []( uint32_t & w, uint32_t & h ) { w = 1280; h = 720; } },
-                        {  848, 480, []( uint32_t & w, uint32_t & h ) { w =  848; h = 480; } },
-                        {  640, 480, []( uint32_t & w, uint32_t & h ) { w =  640; h = 480; } },
-                        {  640, 360, []( uint32_t & w, uint32_t & h ) { w =  640; h = 360; } },
-                        {  480, 270, []( uint32_t & w, uint32_t & h ) { w =  480; h = 270; } },
-                        {  424, 240, []( uint32_t & w, uint32_t & h ) { w =  424; h = 240; } },
-                    };
-                    for( auto & r : color_resolutions )
-                    {
-                        const int rw = r.w, rh = r.h;
-                        depth_sensor.register_processing_block(
-                            { { RS2_FORMAT_RAW8, RS2_STREAM_COLOR } },
-                            { { RS2_FORMAT_RGB8, RS2_STREAM_COLOR, 0, 0, 0, 0, r.xf },
-                              { RS2_FORMAT_RGB8, RS2_STREAM_COLOR, 1, 0, 0, 0, r.xf } },
-                            [rw, rh]() {
-                                rggb::isp_params isp;
-                                isp.swap_rb = true;   // OV9782 is BGGR (driver declares SBGGR8); the base
-                                                      // demosaic is RGGB-pattern, so swap R<->B to correct it
-                                return std::make_shared< rggb_converter >( RS2_FORMAT_RGB8, NATIVE_W, rw, rh, isp );
-                            }
-                        );
-                    }
+                    // The RAW8->RGB8 blocks are registered in d400_color::register_processing_blocks(),
+                    // after the ISP blocks, so a lone Color 0 RGB8 stays ISP and only Color 1 forces raw.
                 }
             }
 
@@ -878,7 +827,7 @@ namespace librealsense
 
                     _polling_error_handler = std::make_shared<polling_error_handler>(1000,
                         error_control,
-                        std::weak_ptr<std::atomic<bool>>( _device_alive ),
+                        std::weak_ptr<std::atomic<bool>>( _is_alive ),
                         raw_depth_sensor->get_notifications_processor(),
                         std::make_shared< ds_notification_decoder >( d400_fw_error_report ) );
 
@@ -886,10 +835,19 @@ namespace librealsense
                 }
             }
 
-            if ((val_in_range(_pid, { RS455_PID })) && (_fw_version >= firmware_version("5.12.11.0")))
+            // D455 drives the thermal loop over its depth XU control, D457 over the HWM TC_CMD
+            // opcode - gated on the last major release rather than the D455 XU baseline.
+            const bool thermal_compensation_supported
+                = ( _pid == RS455_PID && _fw_version >= firmware_version( "5.12.11.0" ) )
+               || ( _pid == RS457_PID && _fw_version >= firmware_version( "5.17.0.10" ) );
+            if( thermal_compensation_supported )
             {
-                auto thermal_compensation_toggle = std::make_shared<protected_xu_option<uint8_t>>( raw_depth_sensor, depth_xu,
-                    ds::DS5_THERMAL_COMPENSATION, "Toggle Thermal Compensation Mechanism");
+                std::shared_ptr< option > thermal_compensation_toggle;
+                if( _is_mipi_device )
+                    thermal_compensation_toggle = std::make_shared< thermal_compensation_option_mipi >( _hw_monitor );
+                else
+                    thermal_compensation_toggle = std::make_shared<protected_xu_option<uint8_t>>( raw_depth_sensor, depth_xu,
+                        ds::DS5_THERMAL_COMPENSATION, "Toggle Thermal Compensation Mechanism");
 
                 auto temperature_sensor = depth_sensor.get_option_handler(RS2_OPTION_ASIC_TEMPERATURE);
 

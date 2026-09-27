@@ -1,7 +1,10 @@
 /* License: Apache 2.0. See LICENSE file in root directory. */
 /* Copyright(c) 2019 RealSense, Inc. All Rights Reserved. */
 #pragma once
-#ifdef RS2_USE_CUDA
+/* Guarded on either macro (not just RS2_USE_CUDA) so this compiles under HIP regardless of
+ * whether global_config.cmake's BUILD_WITH_HIP branch also defines RS2_USE_CUDA (today, for
+ * back-compat) or drops it in favor of RS2_USE_HIP alone. */
+#if defined(RS2_USE_CUDA) || defined(RS2_USE_HIP)
 
 #include "proc/align.h"
 #include "cuda-align.cuh"
@@ -62,4 +65,4 @@ namespace librealsense
         std::map<std::tuple<rs2_stream, rs2_stream>, align_cuda_helper> aligners;
     };
 }
-#endif // RS2_USE_CUDA
+#endif // RS2_USE_CUDA || RS2_USE_HIP

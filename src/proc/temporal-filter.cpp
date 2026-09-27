@@ -11,6 +11,8 @@
 
 #include <rsutils/string/from.h>
 
+#include <algorithm>
+
 
 namespace librealsense
 {
@@ -51,7 +53,7 @@ namespace librealsense
             persistence_max,
             persistence_step,
             persistence_default,
-            &_persistence_param, "Persistency mode");
+            &_persistence_param, "Persistency mode. Rules for replacing a missing pixel with its last valid value");
 
         temporal_persistence_control->set_description(0, "Disabled");
         temporal_persistence_control->set_description(1, "Valid in 8/8");
@@ -83,7 +85,7 @@ namespace librealsense
             temp_alpha_max,
             temp_alpha_step,
             temp_alpha_default,
-            &_alpha_param, "Alpha factor of Exp. moving average, 1=no filter, 0=infinite filter");
+            &_alpha_param, "Alpha factor of Exp. moving average, 1=no filter, 0=infinite filter. Smooths against previous frames");
         temporal_filter_alpha->on_set([this](float val)
         {
             on_set_alpha(val);
@@ -94,7 +96,7 @@ namespace librealsense
             temp_delta_max,
             temp_delta_step,
             temp_delta_default,
-            &_delta_param, "Edge-preserving (gradient) threshold");
+            &_delta_param, "Step-size boundary, the threshold used to preserve surfaces (edges). Higher = smooths over bigger depth differences");
 
         auto weak_temporal_filter_delta = std::weak_ptr<ptr_option<uint8_t>>();
         temporal_filter_delta->on_set([this, weak_temporal_filter_delta](float val)
@@ -119,14 +121,15 @@ namespace librealsense
 
     rs2::frame temporal_filter::process_frame(const rs2::frame_source& source, const rs2::frame& f)
     {
-        update_configuration(f);
+        update_configuration(f);            // sizes the geometry state_of() needs
+        auto & state = state_of(f);
         auto tgt = prepare_target_frame(f, source);
 
         // Temporal filter execution
         if (_extension_type == RS2_EXTENSION_DISPARITY_FRAME)
-            temp_jw_smooth<float>(const_cast<void*>(tgt.get_data()), _last_frame.data(), _history.data());
+            temp_jw_smooth<float>(const_cast<void*>(tgt.get_data()), state.last_frame.data(), state.history.data(), state.cur_frame_index);
         else
-            temp_jw_smooth<uint16_t>(const_cast<void*>(tgt.get_data()), _last_frame.data(), _history.data());
+            temp_jw_smooth<uint16_t>(const_cast<void*>(tgt.get_data()), state.last_frame.data(), state.history.data(), state.cur_frame_index);
 
         return tgt;
     }
@@ -137,26 +140,21 @@ namespace librealsense
         std::lock_guard<std::mutex> lock(_mutex);
         _persistence_param = val;
         recalc_persistence_map();
-        _last_frame.clear();
-        _history.clear();
+        reset_history();
     }
 
     void temporal_filter::on_set_alpha(float val)
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _alpha_param = val;
-        _cur_frame_index = 0;
-        _last_frame.clear();
-        _history.clear();
+        reset_history();
     }
 
     void temporal_filter::on_set_delta(float val)
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _delta_param = static_cast<uint8_t>(val);
-        _cur_frame_index = 0;
-        _last_frame.clear();
-        _history.clear();
+        reset_history();
     }
 
     void  temporal_filter::update_configuration(const rs2::frame& f)
@@ -164,7 +162,7 @@ namespace librealsense
         if (f.get_profile().get() != _source_stream_profile.get())
         {
             _source_stream_profile = f.get_profile();
-            _target_stream_profile = _source_stream_profile.clone(RS2_STREAM_DEPTH, 0, _source_stream_profile.format());
+            _target_stream_profile = _source_stream_profile.clone(RS2_STREAM_DEPTH, _source_stream_profile.stream_index(), _source_stream_profile.format());
 
             //TODO - reject any frame other than depth/disparity
             _extension_type = f.is<rs2::disparity_frame>() ? RS2_EXTENSION_DISPARITY_FRAME : RS2_EXTENSION_DEPTH_FRAME;
@@ -175,12 +173,36 @@ namespace librealsense
             _stride = _width*_bpp;
             _current_frm_size_pixels = _width * _height;
 
-            _last_frame.clear();
-            _last_frame.resize(_current_frm_size_pixels*_bpp);
+        }
+    }
 
-            _history.clear();
-            _history.resize(_current_frm_size_pixels*_bpp);
 
+    // Called with _mutex held by the processing block's frame callback, which is also what the option
+    // setters take - so the map needs no locking of its own
+    temporal_filter::stream_state & temporal_filter::state_of( const rs2::frame & f )
+    {
+        auto & state = _states[{ f.get_profile().stream_type(), f.get_profile().stream_index() }];
+
+        auto const size_bytes = _current_frm_size_pixels * _bpp;
+        if( state.last_frame.size() != size_bytes )
+        {
+            state.last_frame.assign( size_bytes, 0 );
+            state.history.assign( size_bytes, 0 );
+            state.cur_frame_index = 0;
+        }
+
+        return state;
+    }
+
+
+    // Zero the history rather than drop the entries, so a frame being processed keeps a valid buffer
+    void temporal_filter::reset_history()
+    {
+        for( auto & state : _states )
+        {
+            std::fill( state.second.last_frame.begin(), state.second.last_frame.end(), 0 );
+            std::fill( state.second.history.begin(), state.second.history.end(), 0 );
+            state.second.cur_frame_index = 0;
         }
     }
 

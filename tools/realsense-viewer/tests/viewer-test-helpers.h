@@ -10,6 +10,8 @@
 #include "imgui_te_engine.h"
 #include "imgui_te_context.h"
 
+#include <chrono>
+#include <thread>
 #include <vector>
 #include <memory>
 #include <string>
@@ -17,6 +19,19 @@
 
 // Thrown by helpers that need to abort the current test
 struct test_exit {};
+
+// Clears a sensor's search box however the test ends. IM_CHECK returns from the test on
+// failure and the suite shares one viewer, so a box left filtered would follow into the next
+// test and hide the controls it goes looking for.
+struct controls_filter_reset
+{
+    std::shared_ptr< rs2::subdevice_model > sub;
+    ~controls_filter_reset()
+    {
+        if( sub )
+            sub->options_filter.clear();
+    }
+};
 
 // ---------------------------------------------------------------------------
 // viewer_test — wraps helpers as methods for cleaner test bodies
@@ -101,15 +116,24 @@ public:
     void click_stream_toggle_off( rs2::device_model & model,
                                   std::shared_ptr< rs2::subdevice_model > sub );
 
-    // Wait real wall-clock time (not skipped in --auto mode)
-    void sleep( float seconds ) { imgui->SleepNoSkip( seconds, 1.0f ); }
+    // Wait real wall-clock time. Each iteration yields one imgui frame via SleepNoSkip
+    // (so refresh_devices() ticks at ~20 Hz) then sleep_for accumulates 50 ms of real time.
+    void sleep( float seconds )
+    {
+        auto const deadline = std::chrono::steady_clock::now() + std::chrono::duration< float >( seconds );
+        while( std::chrono::steady_clock::now() < deadline )
+        {
+            imgui->SleepNoSkip( 0.05f, 0.05f );
+            std::this_thread::sleep_for( std::chrono::milliseconds( 50 ) );
+        }
+    }
 
-    // Poll a condition up to max_attempts times, sleeping interval seconds between checks
+    // Poll cond up to max_attempts times, sleeping interval real seconds between checks.
     template< typename Pred >
     bool wait_until( int max_attempts, float interval, Pred cond )
     {
         for( int i = 0; i < max_attempts && !cond(); ++i )
-            imgui->SleepNoSkip( interval, 0.05f );
+            sleep( interval );
         return cond();
     }
 
@@ -125,19 +149,47 @@ public:
                                    std::shared_ptr< rs2::subdevice_model > sub,
                                    rs2_option option );
 
+    // Enter a value the way a user does: click the pencil beside a slider, click the text box it
+    // turns into, type, Enter. False when no text box took the click - the pencil did nothing.
+    bool type_value( ImGuiID widget, ImGuiID edit_button, std::string const & value );
+
     // Replace the text in the Controls section's search/filter box ("" clears it)
     void set_controls_filter( rs2::device_model & model,
                               std::shared_ptr< rs2::subdevice_model > sub,
                               const std::string & text );
+    // Click the button beside the box that clears the search
+    void click_controls_filter_clear( rs2::device_model & model,
+                                      std::shared_ptr< rs2::subdevice_model > sub );
     // Options whose control widgets are currently rendered inside the Controls section
     // (single gather pass; requires the sensor panel and Controls section to be expanded)
     std::vector< rs2_option > controls_options( rs2::device_model & model,
                                                 std::shared_ptr< rs2::subdevice_model > sub );
-    // Lowercased display name of an option's control
-    std::string control_name( std::shared_ptr< rs2::subdevice_model > sub, rs2_option option );
-    // Whether an option's control is currently rendered inside the Controls section
-    bool control_visible( rs2::device_model & model,
-                          std::shared_ptr< rs2::subdevice_model > sub, rs2_option option );
+    // Whether an option's widget is currently rendered under one post-processing filter
+    bool post_processing_option_visible( rs2::device_model & model,
+                                         std::shared_ptr< rs2::subdevice_model > sub,
+                                         std::shared_ptr< rs2::processing_block_model > pb,
+                                         rs2_option option );
+    // How far from the Control Panel's right edge a filter's enable toggle is drawn. The toggles are
+    // deferred to the end of the panel, so a broken deferral puts them at the left edge instead.
+    float post_processing_toggle_inset( rs2::device_model & model,
+                                        std::shared_ptr< rs2::subdevice_model > sub,
+                                        std::shared_ptr< rs2::processing_block_model > pb );
+    // The ImGui id of the node at the end of this path, each element seeding the next - pass it to
+    // ItemOpen / ItemInputValue to drive a node that lives under a sensor
+    ImGuiID node_id( rs2::device_model & model,
+                     std::shared_ptr< rs2::subdevice_model > sub,
+                     std::vector< std::string > const & path );
+    // Whether the node at the end of this path is rendered - so a heading with nothing under it, or
+    // a control inside a section, is one call either way
+    bool node_shown( rs2::device_model & model,
+                     std::shared_ptr< rs2::subdevice_model > sub,
+                     std::vector< std::string > const & path );
+    // The tree labels the viewer draws, for building those paths
+    std::string controls_label( rs2::device_model & model,
+                                std::shared_ptr< rs2::subdevice_model > sub );
+    std::string post_processing_label( rs2::device_model & model );
+    std::string embedded_filters_label( rs2::device_model & model );
+    std::string filter_label( rs2::device_model & model, std::string const & name );
 
     // Open a combo dropdown by ID and select the named item
     void select_combo_item( ImGuiID combo_id, const std::string & item );
@@ -193,8 +245,6 @@ public:
 private:
     std::string sensor_label( rs2::device_model & model,
                               std::shared_ptr< rs2::subdevice_model > sub );
-    std::string controls_label( rs2::device_model & model,
-                                std::shared_ptr< rs2::subdevice_model > sub );
     ImGuiID sensor_id_seed( rs2::device_model & model,
                             std::shared_ptr< rs2::subdevice_model > sub );
     ImGuiID controls_id_seed( rs2::device_model & model,

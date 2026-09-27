@@ -6,6 +6,7 @@
 #include "d500-safety.h"
 #include "d500-info.h"
 #include "d585s-md.h"
+#include "mapping-timing.h"
 #include "d500-types/safety-interface-config.h"
 
 #include <vector>
@@ -20,12 +21,33 @@ using rs_fourcc = rsutils::type::fourcc;
 #include "stream.h"
 
 #include "platform/platform-utils.h"
+#include "pose.h"   // identity_matrix
 
 #include <src/metadata-parser.h>
 #include <thread>
 
 namespace librealsense
 {
+    // Use the same validated UVC capture identity as the Mapping timestamp reader.
+    class mapping_capture_parser : public md_attribute_parser_base
+    {
+        rs2_frame_metadata_value const _attribute;
+    public:
+        explicit mapping_capture_parser( rs2_frame_metadata_value attribute ) : _attribute( attribute ) {}
+        bool find( const frame & f, rs2_metadata_type * value ) const override
+        {
+            uint32_t counter = 0;
+            uint64_t timestamp = 0;
+            if( ! get_mapping_capture_timing( f, counter, timestamp ) )
+                return false;
+            if( _attribute == RS2_FRAME_METADATA_ACTUAL_FPS )
+                return ds_md_attribute_actual_fps().find( f, value );
+            if( value )
+                *value = _attribute == RS2_FRAME_METADATA_SENSOR_TIMESTAMP ? timestamp : counter;
+            return true;
+        }
+    };
+
     const std::map<uint32_t, rs2_format> mapping_fourcc_to_rs2_format = {
         {rs_fourcc('G','R','E','Y'), RS2_FORMAT_Y8},
         // point cloud - w/a done in backend in order to distinguish between occupancy
@@ -44,15 +66,31 @@ namespace librealsense
         _point_cloud_stream(new stream(RS2_STREAM_LABELED_POINT_CLOUD))
     {
         using namespace ds;
-        const uint32_t mapping_stream_mi = 13;
+
+        // Depth mapping is currently only supported over USB; skip on MIPI/GMSL transport
+        // rather than failing device creation for units that don't expose it (yet).
+        if( _is_mipi_device )
+            return;
+
+        const auto pid = dev_info->get_group().uvc_devices.front().pid;
+        _is_safety_layout = ( pid == D585S_PID || pid == D585_LEGACY_PID );
+
+        const uint32_t mapping_stream_mi = _is_safety_layout ? 13 : 11;
         auto mapping_devs_info = filter_by_mi( dev_info->get_group().uvc_devices, mapping_stream_mi);
-        
+
+        // A missing interface most commonly means older FW that predates depth mapping.
+        // Degrade gracefully (no occupancy/point-cloud streams) instead of failing the
+        // whole device - some units in the field won't have this FW yet.
         if (mapping_devs_info.size() != 1)
-            throw invalid_value_exception(rsutils::string::from() << "RS5XX models with Safety are expected to include a single depth mapping device! - "
-                << mapping_devs_info.size() << " found");
+        {
+            LOG_WARNING( "depth mapping device not found (expected 1, found " << mapping_devs_info.size()
+                << ") - occupancy/point-cloud streams will not be available" );
+            return;
+        }
 
         auto mapping_ep = create_depth_mapping_device( dev_info->get_context(), mapping_devs_info );
-        _depth_mapping_device_idx = add_sensor(mapping_ep);
+        add_sensor(mapping_ep);
+        _depth_mapping_active = true;
     }
 
     std::shared_ptr<synthetic_sensor> d500_depth_mapping::create_depth_mapping_device(std::shared_ptr<context> ctx,
@@ -97,26 +135,40 @@ namespace librealsense
     void d500_depth_mapping::register_extrinsics()
     {
         using rsutils::json;
-        // extrinsics to depth lazy, becasue safety sensor's api is used and it may be constructed later
-        // than the depth mapping device (though it may not be the case in the device contructor's order, in ds500-factory)
+        // Lazy because it reads the safety interface config table over the HW monitor,
+        // and the depth mapping device may be constructed before the rest of the device
+        // is fully up (though it may not be the case in the device contructor's order, in ds500-factory)
         _depth_to_depth_mapping_extrinsics = std::make_shared< rsutils::lazy< rs2_extrinsics > > ( [this]()
             {
-                // getting access to safety sensor api
-                auto safety_device = dynamic_cast<d500_safety*>(this);
-                if (!safety_device)
-                    throw invalid_value_exception("null pointer recieved from dynamic pointer casting.");
-                auto& safety_sensor = dynamic_cast<d500_safety_sensor&>(safety_device->get_safety_sensor());
-                
-                // Pull extrinsic from safety interface config, according to HKR 0.9 QS
+                // Non-safety D5xx emit mapping payloads in ROS map axes (+X forward, +Y left,
+                // +Z up); consumers expect depth/optical axes (+X right, +Y down, +Z forward).
+                // Report the fixed conversion rather than identity:
+                //   x_ros = z_opt   y_ros = -x_opt   z_ros = -y_opt
+                // stored column-major, depth -> mapping.
+                if( ! _is_safety_layout )
+                {
+                    rs2_extrinsics axes = {};
+                    const float depth_to_mapping[9] = { 0.f, -1.f,  0.f,     // column 1
+                                                        0.f,  0.f, -1.f,     // column 2
+                                                        1.f,  0.f,  0.f };   // column 3
+                    std::memcpy( axes.rotation, depth_to_mapping, sizeof( depth_to_mapping ) );
+                    // Translation would be the mount height, which lives in the same safety
+                    // config we cannot read here, so the ground plane passes through the
+                    // camera origin rather than below it.
+                    return axes;
+                }
+
+                // Pull extrinsic from safety interface config (HKR 0.9 QS) via the shared
+                // HW-monitor read - depth mapping doesn't require a d500_safety sibling.
                 rs2_extrinsics res;
                 json sic_json;
-                try 
+                try
                 {
-                    sic_json = json::parse(safety_sensor.get_safety_interface_config());
+                    sic_json = json::parse(read_safety_interface_config(_hw_monitor));
                 }
-                catch (...)
+                catch (const std::exception& e)
                 {
-                    throw std::runtime_error("Could not read safety interface config");
+                    throw std::runtime_error(rsutils::string::from() << "Could not read safety interface config: " << e.what());
                 }
                 camera_position extrinsics_from_preset(sic_json["safety_interface_config"]["camera_position"]);
                 auto rot = extrinsics_from_preset.get_rotation();
@@ -138,6 +190,25 @@ namespace librealsense
         environment::get_instance().get_extrinsics_graph().register_extrinsics(*_depth_stream, *_point_cloud_stream, _depth_to_depth_mapping_extrinsics);
     }
 
+    void d500_depth_mapping::add_streams_if_active( std::vector< std::shared_ptr< stream_interface > > & streams ) const
+    {
+        if( is_depth_mapping_active() )
+        {
+            streams.push_back( _occupancy_stream );
+            streams.push_back( _point_cloud_stream );
+        }
+    }
+
+    void d500_depth_mapping::add_profile_tag_if_active( std::vector< tagged_profile > & tags ) const
+    {
+        if( is_depth_mapping_active() && _is_safety_layout )
+        {
+            // The occupancy canvas is transposed on this layout.
+            tags.push_back( { RS2_STREAM_OCCUPANCY, -1, 256, 320, RS2_FORMAT_Y8, 30,
+                              profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT } );
+        }
+    }
+
     void d500_depth_mapping::register_options(std::shared_ptr<d500_depth_mapping_sensor> occupancy_ep, std::shared_ptr<uvc_sensor> raw_mapping_sensor)
     {
 
@@ -150,6 +221,13 @@ namespace librealsense
 
         register_occupancy_metadata(raw_mapping_ep);
         register_point_cloud_metadata(raw_mapping_ep);
+
+        raw_mapping_ep->register_metadata( RS2_FRAME_METADATA_FRAME_COUNTER,
+            std::make_shared< mapping_capture_parser >( RS2_FRAME_METADATA_FRAME_COUNTER ) );
+        raw_mapping_ep->register_metadata( RS2_FRAME_METADATA_SENSOR_TIMESTAMP,
+            std::make_shared< mapping_capture_parser >( RS2_FRAME_METADATA_SENSOR_TIMESTAMP ) );
+        raw_mapping_ep->register_metadata( RS2_FRAME_METADATA_ACTUAL_FPS,
+            std::make_shared< mapping_capture_parser >( RS2_FRAME_METADATA_ACTUAL_FPS ) );
     }
 
 
@@ -159,17 +237,9 @@ namespace librealsense
         auto md_prop_offset = metadata_raw_mode_offset +
             offsetof(md_mapping_mode, intel_occupancy);
 
-        raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_FRAME_COUNTER,
-            make_attribute_parser(&md_occupancy::frame_counter,
-                md_occupancy_attributes::frame_counter_attribute, md_prop_offset));
-
         raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_SAFETY_DEPTH_FRAME_COUNTER,
             make_attribute_parser(&md_occupancy::depth_frame_counter,
                 md_occupancy_attributes::depth_frame_counter_attribute, md_prop_offset));
-
-        raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_SENSOR_TIMESTAMP,
-            make_attribute_parser(&md_occupancy::frame_timestamp,
-                md_occupancy_attributes::frame_timestamp_attribute, md_prop_offset));
 
         raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_FLOOR_DETECTION,
             make_attribute_parser(&md_occupancy::floor_detection,
@@ -323,6 +393,14 @@ namespace librealsense
             make_attribute_parser(&md_occupancy::cell_size,
                 md_occupancy_attributes::cell_size_attribute, md_prop_offset));
 
+        raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_OCCUPANCY_GRID_ORIGIN_X,
+            make_attribute_parser(&md_occupancy::grid_origin_x_mm,
+                md_occupancy_attributes::grid_origin_x_attribute, md_prop_offset));
+
+        raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_OCCUPANCY_GRID_ORIGIN_Y,
+            make_attribute_parser(&md_occupancy::grid_origin_y_mm,
+                md_occupancy_attributes::grid_origin_y_attribute, md_prop_offset));
+
         raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_CRC,
             make_attribute_parser(&md_occupancy::payload_crc32,
                 md_occupancy_attributes::payload_crc32_attribute, md_prop_offset));
@@ -334,17 +412,9 @@ namespace librealsense
         auto md_prop_offset = metadata_raw_mode_offset +
             offsetof(md_mapping_mode, intel_point_cloud);
 
-        raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_FRAME_COUNTER,
-            make_attribute_parser(&md_point_cloud::frame_counter,
-                md_point_cloud_attributes::frame_counter_attribute, md_prop_offset));
-
         raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_SAFETY_DEPTH_FRAME_COUNTER,
             make_attribute_parser(&md_point_cloud::depth_frame_counter,
                 md_point_cloud_attributes::depth_frame_counter_attribute, md_prop_offset));
-
-        raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_SENSOR_TIMESTAMP,
-            make_attribute_parser(&md_point_cloud::frame_timestamp,
-                md_point_cloud_attributes::frame_timestamp_attribute, md_prop_offset));
 
         raw_mapping_ep->register_metadata(RS2_FRAME_METADATA_FLOOR_DETECTION,
             make_attribute_parser(&md_point_cloud::floor_detection,
@@ -523,17 +593,20 @@ void d500_depth_mapping::register_processing_blocks( std::shared_ptr< d500_depth
         {
             if (p->get_stream_type() == RS2_STREAM_OCCUPANCY)
             {
-                auto&& video = dynamic_cast<video_stream_profile_interface*>(p.get());
                 const auto&& profile = to_profile(p.get());
-                if (profile.width == 2880)
+                // The mapping interface also advertises the plain point-cloud selectors
+                // (640x480, 1280x720), which have no rs2 stream of their own and would
+                // otherwise surface as bogus occupancy profiles. Keep only the canvas.
+                if (_owner->_is_safety_layout ? (profile.width == 2880)
+                                              : (profile.width != 320 || profile.height != 256))
                     continue;
                 relevant_results.push_back(std::move(p));
             }
             else if (p->get_stream_type() == RS2_STREAM_LABELED_POINT_CLOUD)
             {
-                auto&& video = dynamic_cast<video_stream_profile_interface*>(p.get());
                 const auto&& profile = to_profile(p.get());
-                if (profile.width == 256)
+                if (_owner->_is_safety_layout ? (profile.width == 256)
+                                              : (profile.width != 640 || profile.height != 360))
                     continue;
                 relevant_results.push_back(std::move(p));
             }

@@ -16,16 +16,22 @@ frame_prefix = re.compile( rb'^\[\d{4}\] ', re.MULTILINE )
 # If we want to run a specific test / test group, we can use the -r flag
 
 pytestmark = [
-    pytest.mark.device("D400*"),
+    pytest.mark.device_each("D400*"),
+    # D500 is currently disabled until all tests pass there
+    #pytest.mark.device_each("D500*"),
     pytest.mark.context("nightly"),
     pytest.mark.context("gui"),
+    # Override the 200s default from conftest.py: mem_leak_depth_start_stop is a ~2.5 min
+    # soak (10 * (10s + 5s) real) and the rest of the suite adds ~90s on real CI hardware
+    # (LibCI 17981 D555 Win 245s, D585 Proto Linux 234s). 400s gives ~25% headroom over that.
+    pytest.mark.timeout(400),
     # Opt out of retries: this launches the realsense-viewer GUI and is long-running /
     # not reliably retryable, so a rerun just doubles CI time without adding signal.
     pytest.mark.flaky(reruns=0),
 ]
 
 
-def test_realsense_viewer_gui(module_device_setup):
+def _run_viewer_tests( test_filter=None ):
     viewer_tests = repo.find_built_exe('tools/realsense-viewer', 'realsense-viewer-tests')
     assert viewer_tests, "realsense-viewer-tests not found"
 
@@ -55,10 +61,12 @@ def test_realsense_viewer_gui(module_device_setup):
                 shutil.copy2( src, dst )
 
     cmd += [viewer_tests, '--auto']
+    if test_filter:
+        cmd += ['-r', test_filter]
     log.debug( 'running: %s', ' '.join( cmd ) )
-    # Cap the child below the global pytest-timeout (200s default in conftest.py) so the
-    # subprocess is reaped here rather than leaked when the outer test thread is killed.
-    child_timeout = 180
+    # Cap the child below the per-test pytest.mark.timeout(400) above so the subprocess
+    # is reaped here rather than leaked when the outer test thread is killed.
+    child_timeout = 340
     p = subprocess.Popen( cmd,
                           stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE,
@@ -92,3 +100,7 @@ def test_realsense_viewer_gui(module_device_setup):
     if p.returncode != 0:
         log.error( 'realsense-viewer-tests exited with code %s', p.returncode )
     assert p.returncode == 0, f'realsense-viewer-tests exited with code {p.returncode}'
+
+
+def test_realsense_viewer_gui(module_device_setup):
+    _run_viewer_tests()

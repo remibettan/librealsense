@@ -4,6 +4,7 @@
 #pragma once
 #include <librealsense2/rs.hpp>
 #include <rsutils/time/stopwatch.h>
+#include "control-model.h"
 #include <atomic>
 #include <mutex>
 namespace rs2
@@ -31,7 +32,7 @@ namespace rs2
     class option_model
     {
     public:
-        bool draw( std::string& error_message, notifications_model& model, bool new_line = true, bool use_option_name = true );
+        bool draw( std::string& error_message, notifications_model& model, bool new_line = true );
         void update_supported( std::string& error_message );
         void update_read_only_status( std::string& error_message );
         void update_all_fields( std::string& error_message, notifications_model& model );
@@ -56,7 +57,8 @@ namespace rs2
         bool draw_option( bool update_read_only_options, bool is_streaming,
             std::string& error_message, notifications_model& model );
 
-        std::vector< const char * > get_combo_labels( int * p_selected = nullptr ) const;
+        // p_values, if given, receives the raw value behind each label (entries with no description are skipped)
+        std::vector< const char * > get_combo_labels( int * p_selected = nullptr, std::vector< float > * p_values = nullptr ) const;
         std::string value_as_string() const;
         float value_as_float() const;
 
@@ -64,6 +66,7 @@ namespace rs2
 
         rs2_option opt;
         option_range range;
+        std::string name;        // what the user reads; label is this plus ImGui's "##id"
         std::shared_ptr<options> endpoint;
         rsutils::time::stopwatch last_set_stopwatch;
         rsutils::time::stopwatch last_slider_hold_stopwatch;
@@ -89,7 +92,7 @@ namespace rs2
         // Route a user-initiated write to the synchronous or async path per write_synchronously.
         void write_value( float new_value, std::string & error_message );
         bool draw_checkbox( notifications_model& model, std::string& error_message, const char* description );
-        bool draw_combobox( notifications_model& model, std::string& error_message, const char* description, bool new_line, bool use_option_name );
+        bool draw_combobox( notifications_model& model, std::string& error_message, const char* description, bool new_line );
         bool draw_slider( notifications_model& model, std::string& error_message, const char* description, bool use_cm_units );
         bool slider_selected( rs2_option opt,
             float value,
@@ -165,4 +168,30 @@ namespace rs2
         std::shared_ptr<options> options,
         bool* options_invalidated,
         std::string& error_message);
+
+    // Draws one option through its option_model. Non-owning: the model lives in the sensor's or
+    // the filter's map, which outlives the panel.
+    class option_control : public control_model
+    {
+    public:
+        // A processing block re-reads value and range every frame: its options are written behind
+        // the panel's back, by the block itself and by the depth-visualization controls
+        explicit option_control( option_model & om, bool refresh_every_frame = false )
+            : _om( &om ), _refresh_every_frame( refresh_every_frame ) {}
+
+        std::string const & name() const override { return _om->name; }
+        bool drawable() const override { return _om->endpoint->supports( _om->opt ); }
+        void draw( control_draw_context & ctx ) override
+        {
+            if( _refresh_every_frame )
+                _om->update_all_fields( ctx.error_message, ctx.notifications );
+            if( _om->draw_option( ctx.update_read_only_options, ctx.is_streaming,
+                                  ctx.error_message, ctx.notifications ) )
+                ctx.changed = true;
+        }
+
+    private:
+        option_model * _om;
+        bool _refresh_every_frame;
+    };
 }

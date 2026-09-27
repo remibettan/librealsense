@@ -160,6 +160,8 @@ typedef enum rs2_frame_metadata_value
     RS2_FRAME_METADATA_DIAGNOSTIC_ZONE_POINT_3_X_CORD       , /**< Diagnostic Zone point #3, X coord in mm*/
     RS2_FRAME_METADATA_DIAGNOSTIC_ZONE_POINT_3_Y_CORD       , /**< Diagnostic Zone point #3, Y coord in mm*/
     RS2_FRAME_METADATA_EMBEDDED_FILTERS                     , /**< Bitmask, enumerated */
+    RS2_FRAME_METADATA_OCCUPANCY_GRID_ORIGIN_X              , /**< Occupancy-grid origin on the forward axis, in millimeters */
+    RS2_FRAME_METADATA_OCCUPANCY_GRID_ORIGIN_Y              , /**< Occupancy-grid origin on the lateral axis, in millimeters */
     RS2_FRAME_METADATA_COUNT
 } rs2_frame_metadata_value;
 const char* rs2_frame_metadata_to_string(rs2_frame_metadata_value metadata);
@@ -550,7 +552,9 @@ void rs2_extract_target_dimensions(const rs2_frame* frame, rs2_calib_target_type
 unsigned int rs2_get_frame_object_detection_count(const rs2_frame* frame, rs2_error** error);
 
 /**
-* When called on Object Detection frame type, this method returns a specific detection by index
+* When called on Object Detection frame type, this method returns a specific detection by index.
+* The returned detection includes center-of-mass camera and image coordinates when available;
+* frames from firmware that doesn't report center-of-mass return center_of_mass_valid=0 and zero COM fields.
 * \param[in] frame       Object Detection frame
 * \param[in] index       Index of detection to retrieve
 * \param[out] detection  Pointer to struct to fill with detection data
