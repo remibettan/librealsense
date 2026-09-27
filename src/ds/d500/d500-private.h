@@ -42,7 +42,8 @@ namespace librealsense
             PROJECTOR_TEMPERATURE = 0x16,
             OHM_TEMPERATURE       = 0x17,
             COLORED_IR_AE_POLICY  = 0x19,
-            EXTERNAL_SYNC_MODE    = 0x1A
+            EXTERNAL_SYNC_MODE    = 0x1A,
+            PASSIVE_DEPTH         = 0x1B   // Dual RGB Passive Depth Mode
         };
 
         // Same GUID as safety_xu. FW publishes as either safety or inference, not both.

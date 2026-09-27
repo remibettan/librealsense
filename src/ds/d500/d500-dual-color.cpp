@@ -9,6 +9,7 @@
 #include <src/proc/identity-processing-block.h>
 #include <src/uvc-sensor.h>
 #include <src/platform/uvc-option.h>
+#include <src/ds/d500/d500-options.h>
 #include <src/metadata-parser.h>
 #include <src/ds/ds-color-common.h>
 #include <src/ds/ds-timestamp.h>
@@ -90,6 +91,7 @@ namespace librealsense
 
         register_color_extrinsics();
         register_color_metadata();
+        register_passive_depth_option();
         register_ae_policy_option();
         register_color_options( dev_info );
     }
@@ -158,35 +160,101 @@ namespace librealsense
                                                            { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_DEPTH_PRIORITY ), "Depth Priority" },
                                                            { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_COLOR_PRIORITY ), "Color Priority" },
                                                            { static_cast< float >( RS2_COLORED_IR_AUTO_EXPOSURE_HYBRID ), "Hybrid" } };
-        get_depth_sensor().register_option( RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE,
-                                            std::make_shared< uvc_xu_option< uint8_t > >( get_raw_depth_sensor(),
-                                                                                          ds::depth_xu,
-                                                                                          ds::d500_xu_id::COLORED_IR_AE_POLICY,
-                                                                                          "Auto exposure policy for sensor with both color and depth streams",
-                                                                                          options_map,
-                                                                                          false ) ); // Not settable while streaming
+        auto ae_policy = std::make_shared< colored_ir_ae_policy_option >( get_raw_depth_sensor(),
+                                                                          options_map,
+                                                                          _passive_depth_mode );
+        get_depth_sensor().register_option( RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE, ae_policy );
+
+        if( _passive_depth_mode )
+            _passive_depth_mode->set_ae_policy_option( ae_policy );
+    }
+
+    static int32_t range_field( const std::vector< uint8_t > & raw )
+    {
+        int32_t value = 0;
+        if( ! raw.empty() )
+            std::memcpy( &value, raw.data(), std::min( raw.size(), sizeof( value ) ) );
+        return value;
+    }
+
+    // A control the firmware does not publish answers with an all-zero range (V4L2) or fails the query
+    // outright (WMF). Not every platform publishes the same set - e.g. no backlight compensation over GMSL.
+    static bool is_published( const platform::control_range & range )
+    {
+        return range_field( range.min ) || range_field( range.max )
+            || range_field( range.def ) || range_field( range.step );
+    }
+
+    // Both probes ask the hardware directly, so a control the firmware lacks never costs an option object
+    // that is built only to be dropped.
+    static bool is_xu_published( const std::shared_ptr< uvc_sensor > & ep, const platform::extension_unit & xu,
+                                 uint8_t control, int size, rs2_option id )
+    {
+        if( ! ep )
+            return false;
+        try
+        {
+            return is_published( ep->invoke_powered( [&]( platform::uvc_device & dev )
+                                                     { return dev.get_xu_range( xu, control, size ); } ) );
+        }
+        catch( const std::exception & e )
+        {
+            LOG_DEBUG( "Control " << id << " not published: " << e.what() );
+            return false;
+        }
+    }
+
+    static bool is_pu_published( const std::shared_ptr< uvc_sensor > & ep, const platform::processing_unit & pu,
+                                 rs2_option id )
+    {
+        if( ! ep )
+            return false;
+        try
+        {
+            return is_published( ep->invoke_powered( [&]( platform::uvc_device & dev )
+                                                     { return dev.get_pu_range( pu, id ); } ) );
+        }
+        catch( const std::exception & e )
+        {
+            LOG_DEBUG( "Control " << id << " not published: " << e.what() );
+            return false;
+        }
+    }
+
+    // Selects which exposure classes produce depth. Reaching here means a dual-RGB device; the GMSL driver
+    // has no matching CID yet, so USB only.
+    void d500_dual_color::register_passive_depth_option()
+    {
+        if( _is_mipi_device )
+            return;
+        if( ! is_xu_published( get_raw_depth_sensor(), ds::depth_xu, ds::d500_xu_id::PASSIVE_DEPTH,
+                               sizeof( uint8_t ), RS2_OPTION_PASSIVE_DEPTH_MODE ) )
+            return;
+
+        auto options_map = std::map< float, std::string >{ { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_DISABLED ), "Disabled" },
+                                                           { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_ALTERNATING ), "Alternating" },
+                                                           { static_cast< float >( RS2_PASSIVE_DEPTH_MODE_FULL ), "Full" } };
+        auto mode = std::make_shared< passive_depth_mode_option >( get_raw_depth_sensor(), options_map );
+        _passive_depth_mode = mode;
+        auto & depth_sensor = get_depth_sensor();
+        depth_sensor.register_option( RS2_OPTION_PASSIVE_DEPTH_MODE, mode );
+
+        // Full Passive Depth forces the laser off in firmware, so the host must stop offering the laser controls.
+        for( auto id : { RS2_OPTION_LASER_POWER, RS2_OPTION_EMITTER_ALWAYS_ON, RS2_OPTION_EMITTER_ON_OFF } )
+            if( auto laser = depth_sensor.get_option_handler( id ) )
+                depth_sensor.register_option( id, std::make_shared< passive_depth_locked_option >( laser, _passive_depth_mode ) );
+
+        // The emitter is part of the exposure schedule the firmware fixes at stream start, so it locks there too.
+        if( auto emitter = depth_sensor.get_option_handler( RS2_OPTION_EMITTER_ENABLED ) )
+            depth_sensor.register_option( RS2_OPTION_EMITTER_ENABLED,
+                                          std::make_shared< passive_depth_locked_option >( emitter, _passive_depth_mode,
+                                                                                           get_raw_depth_sensor() ) );
     }
 
     // D585 2C dual-color topology: on the depth-function UVC interface, the RGB streams' PU chain
     // is UVC entity 0x07 and, on Windows, KS topology node 6.
     constexpr uint8_t D585_2C_RGB_PU_UNIT_ID  = 0x07;
     constexpr int     D585_2C_RGB_PU_KS_NODE = 6;
-
-    // The PU does not publish the same set on every platform - e.g. backlight compensation missing over GMSL.
-    // An unpublished control reads back as a degenerate range (V4L2) or throws (WMF).
-    static bool is_control_published( const option & opt, rs2_option id )
-    {
-        try
-        {
-            auto range = opt.get_range();
-            return ! ( range.min == 0.f && range.max == 0.f && range.def == 0.f && range.step == 0.f );
-        }
-        catch( const std::exception & e )
-        {
-            LOG_DEBUG( "Dual-color RGB control " << id << " not published: " << e.what() );
-            return false;
-        }
-    }
 
     void d500_dual_color::register_color_options( std::shared_ptr< const d500_info > const & dev_info )
     {
@@ -203,36 +271,34 @@ namespace librealsense
             return std::make_shared<uvc_pu_option>(raw_ep, option, rgb_pu);
         };
 
-        auto register_if_published = [&color_ep]( rs2_option id, std::shared_ptr< option > opt )
-        {
-            // Registering unpublished would only add a dead control, verify befor registering.
-            if( ! is_control_published( *opt, id ) )
-                return;
-            color_ep.register_option( id, opt );
-        };
-
+        // Each control is probed before it is built - registering an unpublished one would only add a
+        // dead control, and building one to find that out wastes an object.
         for( auto id : { RS2_OPTION_BACKLIGHT_COMPENSATION, RS2_OPTION_BRIGHTNESS, RS2_OPTION_CONTRAST,
                          RS2_OPTION_SATURATION, RS2_OPTION_GAMMA, RS2_OPTION_SHARPNESS, RS2_OPTION_HUE } )
-            register_if_published( id, make_rgb_option( id ) );
+            if( is_pu_published( raw_ep, rgb_pu, id ) )
+                color_ep.register_option( id, make_rgb_option( id ) );
 
-        std::map<float, std::string> power_line_descriptions = {
-            { 0.f, "Disabled" },
-            { 1.f, "50Hz" },
-            { 2.f, "60Hz" }
-        };
-        register_if_published( RS2_OPTION_POWER_LINE_FREQUENCY,
-                               std::make_shared<uvc_pu_option>(raw_ep,
-                                                               RS2_OPTION_POWER_LINE_FREQUENCY,
-                                                               rgb_pu,
-                                                               power_line_descriptions));
-
-        auto white_balance = make_rgb_option(RS2_OPTION_WHITE_BALANCE);
-        if( is_control_published( *white_balance, RS2_OPTION_WHITE_BALANCE ) )
+        if( is_pu_published( raw_ep, rgb_pu, RS2_OPTION_POWER_LINE_FREQUENCY ) )
         {
+            std::map<float, std::string> power_line_descriptions = {
+                { 0.f, "Disabled" },
+                { 1.f, "50Hz" },
+                { 2.f, "60Hz" }
+            };
+            color_ep.register_option( RS2_OPTION_POWER_LINE_FREQUENCY,
+                                      std::make_shared<uvc_pu_option>(raw_ep,
+                                                                      RS2_OPTION_POWER_LINE_FREQUENCY,
+                                                                      rgb_pu,
+                                                                      power_line_descriptions));
+        }
+
+        if( is_pu_published( raw_ep, rgb_pu, RS2_OPTION_WHITE_BALANCE ) )
+        {
+            auto white_balance = make_rgb_option( RS2_OPTION_WHITE_BALANCE );
             // Without auto white balance the manual control is still needed, just not wrapped in the auto-disabling proxy.
-            auto auto_white_balance = make_rgb_option( RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE );
-            if( is_control_published( *auto_white_balance, RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE ) )
+            if( is_pu_published( raw_ep, rgb_pu, RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE ) )
             {
+                auto auto_white_balance = make_rgb_option( RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE );
                 color_ep.register_option( RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE, auto_white_balance );
                 color_ep.register_option( RS2_OPTION_WHITE_BALANCE,
                                           std::make_shared< auto_disabling_control >( white_balance, auto_white_balance ) );
@@ -271,28 +337,12 @@ namespace librealsense
             auto candidate = std::make_shared< uvc_sensor >(
                 "Raw RGB PU Sensor", uvc_dev,
                 std::make_unique< ds_timestamp_reader >(), this );
-            try
+            // The pin that hosts the RGB PU is the one that publishes its controls; the others answer with
+            // the all-zero range v4l_uvc_device returns for an unknown CID, or throw.
+            if( is_pu_published( candidate, rgb_pu, RS2_OPTION_BRIGHTNESS ) )
             {
-                auto r = candidate->invoke_powered( [ & rgb_pu ]( platform::uvc_device & dev )
-                {
-                    return dev.get_pu_range( rgb_pu, RS2_OPTION_BRIGHTNESS );
-                } );
-                // v4l_uvc_device::get_pu_range returns an all-zero range for unknown CIDs instead of throwing - reject that fallback shape.
-                if( r.max.size() >= sizeof( int32_t ) && r.min.size() >= sizeof( int32_t ) )
-                {
-                    int32_t r_min = 0, r_max = 0;
-                    std::memcpy( &r_min, r.min.data(), sizeof( int32_t ) );
-                    std::memcpy( &r_max, r.max.data(), sizeof( int32_t ) );
-                    if( r_min != 0 || r_max != 0 )
-                    {
-                        _raw_rgb_ep = candidate;
-                        return _raw_rgb_ep;
-                    }
-                }
-            }
-            catch( ... )
-            {
-                // this pin doesn't recognize the CID - try the next
+                _raw_rgb_ep = candidate;
+                return _raw_rgb_ep;
             }
         }
 

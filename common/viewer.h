@@ -153,6 +153,9 @@ namespace rs2
         std::mutex streams_mutex;
         std::map<int, stream_model> streams;
         std::map<int, int> streams_origin;
+        // Alternating Passive Depth interleaves laser-on and laser-off frames on one profile, so each
+        // depth/IR stream gets a second tile for the passive class - mapped here from the stream's uid.
+        std::map<int, int> passive_streams;
         bool fullscreen = false;
         stream_model* selected_stream = nullptr;
         // When true, stream tiles can be re-arranged by dragging one onto another (toggled from the top bar)
@@ -242,7 +245,7 @@ namespace rs2
         bool _support_ir_reflectivity;
 
     private:
-        void get_frame_objects_container( rs2::frame & frame, std::shared_ptr< atomic_objects_in_frame > & objects );
+        std::shared_ptr< subdevice_model > get_frame_subdevice( rs2::frame const & frame ) const;
         rs2::rect project_color_bbox_to_depth( const rs2::rect &    color_bbox,
                                                const uint16_t *     depth_data,
                                                float                depth_scale,
@@ -252,6 +255,11 @@ namespace rs2
                                                const rs2_extrinsics & depth_to_color,
                                                const rs2::rect &    depth_frame_rect );
         void process_object_detection_frames( std::map< int, rs2::frame > & last_frames );
+        void update_device_detections( rs2::object_detection_frame const & odf,
+                                       rs2::video_frame const & cf,
+                                       rs2::depth_frame const & df,
+                                       std::shared_ptr< atomic_objects_in_frame > const & objects );
+        int od_color_stream_index( device_model const * dev_model ) const;
 
         void check_permissions();
         void hide_common_options();
@@ -288,6 +296,7 @@ namespace rs2
         void init_labeled_points_uid();
         void draw_3d_labeled_points(const rect& viewer_rect, rs2::labeled_points labeled_points);
         bool should_texture_frame_be_updated(const rs2::frame& f) const;
+        bool is_passive_frame(const rs2::frame& f) const;
 
         streams_layout _layout;
         streams_layout _old_layout;

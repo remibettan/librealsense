@@ -32,6 +32,7 @@
 #include <regex>
 #include <algorithm>
 #include <fstream>
+#include <limits>
 
 namespace rs2
 {
@@ -362,7 +363,7 @@ namespace rs2
         int i = 0;
         for (auto&& s : streams)
         {
-            if (s.second.is_stream_visible() &&
+            if (s.second.is_stream_visible() && ! s.second.passive &&
                 (s.second.profile.stream_type() == RS2_STREAM_COLOR ||
                  s.second.profile.stream_type() == RS2_STREAM_INFRARED ||
                  s.second.profile.stream_type() == RS2_STREAM_CONFIDENCE ||
@@ -522,7 +523,7 @@ namespace rs2
             i = 0;
             for (auto&& s : streams)
             {
-                if (s.second.is_stream_visible() &&
+                if (s.second.is_stream_visible() && ! s.second.passive &&
                     s.second.texture->get_last_frame() &&
                     s.second.profile.stream_type() == RS2_STREAM_DEPTH)
                 {
@@ -1065,6 +1066,8 @@ namespace rs2
             }
         }
         for (auto&& i : streams_to_remove) {
+            passive_streams.erase(i);
+
             if(selected_depth_source_uid == i)
             {
                 last_points = points();
@@ -1086,6 +1089,28 @@ namespace rs2
             if(ppf.frames_queue.find(i) != ppf.frames_queue.end())
             {
                 ppf.frames_queue.erase(i);
+            }
+        }
+
+        // The depth source can stop and other streams stream (e.g. color or IR only), in which case its stream model
+        // is not removed above. Drop the point cloud it produced, otherwise the 3D view keeps rendering that stale
+        // geometry - now textured by whichever stream is still alive.
+        if (last_points)
+        {
+            bool depth_source_streaming = false;
+            auto depth_it = streams.find(selected_depth_source_uid);
+            if (depth_it != streams.end() && depth_it->second.dev)
+            {
+                auto& sub = *depth_it->second.dev;
+                auto enabled_it = sub.stream_enabled.find(selected_depth_source_uid);
+                depth_source_streaming = sub.is_paused()
+                    || (sub.streaming && enabled_it != sub.stream_enabled.end() && enabled_it->second);
+            }
+
+            if (!depth_source_streaming)
+            {
+                last_points = points();
+                ppf.depth_stream_active = false;
             }
         }
     }
@@ -1344,7 +1369,7 @@ namespace rs2
     {
         if (!sm) return {};
         return std::to_string(static_cast<int>(sm->profile.stream_type())) + "_" +
-               std::to_string(sm->profile.stream_index());
+               std::to_string(sm->profile.stream_index()) + (sm->passive ? "_p" : "");
     }
 
     // The tile title bar is drawn in the reserved strip above the frame rect. The drag grab
@@ -2219,7 +2244,7 @@ namespace rs2
                 show_icon(font2, "warning_icon", message.c_str(),
                     static_cast<int>(stream_rect.center().x - 100),
                     static_cast<int>(stream_rect.center().y - 25),
-                    stream_mv.profile.unique_id(),
+                    stream_mv.ui_key,
                     blend(dark_red, alpha),
                     "Did not receive frames from the platform within a reasonable time window,\nplease try reducing the FPS or the resolution");
             }
@@ -2236,11 +2261,11 @@ namespace rs2
 
             if (stream_mv.dev->_is_being_recorded)
             {
-                show_recording_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.profile.unique_id(), alpha);
+                show_recording_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.ui_key, alpha);
                 posX += 23;
             }
             if (stream_mv.dev->is_paused() || (p && p.current_status() == RS2_PLAYBACK_STATUS_PAUSED))
-                show_paused_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.profile.unique_id());
+                show_paused_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.ui_key);
 
             auto stream_type = stream_mv.profile.stream_type();
 
@@ -2330,8 +2355,9 @@ namespace rs2
                 }
             }
 
-            // Detection overlays only make sense on the color stream; bbox coords are in color-frame space.
-            if( stream_mv.profile.stream_type() == RS2_STREAM_COLOR )
+            // Detection overlays only make sense on the color stream object detection runs on; bbox coords are in that stream's frame space.
+            if( stream_mv.profile.stream_type() == RS2_STREAM_COLOR && stream_mv.dev
+                && stream_mv.profile.stream_index() == od_color_stream_index( stream_mv.dev->dev_model ) )
             {
                 static std::vector< std::pair< ImColor, bool > > colors =
                 {
@@ -4002,12 +4028,40 @@ namespace rs2
         mouse.prev_cursor = mouse.cursor;
     }
 
+    // Keys the passive tile of a split stream; kept clear of the unique ids the SDK hands out.
+    static const int PASSIVE_STREAM_KEY_OFFSET = 0x10000000;
+
+    // Only Alternating Passive Depth interleaves the two exposure classes on one profile. Full Passive
+    // delivers passive frames alone, so they stay on the stream's own tile.
+    static bool splits_passive_depth( const std::shared_ptr<subdevice_model>& d, const rs2::stream_profile& p )
+    {
+        if( p.stream_type() != RS2_STREAM_DEPTH && p.stream_type() != RS2_STREAM_INFRARED )
+            return false;
+        if( ! d || ! d->s || ! d->s->supports( RS2_OPTION_PASSIVE_DEPTH_MODE ) )
+            return false;
+        return d->s->get_option( RS2_OPTION_PASSIVE_DEPTH_MODE ) == RS2_PASSIVE_DEPTH_MODE_ALTERNATING;
+    }
+
     void viewer_model::begin_stream(std::shared_ptr<subdevice_model> d, rs2::stream_profile p)
     {
         {
             std::lock_guard< std::mutex > lock( streams_mutex );
-            streams[p.unique_id()].begin_stream(d, p, *this);
+            auto & active = streams[p.unique_id()];
+            active.begin_stream(d, p, *this);
             ppf.frames_queue.emplace(p.unique_id(), rs2::frame_queue(5));
+
+            if( splits_passive_depth( d, p ) )
+            {
+                int const passive_key = p.unique_id() + PASSIVE_STREAM_KEY_OFFSET;
+                auto & passive = streams[passive_key];
+                passive.begin_stream( d, p, *this );
+                passive.passive = passive.split = true;
+                passive.ui_key = passive_key;
+                active.split = true;
+                passive_streams[p.unique_id()] = passive_key;
+            }
+            else
+                passive_streams.erase( p.unique_id() );  // a mode change may have left the last run's split behind
         }
 
         // Starting post processing filter rendering thread
@@ -4080,6 +4134,17 @@ namespace rs2
         auto index = f.get_profile().unique_id();
         auto mapped_index = streams_origin[index];
 
+        // While the stream is split the point cloud follows the active class; Full Passive is not split,
+        // so its passive frames still feed the 3D view. Reached from the frame callback and the
+        // post-processing thread, so the lookup needs the lock begin_stream writes under.
+        bool split = false;
+        {
+            std::lock_guard< std::mutex > lock( streams_mutex );
+            split = passive_streams.count( index ) || passive_streams.count( mapped_index );
+        }
+        if( split && is_passive_frame( f ) )
+            return false;
+
         if(index == selected_depth_source_uid || mapped_index  == selected_depth_source_uid
                 ||(selected_depth_source_uid == -1 && f.get_profile().stream_type() == RS2_STREAM_DEPTH))
             return true;
@@ -4095,13 +4160,25 @@ namespace rs2
 
         std::lock_guard<std::mutex> lock(streams_mutex);
         auto stream_origin_iter = streams_origin.find(index);
-        if ( stream_origin_iter != streams_origin.end() && streams.find( stream_origin_iter->second ) != streams.end())
-            return streams[stream_origin_iter->second].upload_frame(std::move(f));
-        else return nullptr;
+        if( stream_origin_iter == streams_origin.end() || streams.find( stream_origin_iter->second ) == streams.end() )
+            return nullptr;
+
+        int key = stream_origin_iter->second;
+        auto passive_iter = passive_streams.find( key );
+        if( passive_iter != passive_streams.end() && streams.count( passive_iter->second ) && is_passive_frame( f ) )
+            key = passive_iter->second;
+
+        return streams[key].upload_frame(std::move(f));
     }
 
-    void viewer_model::get_frame_objects_container( rs2::frame & frame,
-                                                          std::shared_ptr< atomic_objects_in_frame > & objects )
+    // Depth and IR frames report the emitter state they were captured with; laser off is a passive frame.
+    bool viewer_model::is_passive_frame(const rs2::frame& f) const
+    {
+        return f.supports_frame_metadata( RS2_FRAME_METADATA_FRAME_EMITTER_MODE )
+            && f.get_frame_metadata( RS2_FRAME_METADATA_FRAME_EMITTER_MODE ) == RS2_EMITTER_MODE_OFF;
+    }
+
+    std::shared_ptr< subdevice_model > viewer_model::get_frame_subdevice( rs2::frame const & frame ) const
     {
         auto uid = frame.get_profile().unique_id();
         auto it = streams.find( uid );
@@ -4111,8 +4188,19 @@ namespace rs2
             if( orig != streams_origin.end() )
                 it = streams.find( orig->second );
         }
-        if( it != streams.end() && it->second.dev )
-            objects = it->second.dev->detected_objects;
+        return it != streams.end() ? it->second.dev : nullptr;
+    }
+
+    // Object detection runs on a single color imager of its own camera: dual-RGB firmware reports boxes for
+    // the lower-indexed color stream, and a device with one color sensor only has index 0.
+    int viewer_model::od_color_stream_index( device_model const * dev_model ) const
+    {
+        int index = std::numeric_limits< int >::max();
+        for( auto const & s : streams )
+            if( s.second.dev && s.second.dev->dev_model == dev_model
+                && s.second.profile.stream_type() == RS2_STREAM_COLOR )
+                index = std::min( index, s.second.profile.stream_index() );
+        return index;
     }
 
     rs2::rect viewer_model::project_color_bbox_to_depth( const rs2::rect &     color_bbox,
@@ -4135,14 +4223,31 @@ namespace rs2
         return rs2::rect{ dst_tl[0], dst_tl[1], dst_br[0] - dst_tl[0], dst_br[1] - dst_tl[1] }.intersection( depth_frame_rect );
     }
 
+    // Group the tick's frames per camera and hand each camera's set to update_device_detections. The OD stream
+    // and the color stream it describes sit on different sensors of the same device, so with several cameras
+    // connected an OD frame must never be paired against another camera's color or depth.
     void viewer_model::process_object_detection_frames( std::map< int, rs2::frame > & last_frames )
     {
-        // Scan last_frames for an object detection frame, a color frame, and a depth frame.
-        // These types have no default constructor; initialise from an empty rs2::frame.
-        rs2::object_detection_frame odf{ rs2::frame{} };
-        rs2::video_frame cf{ rs2::frame{} };
-        rs2::depth_frame df{ rs2::frame{} };
-        std::shared_ptr< atomic_objects_in_frame > objects;
+        // These frame types have no default constructor; initialise from an empty rs2::frame.
+        struct device_frames
+        {
+            rs2::object_detection_frame odf{ rs2::frame{} };
+            rs2::video_frame cf{ rs2::frame{} };
+            rs2::depth_frame df{ rs2::frame{} };
+            std::shared_ptr< subdevice_model > color_sub;
+        };
+        std::map< device_model *, device_frames > per_device;
+
+        // Seed an entry per camera that shows a color stream, so a camera that stopped delivering frames
+        // (sensor stopped, cable pulled) still ages its overlay out instead of leaving it frozen on screen.
+        for( auto const & s : streams )
+        {
+            auto const & sm = s.second;
+            if( sm.profile.stream_type() != RS2_STREAM_COLOR || ! sm.dev || ! sm.dev->dev_model )
+                continue;
+            if( sm.profile.stream_index() == od_color_stream_index( sm.dev->dev_model ) )
+                per_device[sm.dev->dev_model].color_sub = sm.dev;
+        }
 
         for( auto & kv : last_frames )
         {
@@ -4151,30 +4256,51 @@ namespace rs2
                 continue;
 
             auto stype = frame.get_profile().stream_type();
+            if( stype != RS2_STREAM_OBJECT_DETECTION && stype != RS2_STREAM_COLOR && stype != RS2_STREAM_DEPTH )
+                continue;
 
-            if( stype == RS2_STREAM_OBJECT_DETECTION && ! odf )
+            auto sub = get_frame_subdevice( frame );
+            if( ! sub || ! sub->dev_model )
+                continue;
+            auto & frames = per_device[sub->dev_model];
+
+            if( stype == RS2_STREAM_OBJECT_DETECTION )
             {
-                odf = frame.as< rs2::object_detection_frame >();
+                if( ! frames.odf )
+                    frames.odf = frame.as< rs2::object_detection_frame >();
             }
-            else if( stype == RS2_STREAM_COLOR && ! cf )
+            else if( stype == RS2_STREAM_COLOR )
             {
-                cf = frame.as< rs2::video_frame >();
-                get_frame_objects_container( frame, objects );
+                // Same rule the draw gate uses, so the two always agree on which stream carries the overlay
+                if( frame.get_profile().stream_index() == od_color_stream_index( sub->dev_model ) )
+                    frames.cf = frame.as< rs2::video_frame >();
             }
-            else if( stype == RS2_STREAM_DEPTH && ! df )
+            else if( ! frames.df )
             {
-                df = frame.as< rs2::depth_frame >();
+                frames.df = frame.as< rs2::depth_frame >();
             }
         }
 
-        // Without a color sensor we have nowhere to draw
-        if( ! objects )
-            return;
+        for( auto & kv : per_device )
+        {
+            auto & frames = kv.second;
+            // Without a color stream on this camera we have nowhere to draw
+            if( frames.color_sub && frames.color_sub->detected_objects )
+                update_device_detections( frames.odf, frames.cf, frames.df, frames.color_sub->detected_objects );
+        }
+    }
 
-        // No OD frame this tick. When OD fps < render fps this is normal (e.g. OD@15fps, RGB@30fps).
-        // Keep last known detections to avoid flicker, but clear if absent for too long (OD sensor stopped).
+    // Turn one camera's object detection frame into the overlay entries drawn on its color stream.
+    void viewer_model::update_device_detections( rs2::object_detection_frame const & odf,
+                                                 rs2::video_frame const & cf,
+                                                 rs2::depth_frame const & df,
+                                                 std::shared_ptr< atomic_objects_in_frame > const & objects )
+    {
+        // Nothing to place detections against this tick. When OD fps < render fps this is normal
+        // (e.g. OD@15fps, RGB@30fps), so keep the last ones to avoid flicker - but age them out, or a
+        // camera that stopped delivering would leave its overlay frozen on screen.
         static constexpr int MAX_STALE_OD_TICKS = 3;
-        if( ! odf )
+        if( ! odf || ! cf )
         {
             if( ++objects->ticks_without_od_frame > MAX_STALE_OD_TICKS )
             {
@@ -4459,7 +4585,7 @@ namespace rs2
 
         for (auto&& s : streams)
         {
-            if (s.second.is_stream_visible() &&
+            if (s.second.is_stream_visible() && ! s.second.passive &&
                 s.second.profile.stream_type() == RS2_STREAM_DEPTH)
             {
                 auto stream_origin_iter = streams_origin.find(s.second.profile.unique_id());

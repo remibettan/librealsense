@@ -19,6 +19,9 @@
 
 #include <src/ds/features/amplitude-factor-feature.h>
 #include <src/ds/features/auto-exposure-roi-feature.h>
+#include <src/ds/features/decimation-filter-feature.h>
+#include <src/ds/features/temporal-filter-feature.h>
+#include <src/ds/features/hdrd-filter-feature.h>
 
 #include "proc/depth-formats-converter.h"
 #include "proc/y8i-to-y8y8.h"
@@ -821,6 +824,21 @@ namespace librealsense
         register_feature( std::make_shared< amplitude_factor_feature >() );
 
         register_feature( std::make_shared< auto_exposure_roi_feature >( get_depth_sensor(), _hw_monitor ) );
+    }
+
+    void d500_device::register_dpp_embedded_filters()
+    {
+        // MIPI publishes these CIDs later than USB. Older firmware on either transport ignores
+        // the composite protocol entirely, so we skip registration below the transport's gate.
+        const auto min_fw = _is_mipi_device
+            ? firmware_version( "7.58.46315.15221" )
+            : firmware_version( "7.58.45911.14188" );
+        if( _fw_version < min_fw )
+            return;
+        auto & depth_sensor = dynamic_cast< d500_depth_sensor & >( get_depth_sensor() );
+        register_feature( std::make_shared< decimation_filter_feature >( depth_sensor, _is_mipi_device ) );
+        register_feature( std::make_shared< temporal_filter_feature >( depth_sensor, _is_mipi_device ) );
+        register_feature( std::make_shared< hdrd_filter_feature >( depth_sensor, _is_mipi_device ) );
     }
 
     void d500_device::register_converters( synthetic_sensor & depth_sensor )

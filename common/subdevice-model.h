@@ -80,6 +80,11 @@ namespace rs2
         std::map<int, int> selected_fps_id;
         std::map<int, int> selected_format_id;
     };
+    // True when a sensor exposes color streams - a dedicated RGB sensor, or a stereo module that carries
+    // them too (D500 dual-RGB, D405). Object-detection overlays and their sensor_is_on flag hang off it.
+    bool sensor_has_color_stream( const std::vector< stream_profile > & profiles );
+    // True when a sensor exposes depth streams. Some sensors carries both, so this cannot be inferred from the absence of color.
+    bool sensor_has_depth_stream( const std::vector< stream_profile > & profiles );
 
     class subdevice_model
     {
@@ -273,6 +278,7 @@ namespace rs2
         bool is_multiple_resolutions_supported() const;
         void refresh_multiple_resolutions_state();
         void apply_decimation_resolution_defaults();
+        bool decimation_restricts_stream(rs2_stream stream) const;
         int get_res_id_in_resolutions_array(const std::vector<const char*>& res_chars, const std::pair<int, int>& res) const;
         std::pair<int, int> get_resolution_from_res_chars_id(const std::vector<const char*>& res_chars, int id_in_res_chars) const;
         std::pair<int, int> get_max_resolution(rs2_stream stream) const;
