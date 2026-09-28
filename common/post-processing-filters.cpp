@@ -233,6 +233,14 @@ void post_processing_filters::process(rs2::frame f, const rs2::frame_source& sou
         source.frame_ready(std::move(frame));
 }
 
+void post_processing_filters::store_latest(rs2::frame f)
+{
+    std::lock_guard<std::mutex> lock(latest_mutex);
+    latest_set = f;
+    for (auto&& sub : f.as<rs2::frameset>())
+        latest_frames[sub.get_profile().unique_id()] = sub;
+}
+
 void post_processing_filters::start()
 {
     stop();

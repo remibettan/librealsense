@@ -206,7 +206,6 @@ namespace rs2
                         error_message = "Exporter not implemented";
                     else if (auto ret = file_dialog_open(save_file, curr_exporter->second.filters.data(), NULL, NULL))
                     {
-                        auto model = ppf.get_points();
                         frame tex;
                         if (selected_tex_source_uid >= 0 && streams.find(selected_tex_source_uid) != streams.end())
                         {
@@ -1692,48 +1691,14 @@ namespace rs2
         std::map<int, frame> last_frames;
         try
         {
-            size_t index = 0;
-            while (ppf.resulting_queue.poll_for_frame(&f) && ++index < ppf.resulting_queue_max_size)
+            // Skip frames of streams no longer shown
+            for( auto && kv : ppf.take_latest_frames( f ) )
             {
-                // Open the frame-set and validate the incoming frame originated from one of the source streams
-                // and save the frames on last_frames
-                // if one of the streams is missing we will use the last frame arrived
-                // point cloud is not a stream type yet it's a frame we want to display
-                if (f.is<rs2::frameset>())
-                {
-                    for (auto frame : f.as<rs2::frameset>())
-                    {
-                        auto profile_id = frame.get_profile().unique_id();
-
-                        if (frame.is< points >() || streams.find(profile_id) != streams.end())
-                        {
-                            last_frames[profile_id] = frame;
-                            continue;
-                        }
-
-                        auto stream_origin_iter = streams_origin.find(profile_id);
-                        if( (stream_origin_iter != streams_origin.end() && streams.find( stream_origin_iter->second ) != streams.end() ))
-                        {
-                            last_frames[ profile_id ] = frame;
-                        }
-                    }
-                }
-                else
-                {
-                    auto profile_id = f.get_profile().unique_id();
-
-                    if (f.is< points >() || streams.find(profile_id) != streams.end())
-                    {
-                        last_frames[profile_id] = f;
-                        continue;
-                    }
-
-                    auto stream_origin_iter = streams_origin.find(profile_id);
-                    if ((stream_origin_iter != streams_origin.end() && streams.find(stream_origin_iter->second) != streams.end()))
-                    {
-                        last_frames[profile_id] = f;
-                    }
-                }
+                auto stream_origin_iter = streams_origin.find( kv.first );
+                if( kv.second.is< points >() || streams.find( kv.first ) != streams.end()
+                    || ( stream_origin_iter != streams_origin.end()
+                         && streams.find( stream_origin_iter->second ) != streams.end() ) )
+                    last_frames.insert( kv );
             }
 
             for(auto&& f : last_frames)
