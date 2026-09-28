@@ -88,8 +88,12 @@ macro(os_set_flags)
 endmacro()
 
 macro(os_target_config)
-    message(STATUS "Building with SSE optimizations")
-    add_definitions(-D__SSSE3__ -D_CRT_SECURE_NO_WARNINGS)
+    # MSVC's SSE headers are x86/x64-only
+    if(CMAKE_CXX_COMPILER_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
+        message(STATUS "Building with SSE optimizations")
+        add_definitions(-D__SSSE3__)
+    endif()
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 
     if(FORCE_RSUSB_BACKEND)
         if (NOT CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_CURRENT_BINARY_DIR)
