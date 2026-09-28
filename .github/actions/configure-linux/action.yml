@@ -12,7 +12,8 @@ runs:
   steps:
     - name: Configure CMake
       shell: bash
-      # cmake-options is interpolated into the script on purpose so $(...) inside it is expanded by the shell
+      # cmake-options is interpolated into the script on purpose so $(...) inside it is expanded by the shell.
+      # This is a local action: inputs come only from workflow files in this repo. Never pass untrusted input here.
       run: |
         mkdir -p build
         cd build

@@ -9,4 +9,4 @@ runs:
       shell: bash
       run: |
         cd build
-        cmake --build . -- -j4
+        cmake --build . -- -j$(nproc)

@@ -14,7 +14,8 @@ runs:
   using: composite
 
   steps:
-    - shell: bash
+    - name: Install apt/pip packages
+      shell: bash
       env:
         APT_PACKAGES: ${{ inputs.apt-packages }}
         PIP_PACKAGES: ${{ inputs.pip-packages }}
@@ -34,9 +35,9 @@ runs:
             libglfw3
 
         if [ -n "$APT_PACKAGES" ]; then
-            sudo apt-get install -qq $APT_PACKAGES
+            sudo apt-get install -qq -- $APT_PACKAGES
         fi
 
         if [ -n "$PIP_PACKAGES" ]; then
-            python3 -m pip install $PIP_PACKAGES
+            python3 -m pip install -- $PIP_PACKAGES
         fi
