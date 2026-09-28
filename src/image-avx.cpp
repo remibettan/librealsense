@@ -22,9 +22,13 @@
         bool cpu_supports_avx2()
         {
             // AVX2 needs CPU support (CPUID.7:EBX[5]), AVX (CPUID.1:ECX[28]), and OS-saved YMM state (OSXSAVE + XCR0[2:1])
-            unsigned int eax, ebx, ecx, edx;
+            unsigned int eax, ebx, ecx;
     #ifdef _MSC_VER
             int info[4];
+    #else
+            unsigned int edx;
+    #endif
+    #ifdef _MSC_VER
             __cpuid( info, 0 );
             eax = info[0];
     #else
