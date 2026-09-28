@@ -19,8 +19,6 @@ namespace librealsense
     bool cpu_supports_avx2();
 
     // n must be a multiple of 32 pixels
-    void unpack_yuy2_avx_y8(uint8_t * const d[], const uint8_t * s, int n);
-    void unpack_yuy2_avx_y16(uint8_t * const d[], const uint8_t * s, int n);
     void unpack_yuy2_avx_rgb8(uint8_t * const d[], const uint8_t * s, int n);
     void unpack_yuy2_avx_rgba8(uint8_t * const d[], const uint8_t * s, int n);
     void unpack_yuy2_avx_bgr8(uint8_t * const d[], const uint8_t * s, int n);

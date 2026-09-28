@@ -295,14 +295,6 @@
             }
         }
 
-        LRS_TARGET_AVX2 void unpack_yuy2_avx_y8( uint8_t * const d[], const uint8_t * s, int n)
-        {
-            unpack_yuy2<RS2_FORMAT_Y8>(d, s, n);
-        }
-        LRS_TARGET_AVX2 void unpack_yuy2_avx_y16( uint8_t * const d[], const uint8_t * s, int n)
-        {
-            unpack_yuy2<RS2_FORMAT_Y16>(d, s, n);
-        }
         LRS_TARGET_AVX2 void unpack_yuy2_avx_rgb8( uint8_t * const d[], const uint8_t * s, int n)
         {
             unpack_yuy2<RS2_FORMAT_RGB8>(d, s, n);

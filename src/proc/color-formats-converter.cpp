@@ -44,13 +44,12 @@ namespace librealsense
 #if defined __SSSE3__ && ! defined ANDROID
         int first_block = 0;  // in 16-pixel blocks
 #ifdef LRS_YUY2_AVX2
+        // Y8/Y16 are memory bound and gain nothing from AVX2, so they stay on SSSE3
         static bool do_avx = cpu_supports_avx2();
-        if (do_avx)
+        if (do_avx && FORMAT != RS2_FORMAT_Y8 && FORMAT != RS2_FORMAT_Y16)
         {
             // AVX2 handles 32 pixels per iteration; the SSSE3 loop below finishes any remaining 16
             int avx_n = n / 32 * 32;
-            if (FORMAT == RS2_FORMAT_Y8) unpack_yuy2_avx_y8(d, s, avx_n);
-            if (FORMAT == RS2_FORMAT_Y16) unpack_yuy2_avx_y16(d, s, avx_n);
             if (FORMAT == RS2_FORMAT_RGB8) unpack_yuy2_avx_rgb8(d, s, avx_n);
             if (FORMAT == RS2_FORMAT_RGBA8) unpack_yuy2_avx_rgba8(d, s, avx_n);
             if (FORMAT == RS2_FORMAT_BGR8) unpack_yuy2_avx_bgr8(d, s, avx_n);
