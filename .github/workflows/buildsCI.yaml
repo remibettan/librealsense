@@ -322,8 +322,6 @@ jobs:
 
     - uses: ./.github/actions/configure-linux
       # Adding -DENABLE_SECURITY_FLAGS=true here to also check examples and tools. See RSDSO-RSDSO-20629.
-      env:
-        LRS_LOG_LEVEL: DEBUG
       with:
         cmake-options: >-
           -DBUILD_EXAMPLES=true
@@ -361,6 +359,7 @@ jobs:
           -DBUILD_PYTHON_BINDINGS=true
           -DBUILD_WITH_DDS=false
           -DCHECK_FOR_UPDATES=false
+          -DENABLE_STATS=OFF
           -DPYTHON_EXECUTABLE=$(which python3)
           -DUNIT_TESTS_ARGS="--not-live --context=linux"
 
@@ -497,7 +496,6 @@ jobs:
     - uses: ./.github/actions/install-linux-deps
       with:
         apt-packages: python3-numpy
-        pip-packages: numpy
 
     - uses: ./.github/actions/pre-build-checks
       with:
@@ -542,8 +540,6 @@ jobs:
     - uses: ./.github/actions/install-linux-deps
 
     - uses: ./.github/actions/configure-linux
-      env:
-        LRS_LOG_LEVEL: DEBUG
       with:
         cmake-options: >-
           -DBUILD_EXAMPLES=true

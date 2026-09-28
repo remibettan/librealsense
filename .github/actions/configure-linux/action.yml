@@ -1,8 +1,9 @@
 name: Configure Linux
+description: Create the build directory and run the CMake configure step
 
 inputs:
   cmake-options:
-    description: Additional CMake options
+    description: Additional CMake options, one per line; shell expressions such as $(which python3) are expanded
     default: ""
 
 runs:
@@ -11,6 +12,7 @@ runs:
   steps:
     - name: Configure CMake
       shell: bash
+      # cmake-options is interpolated into the script on purpose so $(...) inside it is expanded by the shell
       run: |
         mkdir -p build
         cd build

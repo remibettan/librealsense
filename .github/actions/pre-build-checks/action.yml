@@ -1,8 +1,9 @@
-name: Check API
+name: Pre-build checks
+description: Run the API check script, and optionally the PR check script
 
 inputs:
   pr-check:
-    description: Run pr_check.sh
+    description: Also run pr_check.sh
     default: "false"
 
 runs:
@@ -10,10 +11,12 @@ runs:
 
   steps:
     - shell: bash
+      env:
+        PR_CHECK: ${{ inputs.pr-check }}
       run: |
         cd scripts
         ./api_check.sh
 
-        if [ "${{ inputs.pr-check }}" = "true" ]; then
+        if [ "$PR_CHECK" = "true" ]; then
             ./pr_check.sh
         fi

@@ -1,4 +1,5 @@
 name: Build on Linux
+description: Run the CMake build in the build directory
 
 runs:
   using: composite

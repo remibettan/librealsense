@@ -1,10 +1,13 @@
 name: Install Linux dependencies
+description: Install the apt packages every Linux build needs, plus any job-specific apt or pip packages
 
 inputs:
   apt-packages:
+    description: Extra apt packages, space separated
     default: ""
 
   pip-packages:
+    description: Extra pip packages, space separated
     default: ""
 
 runs:
@@ -12,6 +15,9 @@ runs:
 
   steps:
     - shell: bash
+      env:
+        APT_PACKAGES: ${{ inputs.apt-packages }}
+        PIP_PACKAGES: ${{ inputs.pip-packages }}
       run: |
         sudo apt-get update
 
@@ -27,10 +33,10 @@ runs:
             libglfw3-dev \
             libglfw3
 
-        if [ -n "${{ inputs.apt-packages }}" ]; then
-            sudo apt-get install ${{ inputs.apt-packages }}
+        if [ -n "$APT_PACKAGES" ]; then
+            sudo apt-get install -qq $APT_PACKAGES
         fi
 
-        if [ -n "${{ inputs.pip-packages }}" ]; then
-            python3 -m pip install ${{ inputs.pip-packages }}
+        if [ -n "$PIP_PACKAGES" ]; then
+            python3 -m pip install $PIP_PACKAGES
         fi
