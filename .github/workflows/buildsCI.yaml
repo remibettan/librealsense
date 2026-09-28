@@ -22,6 +22,20 @@ jobs:
 
 
   #--------------------------------------------------------------------------------
+  Source_Checks:  # Header self-containment and copyright/license/whitespace lint (no build)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+
+    - name: Check API headers
+      run: cd scripts && ./api_check.sh
+
+    - name: PR check
+      run: cd scripts && ./pr_check.sh
+
+
+  #--------------------------------------------------------------------------------
   Infra_Tests:  # Pytest infrastructure regression tests (no build, no devices)
     runs-on: ubuntu-22.04
     timeout-minutes: 10
@@ -46,8 +60,6 @@ jobs:
       shell: powershell
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-
-    - uses: ./.github/actions/pre-build-checks
 
     - name: PreBuild
       shell: bash
@@ -83,8 +95,6 @@ jobs:
       shell: powershell
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-
-    - uses: ./.github/actions/pre-build-checks
 
     - name: PreBuild
       shell: bash
@@ -123,8 +133,6 @@ jobs:
       shell: powershell
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-
-    - uses: ./.github/actions/pre-build-checks
 
     - name: PreBuild
       shell: bash
@@ -185,8 +193,6 @@ jobs:
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
 
-    - uses: ./.github/actions/pre-build-checks
-
     - name: PreBuild
       shell: bash
       run: |
@@ -233,8 +239,6 @@ jobs:
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
 
-    - uses: ./.github/actions/pre-build-checks
-
     - name: PreBuild
       shell: bash
       run: |
@@ -271,8 +275,6 @@ jobs:
       shell: powershell
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-
-    - uses: ./.github/actions/pre-build-checks
 
     - name: PreBuild
       shell: bash
@@ -316,8 +318,6 @@ jobs:
       with:
         cmake-version: '4.x'
 
-    - uses: ./.github/actions/pre-build-checks
-
     - uses: ./.github/actions/install-linux-deps
 
     - uses: ./.github/actions/configure-linux
@@ -344,10 +344,6 @@ jobs:
     - uses: ./.github/actions/install-linux-deps
       with:
         pip-packages: numpy
-
-    - uses: ./.github/actions/pre-build-checks
-      with:
-        pr-check: true
 
     - uses: ./.github/actions/configure-linux
       with:
@@ -395,10 +391,6 @@ jobs:
         # for debugging purpose
         dpkg -s nlohmann-json3-dev | grep "Package\|Version" | xargs
 
-    - uses: ./.github/actions/pre-build-checks
-      with:
-        pr-check: true
-
     - uses: ./.github/actions/configure-linux
       with:
         cmake-options: >-
@@ -437,10 +429,6 @@ jobs:
     - uses: ./.github/actions/install-linux-deps
       with:
         pip-packages: numpy
-
-    - uses: ./.github/actions/pre-build-checks
-      with:
-        pr-check: true
 
     - uses: ./.github/actions/configure-linux
       # Note: we force RSUSB because, on Linux, the context creation will fail on GHA:
@@ -497,10 +485,6 @@ jobs:
       with:
         apt-packages: python3-numpy
 
-    - uses: ./.github/actions/pre-build-checks
-      with:
-        pr-check: true
-
     - uses: ./.github/actions/configure-linux
       # Adding -DENABLE_SECURITY_FLAGS=true here to also check DDS. See RSDSO-RSDSO-20629.
       with:
@@ -534,8 +518,6 @@ jobs:
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
-
-    - uses: ./.github/actions/pre-build-checks
 
     - uses: ./.github/actions/install-linux-deps
 
@@ -587,8 +569,6 @@ jobs:
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
-    - uses: ./.github/actions/pre-build-checks
-
     - name: Prebuild 
       shell: bash
       run: |
@@ -614,8 +594,6 @@ jobs:
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
-
-    - uses: ./.github/actions/pre-build-checks
 
     - uses: ./.github/actions/install-linux-deps
 
