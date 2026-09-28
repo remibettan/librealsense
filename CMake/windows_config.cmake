@@ -76,7 +76,6 @@ macro(os_set_flags)
         endif()
         
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj /wd4819")
-        set(LRS_TRY_USE_AVX true)
         add_definitions(-D_UNICODE)
     endif()
     set(DOTNET_VERSION_LIBRARY "3.5" CACHE STRING ".Net Version, defaulting to '3.5', the Unity wrapper currently supports only .NET 3.5")

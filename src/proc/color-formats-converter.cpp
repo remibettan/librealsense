@@ -20,32 +20,6 @@
 #endif
 #include "neon/image-neon.h"
 
-#if defined (ANDROID) || (defined (__linux__) && !defined (__x86_64__)) || (defined (__APPLE__) && !defined (__x86_64__))
-
-bool has_avx() { return false; }
-
-#else
-
-#ifdef _WIN32
-#include <intrin.h>
-#define cpuid(info, x)    __cpuidex(info, x, 0)
-#else
-#include <cpuid.h>
-void cpuid(int info[4], int info_type) {
-    __cpuid_count(info_type, 0, info[0], info[1], info[2], info[3]);
-}
-#endif
-
-bool has_avx()
-{
-    int info[4];
-    cpuid(info, 0);
-    cpuid(info, 0x80000000);
-    return (info[2] & ((int)1 << 28)) != 0;
-}
-
-#endif
-
 // explanations for converting YUV values to RGB can be found in:
 // https://en.wikipedia.org/wiki/YUV#Y%E2%80%B2UV444_to_RGB888_conversion
 
@@ -68,26 +42,28 @@ namespace librealsense
         }
 #endif
 #if defined __SSSE3__ && ! defined ANDROID
-        static bool do_avx = has_avx();
-#ifdef __AVX2__
-
+        int first_block = 0;  // in 16-pixel blocks
+#ifdef LRS_YUY2_AVX2
+        static bool do_avx = cpu_supports_avx2();
         if (do_avx)
         {
-            if (FORMAT == RS2_FORMAT_Y8) unpack_yuy2_avx_y8(d, s, n);
-            if (FORMAT == RS2_FORMAT_Y16) unpack_yuy2_avx_y16(d, s, n);
-            if (FORMAT == RS2_FORMAT_RGB8) unpack_yuy2_avx_rgb8(d, s, n);
-            if (FORMAT == RS2_FORMAT_RGBA8) unpack_yuy2_avx_rgba8(d, s, n);
-            if (FORMAT == RS2_FORMAT_BGR8) unpack_yuy2_avx_bgr8(d, s, n);
-            if (FORMAT == RS2_FORMAT_BGRA8) unpack_yuy2_avx_bgra8(d, s, n);
+            // AVX2 handles 32 pixels per iteration; the SSSE3 loop below finishes any remaining 16
+            int avx_n = n / 32 * 32;
+            if (FORMAT == RS2_FORMAT_Y8) unpack_yuy2_avx_y8(d, s, avx_n);
+            if (FORMAT == RS2_FORMAT_Y16) unpack_yuy2_avx_y16(d, s, avx_n);
+            if (FORMAT == RS2_FORMAT_RGB8) unpack_yuy2_avx_rgb8(d, s, avx_n);
+            if (FORMAT == RS2_FORMAT_RGBA8) unpack_yuy2_avx_rgba8(d, s, avx_n);
+            if (FORMAT == RS2_FORMAT_BGR8) unpack_yuy2_avx_bgr8(d, s, avx_n);
+            if (FORMAT == RS2_FORMAT_BGRA8) unpack_yuy2_avx_bgra8(d, s, avx_n);
+            first_block = avx_n / 16;
         }
-        else
 #endif
         {
             auto src = reinterpret_cast<const __m128i *>(s);
             auto dst = reinterpret_cast<__m128i *>(d[0]);
 
 #pragma omp parallel for
-            for (int i = 0; i < n / 16; i++)
+            for (int i = first_block; i < n / 16; i++)
             {
                 const __m128i zero = _mm_set1_epi8(0);
                 const __m128i n100 = _mm_set1_epi16(100 << 4);
@@ -637,8 +613,6 @@ namespace librealsense
         // a multiple of 16. For non-aligned widths (e.g. 424) the offsets drift and lines shift.
         if (width % 16 == 0)
         {
-            static bool do_avx = has_avx();
-
             auto src = reinterpret_cast<const __m128i*>(s);
             auto dst = reinterpret_cast<__m128i*>(d[0]);
 
