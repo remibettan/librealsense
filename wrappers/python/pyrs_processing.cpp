@@ -169,7 +169,7 @@ void init_processing(py::module &m) {
              "6 - Warm\n"
              "7 - Quantized\n"
              "8 - Pattern", "color_scheme"_a)
-        .def("colorize", &rs2::colorizer::colorize, "Start to generate color image base on depth frame", "depth"_a)
+        .def("colorize", &rs2::colorizer::colorize, "Start to generate color image base on depth frame", "depth"_a, py::call_guard<py::gil_scoped_release>())
         /*.def("__call__", &rs2::colorizer::operator())*/;
 
     py::class_<rs2::decimation_filter, rs2::filter> decimation_filter(m, "decimation_filter", "Performs downsampling by using the median with specific kernel size.");
