@@ -5,6 +5,7 @@
 
 #include "option.h"
 #include "image-avx.h"
+#include <rsutils/os/os.h>
 #include "image.h"
 
 #define STB_IMAGE_STATIC
@@ -43,9 +44,9 @@ namespace librealsense
 #endif
 #if defined __SSSE3__ && ! defined ANDROID
         int first_block = 0;  // in 16-pixel blocks
-#ifdef LRS_YUY2_AVX2
+#ifdef LRS_WITH_AVX2
         // Y8/Y16 are memory bound and gain nothing from AVX2, so they stay on SSSE3
-        static bool do_avx = cpu_supports_avx2();
+        static bool do_avx = rsutils::os::cpu_supports_avx2();
         if (do_avx && FORMAT != RS2_FORMAT_Y8 && FORMAT != RS2_FORMAT_Y16)
         {
             // AVX2 handles 32 pixels per iteration; the SSSE3 loop below finishes any remaining 16

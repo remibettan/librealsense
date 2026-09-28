@@ -7,17 +7,20 @@
 
 #include <cstdint>
 
-// AVX2 YUY2 unpacking is built on x86-64 only and selected at runtime via cpu_supports_avx2().
-// image-avx.cpp is compiled with the baseline flags; only its unpack functions use AVX2.
+// AVX2 image kernels are built on x86-64 only; callers select them at runtime via rsutils::os::cpu_supports_avx2().
+// They are compiled with the baseline flags plus a per-function AVX2 target, so nothing else emits AVX2.
 #if defined( __SSSE3__ ) && ! defined( ANDROID ) && ( defined( __x86_64__ ) || defined( _M_X64 ) )
-#define LRS_YUY2_AVX2
+#define LRS_WITH_AVX2
+#ifdef _MSC_VER
+#define LRS_TARGET_AVX2  // MSVC allows AVX2 intrinsics without /arch:AVX2
+#else
+#define LRS_TARGET_AVX2 __attribute__( ( target( "avx2" ) ) )
+#endif
 #endif
 
 namespace librealsense
 {
-#ifdef LRS_YUY2_AVX2
-    bool cpu_supports_avx2();
-
+#ifdef LRS_WITH_AVX2
     // n must be a multiple of 32 pixels
     void unpack_yuy2_avx_rgb8(uint8_t * const d[], const uint8_t * s, int n);
     void unpack_yuy2_avx_rgba8(uint8_t * const d[], const uint8_t * s, int n);
