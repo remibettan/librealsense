@@ -88,12 +88,10 @@
 
                 if (FORMAT == RS2_FORMAT_Y8)
                 {
-                    // Align all Y components and output 32 pixels (32 bytes) at once
-                    __m256i y0 = _mm256_shuffle_epi8(s0, _mm256_setr_epi8(1, 3, 5, 7, 9, 11, 13, 15, 0, 2, 4, 6, 8, 10, 12, 14,
-                        1, 3, 5, 7, 9, 11, 13, 15, 0, 2, 4, 6, 8, 10, 12, 14));
-                    __m256i y1 = _mm256_shuffle_epi8(s1, _mm256_setr_epi8(0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15,
-                        0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15));
-                    _mm256_storeu_si256(&dst[i], _mm256_alignr_epi8(y0, y1, 8));
+                    // Keep the Y bytes, pack them, and undo the per-lane interleave of _mm256_packus_epi16
+                    const __m256i vmask = _mm256_set1_epi16(0x00ff);
+                    __m256i y = _mm256_packus_epi16(_mm256_and_si256(s0, vmask), _mm256_and_si256(s1, vmask));
+                    _mm256_storeu_si256(&dst[i], _mm256_permute4x64_epi64(y, _MM_SHUFFLE(3, 1, 2, 0)));
                     continue;
                 }
 
@@ -265,11 +263,11 @@
                         // Shuffle rgb triples to the start and end of each register
                         __m128i bgr0 = _mm_shuffle_epi8(rgba0, _mm_setr_epi8(3, 7, 11, 15, 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14));
                         __m128i bgr1 = _mm_shuffle_epi8(rgba1, _mm_setr_epi8(0, 1, 2, 4, 3, 7, 11, 15, 5, 6, 8, 9, 10, 12, 13, 14));
-                        __m128i bgr2 = _mm_shuffle_epi8(rgba2, _mm_setr_epi8(0, 1, 2, 4, 5, 6, 8, 9, 3, 7, 11, 15, 10, 12, 13, 1));
+                        __m128i bgr2 = _mm_shuffle_epi8(rgba2, _mm_setr_epi8(0, 1, 2, 4, 5, 6, 8, 9, 3, 7, 11, 15, 10, 12, 13, 14));
                         __m128i bgr3 = _mm_shuffle_epi8(rgba3, _mm_setr_epi8(0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 3, 7, 11, 15));
                         __m128i bgr4 = _mm_shuffle_epi8(rgba4, _mm_setr_epi8(3, 7, 11, 15, 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14));
                         __m128i bgr5 = _mm_shuffle_epi8(rgba5, _mm_setr_epi8(0, 1, 2, 4, 3, 7, 11, 15, 5, 6, 8, 9, 10, 12, 13, 14));
-                        __m128i bgr6 = _mm_shuffle_epi8(rgba6, _mm_setr_epi8(0, 1, 2, 4, 5, 6, 8, 9, 3, 7, 11, 15, 10, 12, 13, 1));
+                        __m128i bgr6 = _mm_shuffle_epi8(rgba6, _mm_setr_epi8(0, 1, 2, 4, 5, 6, 8, 9, 3, 7, 11, 15, 10, 12, 13, 14));
                         __m128i bgr7 = _mm_shuffle_epi8(rgba7, _mm_setr_epi8(0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 3, 7, 11, 15));
 
                         __m128i a1 = _mm_alignr_epi8(bgr1, bgr0, 4);
