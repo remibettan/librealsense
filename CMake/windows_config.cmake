@@ -89,7 +89,7 @@ endmacro()
 
 macro(os_target_config)
     # MSVC's SSE headers are x86/x64-only
-    if(CMAKE_CXX_COMPILER_ARCHITECTURE_ID MATCHES "^(x64|X86)$")
+    if(NOT CMAKE_CXX_COMPILER_ARCHITECTURE_ID MATCHES "ARM")
         message(STATUS "Building with SSE optimizations")
         add_definitions(-D__SSSE3__)
     endif()
