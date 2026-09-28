@@ -1590,10 +1590,7 @@ class RealSenseManager:
                     detail=f"Stream type '{stream_key}' is not active for device {device_id}.",
                 )
 
-    # TODO: replace with `list(rs.frame_metadata_value)` once pyrealsense2 ships
-    # with pybind11 >= 2.12 (added __iter__ on py::enum_). Current PyPI wheels
-    # use older pybind11 where the enum is not iterable.
-    _FRAME_METADATA_VALUES = list(rs.frame_metadata_value.__members__.values())
+    _FRAME_METADATA_ITEMS = list(rs.frame_metadata_value.__members__.items())
 
     @staticmethod
     def _build_viewer_info(frame_data) -> Dict[str, Any]:
@@ -1638,7 +1635,7 @@ class RealSenseManager:
         # Build the supported set from the 2nd frame on: delta-computed metadata
         # (e.g. actual_fps) is not yet available on the first frame.
         if supported is None and frame_data.get_frame_number() >= 2:
-            supported = [md for md in self._FRAME_METADATA_VALUES
+            supported = [(name, md) for name, md in self._FRAME_METADATA_ITEMS
                          if frame_data.supports_frame_metadata(md)]
             if profile_uid is not None:
                 if device_cache is None:
@@ -1646,12 +1643,12 @@ class RealSenseManager:
                 device_cache[profile_uid] = supported
 
         attrs: Dict[str, int] = {}
-        for md in (supported or []):
+        for name, md in (supported or []):
             try:
-                attrs[md.name] = frame_data.get_frame_metadata(md)
+                attrs[name] = frame_data.get_frame_metadata(md)
             except Exception as e:
                 # supports_frame_metadata said yes; getting the value should not throw.
-                logging.debug("[METADATA] failed to read %s: %s", md.name, e)
+                logging.debug("[METADATA] failed to read %s: %s", name, e)
                 continue
         return attrs
 
