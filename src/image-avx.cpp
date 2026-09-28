@@ -3,7 +3,7 @@
 
 #include "image-avx.h"
 
-#ifdef LRS_WITH_AVX2
+#ifdef AVX2_SUPPORT
     // Keep this file free of C++ library code: it must not emit AVX2 instructions outside the functions below
     #include <librealsense2/h/rs_sensor.h>
     #include <cassert>
@@ -12,9 +12,9 @@
     #pragma pack(push, 1) // All structs in this file are assumed to be byte-packed
     namespace librealsense
     {
-        template<rs2_format FORMAT> LRS_TARGET_AVX2 void unpack_yuy2( uint8_t * const d[], const uint8_t * s, int n)
+        template<rs2_format FORMAT> AVX2_TARGET void unpack_yuy2( uint8_t * const d[], const uint8_t * s, int n)
         {
-            assert(n % 32 == 0); // the caller handles the remaining pixels
+            assert(n % 32 == 0); // the caller uses AVX2 only when n % 32 == 0
 
             auto src = reinterpret_cast<const __m256i *>(s);
             auto dst = reinterpret_cast<__m256i *>(d[0]);
@@ -229,19 +229,19 @@
             }
         }
 
-        LRS_TARGET_AVX2 void unpack_yuy2_avx_rgb8( uint8_t * const d[], const uint8_t * s, int n)
+        AVX2_TARGET void unpack_yuy2_avx_rgb8( uint8_t * const d[], const uint8_t * s, int n)
         {
             unpack_yuy2<RS2_FORMAT_RGB8>(d, s, n);
         }
-        LRS_TARGET_AVX2 void unpack_yuy2_avx_rgba8( uint8_t * const d[], const uint8_t * s, int n)
+        AVX2_TARGET void unpack_yuy2_avx_rgba8( uint8_t * const d[], const uint8_t * s, int n)
         {
             unpack_yuy2<RS2_FORMAT_RGBA8>(d, s, n);
         }
-        LRS_TARGET_AVX2 void unpack_yuy2_avx_bgr8( uint8_t * const d[], const uint8_t * s, int n)
+        AVX2_TARGET void unpack_yuy2_avx_bgr8( uint8_t * const d[], const uint8_t * s, int n)
         {
             unpack_yuy2<RS2_FORMAT_BGR8>(d, s, n);
         }
-        LRS_TARGET_AVX2 void unpack_yuy2_avx_bgra8( uint8_t * const d[], const uint8_t * s, int n)
+        AVX2_TARGET void unpack_yuy2_avx_bgra8( uint8_t * const d[], const uint8_t * s, int n)
         {
             unpack_yuy2<RS2_FORMAT_BGRA8>(d, s, n);
         }

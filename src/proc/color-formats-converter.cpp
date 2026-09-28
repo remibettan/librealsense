@@ -43,27 +43,24 @@ namespace librealsense
         }
 #endif
 #if defined __SSSE3__ && ! defined ANDROID
-        int first_block = 0;  // in 16-pixel blocks
-#ifdef LRS_WITH_AVX2
+#ifdef AVX2_SUPPORT
         // Y8/Y16 are memory bound and gain nothing from AVX2, so they stay on SSSE3
         static bool do_avx = rsutils::os::cpu_supports_avx2();
-        if (do_avx && FORMAT != RS2_FORMAT_Y8 && FORMAT != RS2_FORMAT_Y16)
+        if (do_avx && n % 32 == 0 && FORMAT != RS2_FORMAT_Y8 && FORMAT != RS2_FORMAT_Y16)
         {
-            // AVX2 handles 32 pixels per iteration; the SSSE3 loop below finishes any remaining 16
-            int avx_n = n / 32 * 32;
-            if (FORMAT == RS2_FORMAT_RGB8) unpack_yuy2_avx_rgb8(d, s, avx_n);
-            if (FORMAT == RS2_FORMAT_RGBA8) unpack_yuy2_avx_rgba8(d, s, avx_n);
-            if (FORMAT == RS2_FORMAT_BGR8) unpack_yuy2_avx_bgr8(d, s, avx_n);
-            if (FORMAT == RS2_FORMAT_BGRA8) unpack_yuy2_avx_bgra8(d, s, avx_n);
-            first_block = avx_n / 16;
+            if (FORMAT == RS2_FORMAT_RGB8) unpack_yuy2_avx_rgb8(d, s, n);
+            if (FORMAT == RS2_FORMAT_RGBA8) unpack_yuy2_avx_rgba8(d, s, n);
+            if (FORMAT == RS2_FORMAT_BGR8) unpack_yuy2_avx_bgr8(d, s, n);
+            if (FORMAT == RS2_FORMAT_BGRA8) unpack_yuy2_avx_bgra8(d, s, n);
         }
+        else
 #endif
         {
             auto src = reinterpret_cast<const __m128i *>(s);
             auto dst = reinterpret_cast<__m128i *>(d[0]);
 
 #pragma omp parallel for
-            for (int i = first_block; i < n / 16; i++)
+            for (int i = 0; i < n / 16; i++)
             {
                 const __m128i zero = _mm_set1_epi8(0);
                 const __m128i n100 = _mm_set1_epi16(100 << 4);
