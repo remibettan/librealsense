@@ -36,15 +36,6 @@
                 __m256i s0 = _mm256_loadu_si256(&src[i * 2]);
                 __m256i s1 = _mm256_loadu_si256(&src[i * 2 + 1]);
 
-                if (FORMAT == RS2_FORMAT_Y8)
-                {
-                    // Keep the Y bytes, pack them, and undo the per-lane interleave of _mm256_packus_epi16
-                    const __m256i vmask = _mm256_set1_epi16(0x00ff);
-                    __m256i y = _mm256_packus_epi16(_mm256_and_si256(s0, vmask), _mm256_and_si256(s1, vmask));
-                    _mm256_storeu_si256(&dst[i], _mm256_permute4x64_epi64(y, _MM_SHUFFLE(3, 1, 2, 0)));
-                    continue;
-                }
-
                 // Shuffle all Y components to the low order bytes of the register, and all U/V components to the high order bytes
                 const __m256i evens_odd1s_odd3s = _mm256_setr_epi8(0, 2, 4, 6, 8, 10, 12, 14, 1, 5, 9, 13, 3, 7, 11, 15,
                     0, 2, 4, 6, 8, 10, 12, 14, 1, 5, 9, 13, 3, 7, 11, 15); // to get yyyyyyyyuuuuvvvvyyyyyyyyuuuuvvvv
@@ -54,13 +45,6 @@
                 // Retrieve all 32 Y components as 32-bit values (16 components per register))
                 __m256i y16__0_7 = _mm256_unpacklo_epi8(yyyyyyyyuuuuvvvv0, zero);         // convert to 16 bit
                 __m256i y16__8_F = _mm256_unpacklo_epi8(yyyyyyyyuuuuvvvv8, zero);         // convert to 16 bit
-
-                if (FORMAT == RS2_FORMAT_Y16)
-                {
-                    _mm256_storeu_si256(&dst[i * 2], _mm256_slli_epi16(y16__0_7, 8));
-                    _mm256_storeu_si256(&dst[i * 2 + 1], _mm256_slli_epi16(y16__8_F, 8));
-                    continue;
-                }
 
                 // Retrieve all 16 U and V components as 32-bit values (16 components per register)
                 __m256i uv = _mm256_unpackhi_epi32(yyyyyyyyuuuuvvvv0, yyyyyyyyuuuuvvvv8); // uuuuuuuuvvvvvvvvuuuuuuuuvvvvvvvv
