@@ -54,7 +54,7 @@ namespace librealsense
         bool resolve_color_frame( const frame_interface * frame, int & index );
         static bool is_color_pin( const std::vector< platform::stream_profile > & all, uint32_t pin );
 
-        int _color_pins = 0;
+        std::atomic< int > _color_pins{ 0 };
         std::atomic< bool > _warned_no_source_index{ false };
     };
 }
