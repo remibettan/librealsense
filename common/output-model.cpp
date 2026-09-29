@@ -1250,6 +1250,11 @@ void stream_dashboard::draw_dashboard(ux_window& win, rect& r)
 
 void frame_drops_dashboard::process_frame(rs2::frame f)
 {
+    // Perception streams are event-driven and run at their own rate (e.g. OD at 15 fps when 30 is requested),
+    // so comparing them against the requested fps would report false drops.
+    if( f.get_profile().stream_type() == RS2_STREAM_OBJECT_DETECTION )
+        return;
+
     shared_data.write([&](){
         double ts = glfwGetTime();
         if (method == 1) ts = f.get_timestamp() / 1000.f;
