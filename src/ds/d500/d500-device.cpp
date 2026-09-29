@@ -522,11 +522,10 @@ namespace librealsense
 
             if ((_device_capabilities & ds_caps::CAP_INTERCAM_HW_SYNC) == ds_caps::CAP_INTERCAM_HW_SYNC)
             {
-                // The sync-mode XU exists only on D555/D585 FW >= 7.58.40929.13516. D585S (and the
-                // D585 legacy SKU on the same HW) run a separate 8.x FW line with no such XU, so
-                // they keep the HW-monitor SET/GET_CAM_SYNC path regardless of FW version.
-                const bool is_d585s_hw = ( _pid == ds::D585S_PID || _pid == ds::D585_LEGACY_PID );
-                if( ! is_d585s_hw && _fw_version >= firmware_version( "7.58.40929.13516" ) )
+                // The sync-mode XU ships on FW >= 7.58.40929.13516. D585S runs a separate 8.x FW line
+                // with no such XU, so it keeps the HW-monitor SET/GET_CAM_SYNC path regardless of FW
+                // version.
+                if( _pid != ds::D585S_PID && _fw_version >= firmware_version( "7.58.40929.13516" ) )
                 {
                     // GMSL: d4xx kernel driver exposes the D457-style range 0..2 (0:Internal, 1:Master, 2:External);
                     // USB: FW register 0x2C uses the D500-native 2:Internal, 3:External. Different range → different
