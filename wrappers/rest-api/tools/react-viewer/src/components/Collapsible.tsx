@@ -60,18 +60,46 @@ export function Collapsible({ variant, label, aside, belowHeader, forcedOpen, ch
 }
 
 /** On/off pill switch, sized to sit in a collapsible header as its `aside`. */
-export function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
+export function ToggleSwitch({
+  enabled, onToggle, pending = false, disabled = false, title, testId, children,
+}: {
+  enabled: boolean
+  onToggle: () => void
+  /** Waiting on an async change; shown amber and not clickable. */
+  pending?: boolean
+  disabled?: boolean
+  title?: string
+  testId?: string
+  /** Label drawn after the switch, inside the same button. */
+  children?: ReactNode
+}) {
   return (
     <button
       onClick={onToggle}
       aria-pressed={enabled}
-      className={`relative w-8 h-4 rounded-full transition-colors ${enabled ? 'bg-rs-blue' : 'bg-rs-border'}`}
+      disabled={disabled || pending}
+      title={title}
+      data-testid={testId}
+      className="group flex items-center gap-1.5 disabled:cursor-not-allowed"
     >
       <span
-        className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
-          enabled ? 'translate-x-4' : ''
+        className={`relative w-8 h-4 rounded-full transition-colors ${
+          pending
+            ? 'bg-rs-warn/70 cursor-wait'
+            : enabled
+              ? 'bg-rs-blue'
+              : disabled
+                ? 'bg-rs-border/50'
+                : 'bg-rs-border group-hover:bg-rs-dim'
         }`}
-      />
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+            enabled ? 'translate-x-4' : ''
+          }`}
+        />
+      </span>
+      {children}
     </button>
   )
 }

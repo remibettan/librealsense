@@ -4,9 +4,9 @@ import {
   nextIMUAxisBound,
   toIMUChartSeries,
   zoomIMUAxisRange,
-  imuPlotHeight,
   IMU_AXES,
-  IMU_CHART_LAYOUT,
+  IMU_HISTORY_SIZE,
+  IMU_SAMPLE_INTERVAL_MS,
   type IMUChartPoint,
 } from '@/utils/imuChart'
 
@@ -19,10 +19,23 @@ describe('toIMUChartSeries', () => {
       { timestamp: 1_000, x: 1, y: 2, z: 3 },
       { timestamp: 1_050, x: 4, y: 5, z: 6 },
     ])
-    expect(series).toEqual([
+    expect(series.slice(-2)).toEqual([
       { t: 1_000, x: 1, y: 2, z: 3, n: Math.sqrt(14) },
       { t: 1_050, x: 4, y: 5, z: 6, n: Math.sqrt(77) },
     ])
+  })
+
+  it('pads a short history to a full window of back-dated zeros', () => {
+    const series = toIMUChartSeries([{ timestamp: 20_000, x: 1, y: 0, z: 0 }])
+    expect(series).toHaveLength(IMU_HISTORY_SIZE)
+    expect(series[0]).toEqual({
+      t: 20_000 - (IMU_HISTORY_SIZE - 1) * IMU_SAMPLE_INTERVAL_MS, x: 0, y: 0, z: 0, n: 0,
+    })
+    expect(series[IMU_HISTORY_SIZE - 2].t).toBe(20_000 - IMU_SAMPLE_INTERVAL_MS)
+  })
+
+  it('draws nothing until the first sample arrives', () => {
+    expect(toIMUChartSeries([])).toEqual([])
   })
 
   it('keeps a sample at the same x after the window slides', () => {
@@ -33,7 +46,7 @@ describe('toIMUChartSeries', () => {
     const before = toIMUChartSeries(samples)
     // Oldest sample drops off, as the ring buffer does.
     const after = toIMUChartSeries(samples.slice(1))
-    expect(after[0].t).toBe(before[1].t)
+    expect(after[after.length - 1].t).toBe(before[before.length - 1].t)
   })
 })
 
@@ -66,7 +79,7 @@ describe('nextIMUAxisBound', () => {
 describe('magnitude series', () => {
   it('matches the N line in the C++ viewer: the norm of the three axes', () => {
     expect(imuMagnitude({ x: 3, y: 4, z: 0 })).toBe(5)
-    expect(toIMUChartSeries([{ timestamp: 0, x: 0, y: -9.8, z: 0 }])[0].n).toBeCloseTo(9.8)
+    expect(toIMUChartSeries([{ timestamp: 0, x: 0, y: -9.8, z: 0 }]).at(-1)!.n).toBeCloseTo(9.8)
   })
 
   it('is plotted as a fourth series', () => {
@@ -109,12 +122,5 @@ describe('zoomIMUAxisRange', () => {
   it('refuses to zoom past a degenerate span', () => {
     const tiny: [number, number] = [-0.00002, 0.00002]
     expect(zoomIMUAxisRange(tiny, 12, 0.5, 1 / 1.25)).toBe(tiny)
-  })
-})
-
-describe('imuPlotHeight', () => {
-  it('subtracts every chart inset that shrinks the plot area', () => {
-    const { marginTop, marginBottom, axisHeight } = IMU_CHART_LAYOUT
-    expect(imuPlotHeight(200)).toBe(200 - marginTop - marginBottom - axisHeight)
   })
 })

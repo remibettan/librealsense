@@ -15,7 +15,6 @@ export default {
         'rs-inset': '#1b2233',
         'rs-border': '#29314a',
         // Text ramp: primary / secondary / disabled.
-        'rs-light': '#f2f4f9',
         'rs-text': '#f2f4f9',
         'rs-muted': '#bcc4d4',
         'rs-dim': '#8e97ab',

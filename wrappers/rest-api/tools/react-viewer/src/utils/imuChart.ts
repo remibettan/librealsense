@@ -16,15 +16,24 @@ export interface IMUChartPoint {
   n: number
 }
 
+// Graph cadence of the C++ viewer (common/graph-model.h): one sample per 50 ms,
+// 300 kept, a 15 s window.
+export const IMU_SAMPLE_INTERVAL_MS = 50
+export const IMU_HISTORY_SIZE = 300
+
 export const imuMagnitude = (s: { x: number; y: number; z: number }) =>
   Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2)
 
-// Plot against the sample timestamp rather than its array position: the history is
-// a sliding window, so an index-based x re-labels every point on each redraw and
-// the whole trace appears to jitter. On a time axis a sample keeps the same x, so
-// old data stays put and only the right edge advances.
+// Plotted against time, so old samples keep their x as the window slides. Zeros
+// back-dated at the sample cadence fill the window, as graph_model::clear() does,
+// so the trace scrolls in from the right instead of stretching across the plot.
 export function toIMUChartSeries(samples: IMUSample[]): IMUChartPoint[] {
-  return samples.map((s) => ({ t: s.timestamp, x: s.x, y: s.y, z: s.z, n: imuMagnitude(s) }))
+  const first = samples[0]?.timestamp ?? 0
+  const padding = samples.length === 0 ? 0 : IMU_HISTORY_SIZE - samples.length
+  const zeros = Array.from({ length: padding }, (_, i) => ({
+    t: first - (padding - i) * IMU_SAMPLE_INTERVAL_MS, x: 0, y: 0, z: 0, n: 0,
+  }))
+  return [...zeros, ...samples.map((s) => ({ t: s.timestamp, x: s.x, y: s.y, z: s.z, n: imuMagnitude(s) }))]
 }
 
 // The plotted series, matching the C++ viewer's graph (common/graph-model.cpp): the
@@ -38,27 +47,13 @@ export const IMU_AXES = [
 
 export type IMUAxisKey = (typeof IMU_AXES)[number]['key']
 
-// Chart geometry, shared by the LineChart/XAxis props and by the wheel handler's
-// pixel-to-value mapping. Everything that shrinks the plot area lives here so the
-// two cannot drift apart.
+// Chart geometry, shared by the chart props and the wheel handler's pixel mapping.
 export const IMU_CHART_LAYOUT = {
   marginTop: 6,
   marginRight: 8,
   marginBottom: 0,
   axisHeight: 12,
 } as const
-
-// The plot redraws on a timer rather than on every new sample. Re-rendering a
-// 300-point, four-series SVG at the sample cadence saturates the main thread, which
-// delays the Socket.IO callbacks that deliver the samples — the stream then looks
-// like it keeps stopping, because gaps beyond IMU_STALE_GAP_MS restart the window.
-export const IMU_CHART_REDRAW_MS = 100
-
-export const imuPlotHeight = (wrapperHeight: number) =>
-  wrapperHeight -
-  IMU_CHART_LAYOUT.marginTop -
-  IMU_CHART_LAYOUT.marginBottom -
-  IMU_CHART_LAYOUT.axisHeight
 
 // Axis bounds snap to these so the scale settles on round numbers instead of
 // tracking the peak exactly.
@@ -71,14 +66,8 @@ const AXIS_STEPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 20, 50, 10
 // bad frame or wrong-unit stream should still be shown in full, not clipped.
 const snapUp = (value: number) => AXIS_STEPS.find((step) => step >= value) ?? value
 
-// Symmetric Y bound that grows the moment the signal needs room but shrinks only
-// once it fits well inside the current scale — without that hysteresis the axis
-// rescales on nearly every redraw and the chart looks like it is jumping. `floor`
-// is a dead zone: the smallest scale the axis will use, so a stationary camera
-// does not look like it is shaking.
-// `visible` keeps a hidden series out of the scale: the accel magnitude sits at ~9.8
-// even at rest, so leaving it in would hold the axis at ±10 and flatten X/Y/Z long
-// after the user switched that series off.
+// Symmetric Y bound: grows at once, shrinks only when the data fits well inside
+// (hysteresis), never below `floor`. Hidden series do not count toward it.
 export function nextIMUAxisBound(
   points: IMUChartPoint[],
   current: number,
@@ -91,8 +80,7 @@ export function nextIMUAxisBound(
       peak = Math.max(peak, Math.abs(p[key]))
     }
   }
-  // Headroom applies to the data, then the floor clamps. Scaling the floor itself
-  // would push the resting scale a ladder step above the intended dead zone.
+  // Headroom on the data, not on the floor.
   const needed = Math.max(floor, peak * 1.15)
   if (needed > current) return snapUp(needed)
   if (needed < current / 2.5) return snapUp(Math.max(needed, floor))

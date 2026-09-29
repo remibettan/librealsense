@@ -7,6 +7,8 @@
 // sensor is pointing. The vector is normalised, exactly as in the C++ code, so its
 // direction carries the orientation and the magnitude is printed as text.
 
+import { imuMagnitude } from './imuChart'
+
 export interface Vec3 {
   x: number
   y: number
@@ -57,17 +59,20 @@ export function projectIMU(v: Vec3): [number, number] {
   return [x2, y2 * cx - z2 * sx]
 }
 
-// `+ 0` collapses -0 to 0, so a point reached from either side of the circle is
-// written the same way and the path closes exactly on its starting coordinates.
-const coord = (n: number) => (n + 0).toFixed(4).replace('-0.0000', '0.0000')
+type Point = [number, number]
 
-const toPath = (points: [number, number][]) =>
-  points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${coord(x)},${coord(y)}`).join('')
+// Every projected point of the wireframe, so VIEW_BOX can be fitted to it.
+const allPoints: Point[] = []
+
+const toPath = (points: Point[]) => {
+  allPoints.push(...points)
+  return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(4)},${y.toFixed(4)}`).join('')
+}
 
 // One great circle, spanned by two orthogonal unit vectors, as draw_circle() does.
 function circlePath(a: Vec3, b: Vec3, segments = 50): string {
-  const points: [number, number][] = []
-  for (let i = 0; i <= segments; i++) {
+  const points: Point[] = []
+  for (let i = 0; i < segments; i++) {
     const theta = ((2 * Math.PI) / segments) * i
     const cos = Math.cos(theta)
     const sin = Math.sin(theta)
@@ -79,7 +84,7 @@ function circlePath(a: Vec3, b: Vec3, segments = 50): string {
       }),
     )
   }
-  return toPath(points)
+  return `${toPath(points)}Z`
 }
 
 const X_AXIS: Vec3 = { x: 1, y: 0, z: 0 }
@@ -135,11 +140,8 @@ export const ORIGIN_2D = projectIMU({ x: 0, y: 0, z: 0 })
 // texture it renders into; fitting the box to the geometry instead reproduces what
 // the C++ tile shows without carrying the empty margin around it.
 export const VIEW_BOX = (() => {
-  const coords = [...WIRE_CIRCLES, ...AXES.flatMap((a) => [a.line, ...a.heads])]
-    .flatMap((path) => path.replace(/Z$/, '').split(/[ML]/).filter(Boolean))
-    .map((pair) => pair.split(',').map(Number) as [number, number])
-  const xs = coords.map(([x]) => x)
-  const ys = coords.map(([, y]) => y)
+  const xs = allPoints.map(([x]) => x)
+  const ys = allPoints.map(([, y]) => y)
   // Room for the magnitude label, which sits beside the vector.
   const pad = 0.22
   const minX = Math.min(...xs) - pad
@@ -156,7 +158,7 @@ export interface MotionVector {
 }
 
 export function motionVector(v: Vec3): MotionVector {
-  const norm = Math.sqrt(v.x ** 2 + v.y ** 2 + v.z ** 2)
+  const norm = imuMagnitude(v)
   if (norm < VECTOR_THRESHOLD) {
     return { norm, tip: null, label: ORIGIN_2D }
   }

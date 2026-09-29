@@ -23,32 +23,8 @@ let currentChatAbortController: AbortController | null = null
 // Used to await completion before allowing a new start
 const pendingStopPromises = new Map<string, Promise<void>>()
 
-// IMU graph cadence, mirroring the C++ viewer (common/graph-model.h): one sample
-// every 50 ms, 300 samples retained — a 15 s window.
-const IMU_SAMPLE_INTERVAL_MS = 50
-const IMU_HISTORY_SIZE = 300
-// A gap this long means streaming stopped and restarted. Keeping the older samples
-// would leave the graph spanning minutes of wall clock with a flat stretch across
-// the gap, so start the window fresh instead.
+// A gap this long means streaming stopped and restarted, so the window starts fresh.
 const IMU_STALE_GAP_MS = 1000
-// Keyed "<deviceId>:<accel|gyro>", so one camera's cadence cannot throttle another's.
-const imuLastSampleAt: Record<string, number> = {}
-
-// Shared empty history, so a tile for a device that has not produced a sample yet
-// reads a stable reference instead of a fresh object on every render.
-const EMPTY_IMU_HISTORY: DeviceIMUHistory = { accel: [], gyro: [] }
-
-// A window starts out full of zeros, back-dated at the sample cadence, the way the
-// C++ viewer's graph_model::clear() pre-fills its 300 slots. The plot then always
-// spans the same 15 s and the trace scrolls in from the right, instead of a short
-// history stretching across the full width and squeezing as samples accumulate.
-const seedIMUWindow = (endTimestamp: number) =>
-  Array.from({ length: IMU_HISTORY_SIZE }, (_, i) => ({
-    timestamp: endTimestamp - (IMU_HISTORY_SIZE - i) * IMU_SAMPLE_INTERVAL_MS,
-    x: 0,
-    y: 0,
-    z: 0,
-  }))
 
 // Enumerations are unordered across connections; only the newest response may be applied.
 let _fetchSeq = 0
@@ -162,11 +138,12 @@ import {
 } from '../api/chat'
 import type { ProposedSettings } from '../utils/chatPrompt'
 import type { AssistantChatMessage, AssistantFileAttachment } from '../api/assistantChat'
+import { IMU_HISTORY_SIZE, IMU_SAMPLE_INTERVAL_MS, type IMUSample } from '../utils/imuChart'
 import { createAssistantSlice } from './assistantSlice'
 
 export interface DeviceIMUHistory {
-  accel: { timestamp: number; x: number; y: number; z: number }[]
-  gyro: { timestamp: number; x: number; y: number; z: number }[]
+  accel: IMUSample[]
+  gyro: IMUSample[]
 }
 
 // Keyed by device id.
@@ -215,7 +192,6 @@ interface AppState {
 
   // IMU sample history for the per-tile graphs, keyed by device id
   imuHistory: IMUHistory
-  maxIMUHistoryLength: number
   addIMUData: (deviceId: string, type: 'accel' | 'gyro', data: IMUData) => void
   clearIMUHistory: (deviceId?: string) => void
 
@@ -638,11 +614,9 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
       return
     }
 
-    // A restart begins a new graph window. Needed because a stop/start faster than
-    // IMU_STALE_GAP_MS would not trip the stale-gap check when samples resume.
-    for (const config of enabledStreamConfigs) {
-      const type = config.stream_type.toLowerCase()
-      if (type === 'accel' || type === 'gyro') imuLastSampleAt[`${deviceId}:${type}`] = 0
+    // A restart begins a new graph window, even one faster than IMU_STALE_GAP_MS.
+    if (enabledStreamConfigs.some(c => ['accel', 'gyro'].includes(c.stream_type.toLowerCase()))) {
+      get().clearIMUHistory(deviceId)
     }
 
     // Get sensor-level resolution/FPS (shared across all streams from this sensor)
@@ -876,42 +850,21 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
   // IMU history, per device: two cameras streaming accel would otherwise interleave
   // into one buffer and both tiles would draw the same mixed trace.
   imuHistory: {},
-  // 300 samples at one per 50 ms — a 15 s window, matching the C++ viewer's graph
-  // (common/graph-model.h VECTOR_SIZE / _update_rate).
-  maxIMUHistoryLength: IMU_HISTORY_SIZE,
   addIMUData: (deviceId, type, data) => {
-    // Motion frames arrive at up to 400 Hz; keep the graph cadence instead of
-    // every frame, so the window spans seconds and the store isn't rewritten
-    // hundreds of times a second.
+    // Motion frames arrive at up to 400 Hz; keep one per IMU_SAMPLE_INTERVAL_MS.
     const now = Date.now()
-    const key = `${deviceId}:${type}`
-    const gap = now - (imuLastSampleAt[key] ?? 0)
+    const deviceHistory = get().imuHistory[deviceId] ?? { accel: [], gyro: [] }
+    const previous = deviceHistory[type]
+    const gap = now - (previous[previous.length - 1]?.timestamp ?? 0)
     if (gap < IMU_SAMPLE_INTERVAL_MS) return
-    imuLastSampleAt[key] = now
 
-    set((state) => {
-      const deviceHistory = state.imuHistory[deviceId] ?? EMPTY_IMU_HISTORY
-      const previous = deviceHistory[type]
-      const history =
-        previous.length === 0 || gap > IMU_STALE_GAP_MS ? seedIMUWindow(now) : [...previous]
-      history.push({ timestamp: now, ...data })
-      if (history.length > state.maxIMUHistoryLength) {
-        history.shift()
-      }
-      return {
-        imuHistory: {
-          ...state.imuHistory,
-          [deviceId]: { ...deviceHistory, [type]: history },
-        },
-      }
-    })
+    const history = gap > IMU_STALE_GAP_MS ? [] : previous.slice(1 - IMU_HISTORY_SIZE)
+    history.push({ x: data.x, y: data.y, z: data.z, timestamp: now })
+    set((state) => ({
+      imuHistory: { ...state.imuHistory, [deviceId]: { ...deviceHistory, [type]: history } },
+    }))
   },
   clearIMUHistory: (deviceId) => {
-    // Drop the cadence marks too, so the next sample after a clear is taken at once
-    // instead of being thrown away as if it arrived mid-interval.
-    for (const key of Object.keys(imuLastSampleAt)) {
-      if (!deviceId || key.startsWith(`${deviceId}:`)) delete imuLastSampleAt[key]
-    }
     set((state) =>
       deviceId
         ? { imuHistory: { ...state.imuHistory, [deviceId]: { accel: [], gyro: [] } } }

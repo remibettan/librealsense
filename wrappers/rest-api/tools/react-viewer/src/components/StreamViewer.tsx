@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react'
 import { useAppStore, type DeviceIMUHistory } from '../store'
 import { WebRTCHandler } from '../api/webrtc'
 import { apiClient } from '../api/client'
@@ -7,22 +7,9 @@ import { toIMUChartSeries } from '../utils/imuChart'
 import type { DeviceState, StreamConfig, StreamMetadata } from '../api/types'
 
 import IMUOrientation from './IMUOrientation'
-
-const IMUChart = lazy(() => import('./IMUChart'))
+import IMUChart from './IMUChart'
 
 const NO_SAMPLES: DeviceIMUHistory['accel'] = []
-
-// Muted hue per stream type, used only as an edge accent on the video stream label
-// so tiles stay identifiable without the panel turning into a rainbow. Motion
-// streams render as IMUStreamTile and never reach that label.
-const STREAM_HUES: Record<string, string> = {
-  depth: '#4f9cf0',
-  color: '#35c07a',
-  infrared: '#9b8cf5',
-  fisheye: '#d9a13b',
-}
-
-const streamHue = (type: string) => STREAM_HUES[type.toLowerCase()] ?? '#bcc4d4'
 
 // A stream with its device context
 interface DeviceStream {
@@ -71,7 +58,7 @@ export function StreamViewer() {
   return (
     <div className="h-full">
       {activeStreams.length === 0 ? (
-        <div className="h-full flex items-center justify-center text-gray-500">
+        <div className="h-full flex items-center justify-center text-rs-dim">
           <div className="text-center">
             <svg
               className="w-16 h-16 mx-auto mb-4 opacity-50"
@@ -356,11 +343,10 @@ function StreamTile({ deviceId, deviceName, serialNumber, streamType, showDevice
         </div>
       )}
 
-      {/* Stream Label — hue on the edge only, so it reads over any video content */}
+      {/* Stream Label */}
       <div
-        className={`absolute ${showDeviceName ? 'top-7' : 'top-2'} left-2 px-2 py-0.5 rounded-md border-l-2
-                    bg-black/55 backdrop-blur-sm text-[11px] font-semibold uppercase tracking-[0.06em] text-white/90`}
-        style={{ borderLeftColor: streamHue(streamType) }}
+        className={`absolute ${showDeviceName ? 'top-7' : 'top-2'} left-2 px-2 py-0.5 rounded-md
+                    bg-black/55 backdrop-blur-sm text-[11px] font-semibold text-white/90`}
       >
         {streamType.toUpperCase()}
       </div>
@@ -392,10 +378,10 @@ function StreamTile({ deviceId, deviceName, serialNumber, streamType, showDevice
       {isDepthStream && hoverDepth && !showMetadata && (
         <div className="absolute bottom-2 left-2 bg-black/80 text-white text-xs px-2 py-1 rounded shadow pointer-events-none font-mono">
           <div>
-            <span className="text-gray-400">Pixel:</span> ({hoverDepth.x}, {hoverDepth.y})
+            <span className="text-rs-muted">Pixel:</span> ({hoverDepth.x}, {hoverDepth.y})
           </div>
           <div className="font-bold">
-            <span className="text-gray-400">Depth:</span>{' '}
+            <span className="text-rs-muted">Depth:</span>{' '}
             {hoverDepth.depth !== null ? `${hoverDepth.depth.toFixed(3)} m` : 'N/A'}
           </div>
         </div>
@@ -454,7 +440,7 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 bg-rs-inset/70 border-b border-rs-border">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-[11px] uppercase tracking-[0.06em] text-rs-text">
+          <span className="font-semibold text-[11px] text-rs-text">
             {streamType.toUpperCase()}
           </span>
           <span className="w-1.5 h-1.5 bg-rs-ok rounded-full animate-pulse" />
@@ -492,39 +478,9 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
           in a sparse stream grid the tile is taller than they are. */}
       <div className="flex-1 min-h-0 flex flex-col justify-center p-4">
         {showGraph ? (
-          // Lazy: recharts is a 384 kB chunk, and a tile only needs it once the user
-          // opens the graph. Numeric-only sessions never download it.
-          <Suspense
-            fallback={
-              <div className="h-44 max-h-full flex items-center justify-center text-xs text-rs-dim">
-                Loading graph…
-              </div>
-            }
-          >
-            <IMUChart data={chartSeries} axisFloor={axisFloor} />
-          </Suspense>
+          <IMUChart data={chartSeries} axisFloor={axisFloor} />
         ) : (
-          <>
-            <IMUOrientation sample={latest ?? null} unit={unit} />
-            {/* Exact per-axis values, which the wireframe alone cannot give. */}
-            <div className="mt-2 flex items-center justify-center gap-4 text-xs nums">
-              {latest ? (
-                <>
-                  <span className="text-red-400">
-                    X {latest.x.toFixed(3)} <span className="text-rs-dim">{unit}</span>
-                  </span>
-                  <span className="text-green-400">
-                    Y {latest.y.toFixed(3)} <span className="text-rs-dim">{unit}</span>
-                  </span>
-                  <span className="text-blue-400">
-                    Z {latest.z.toFixed(3)} <span className="text-rs-dim">{unit}</span>
-                  </span>
-                </>
-              ) : (
-                <span className="text-rs-dim">Waiting for data…</span>
-              )}
-            </div>
-          </>
+          <IMUOrientation sample={latest ?? null} unit={unit} />
         )}
       </div>
     </div>
@@ -545,11 +501,11 @@ export function MetadataOverlay({ streamType, metadata, fps }: MetadataOverlayPr
   const metadataUnavailable = metadata.clock_domain === 'system_time'
   return (
     <div className="absolute inset-0 overflow-y-auto bg-black/60 text-white text-xs z-10">
-      <div className="sticky top-0 px-3 py-2 bg-gray-800 font-semibold border-b border-gray-700">
+      <div className="sticky top-0 px-3 py-2 bg-rs-inset font-semibold border-b border-rs-border">
         Frame Metadata — {streamType.toUpperCase()}
       </div>
-      <div className="px-3 py-2 border-b border-gray-700 bg-gray-900/60">
-        <div className="text-gray-400 uppercase tracking-wide text-[10px] mb-1">Viewer Info</div>
+      <div className="px-3 py-2 border-b border-rs-border bg-rs-darker/60">
+        <div className="text-rs-muted uppercase tracking-wide text-[10px] mb-1">Viewer Info</div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 font-mono">
           <MetadataItem label="Frame Timestamp" value={metadata.timestamp} />
           <MetadataItem label="Clock Domain" value={metadata.clock_domain} />
@@ -605,7 +561,7 @@ export function MetadataPanel({ metadata, streamType, fps, show, onToggle, butto
         type="button"
         onClick={() => onToggle(!show)}
         title={show ? 'Hide frame metadata' : 'Show frame metadata'}
-        className={`px-2 py-0.5 bg-black/60 hover:bg-black/80 rounded text-xs text-white border border-gray-600 z-20 ${buttonClassName}`}
+        className={`px-2 py-0.5 bg-black/60 hover:bg-black/80 rounded text-xs text-white border border-rs-border z-20 ${buttonClassName}`}
       >
         {show ? '✕' : 'Metadata'}
       </button>
@@ -622,8 +578,8 @@ export function lessScreamy(key: string): string {
 export function MetadataItem({ label, value }: { label: string; value: ReactNode }) {
   if (value === undefined || value === null) return null
   return (
-    <div className="flex justify-between border-b border-gray-800/50 py-0.5">
-      <span className="text-gray-300 truncate pr-2">{label}</span>
+    <div className="flex justify-between border-b border-rs-border/50 py-0.5">
+      <span className="text-rs-muted truncate pr-2">{label}</span>
       <span className="text-right shrink-0">{value}</span>
     </div>
   )

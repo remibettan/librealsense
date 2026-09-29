@@ -14,8 +14,6 @@ import {
 import {
   IMU_AXES,
   IMU_CHART_LAYOUT,
-  IMU_CHART_REDRAW_MS,
-  imuPlotHeight,
   nextIMUAxisBound,
   zoomIMUAxisRange,
   type IMUAxisKey,
@@ -28,24 +26,12 @@ interface IMUChartProps {
   axisFloor: number
 }
 
-// Memoised: the tile above re-renders on every metadata frame — 200 Hz per motion
-// stream — while `data` only changes at the 50 ms sample cadence. Without this the
-// charts redraw a few hundred times a second and block the main thread long enough
-// for Socket.IO to drop the connection on a ping timeout.
-function IMUChart({ data: live, axisFloor }: IMUChartProps) {
+// Memoised: the tile re-renders on every motion frame, `data` only every 50 ms.
+function IMUChart({ data, axisFloor }: IMUChartProps) {
   const [hiddenAxes, setHiddenAxes] = useState<Record<string, boolean>>({})
   const [zoomRange, setZoomRange] = useState<[number, number] | null>(null)
   const [autoBound, setAutoBound] = useState(axisFloor)
   const plotRef = useRef<HTMLDivElement>(null)
-
-  // Redraw on a timer, not on every sample — see IMU_CHART_REDRAW_MS.
-  const liveRef = useRef(live)
-  liveRef.current = live
-  const [data, setData] = useState(live)
-  useEffect(() => {
-    const id = setInterval(() => setData(liveRef.current), IMU_CHART_REDRAW_MS)
-    return () => clearInterval(id)
-  }, [])
 
   const hasData = data.length > 0
 
@@ -66,7 +52,8 @@ function IMUChart({ data: live, axisFloor }: IMUChartProps) {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       const rect = el.getBoundingClientRect()
-      const plotHeight = imuPlotHeight(rect.height)
+      const plotHeight =
+        rect.height - IMU_CHART_LAYOUT.marginTop - IMU_CHART_LAYOUT.marginBottom - IMU_CHART_LAYOUT.axisHeight
       if (plotHeight <= 0) return
       const ratio = Math.min(
         1,

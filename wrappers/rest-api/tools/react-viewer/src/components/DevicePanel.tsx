@@ -707,32 +707,16 @@ function SensorPanel({
         </>
       }
       aside={
-        <button
-          onClick={() => isSensorStreaming ? onStopStreaming() : onStartStreaming()}
-          disabled={isSensorPending || (!canStartSensor && !isSensorStreaming)}
-          data-testid={isSensorStreaming ? "stop-streaming" : "start-streaming"}
+        // Switch + word, matching the C++ viewer's per-sensor control.
+        <ToggleSwitch
+          enabled={isSensorStreaming}
+          pending={isSensorPending}
+          disabled={!canStartSensor && !isSensorStreaming}
+          onToggle={() => isSensorStreaming ? onStopStreaming() : onStartStreaming()}
           title={isSensorPending ? 'Stopping...' : isSensorStreaming ? 'Stop' : 'Start'}
-          className="group flex items-center gap-1.5 disabled:cursor-not-allowed"
+          testId={isSensorStreaming ? 'stop-streaming' : 'start-streaming'}
         >
           <span className="sr-only">{isSensorStreaming ? 'Stop' : 'Start'}</span>
-          {/* Switch + word, matching the C++ viewer's per-sensor control. */}
-          <span
-            className={`relative w-8 h-4 rounded-full transition-colors ${
-              isSensorPending
-                ? 'bg-rs-warn/70 cursor-wait'
-                : isSensorStreaming
-                  ? 'bg-rs-blue'
-                  : canStartSensor
-                    ? 'bg-rs-border group-hover:bg-rs-dim'
-                    : 'bg-rs-border/50'
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white/90 transition-transform ${
-                isSensorStreaming ? 'translate-x-4' : ''
-              }`}
-            />
-          </span>
           <span
             className={`w-7 text-left text-xs font-semibold lowercase tracking-wide transition-colors ${
               isSensorPending
@@ -746,7 +730,7 @@ function SensorPanel({
           >
             {isSensorPending ? 'wait' : isSensorStreaming ? 'on' : 'off'}
           </span>
-        </button>
+        </ToggleSwitch>
       }
       belowHeader={sensorError && (
         <div className="mb-2 text-xs text-rs-err bg-rs-err/10 border border-rs-err/30 rounded px-2 py-1">
@@ -880,7 +864,7 @@ function StreamConfigItem({ config, sensor, onUpdate, disabled, isMotionSensor }
           data-testid={`toggle-stream-${config.stream_type.toLowerCase()}`}
         />
         {/* Same color whether or not the stream is selected; the checkbox carries that state. */}
-        <span className="text-xs font-bold uppercase tracking-[0.06em] min-w-[56px] text-rs-muted">
+        <span className="text-xs font-semibold min-w-[50px] text-rs-muted">
           {config.stream_type.toUpperCase()}
         </span>
       </label>

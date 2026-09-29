@@ -51,10 +51,9 @@ describe('static wireframe', () => {
   it('draws the three great circles as closed paths', () => {
     expect(WIRE_CIRCLES).toHaveLength(3)
     for (const path of WIRE_CIRCLES) {
-      const points = path.split('L')
-      expect(points.length).toBe(51)
-      // A great circle comes back to where it started.
-      expect(points[0].replace('M', '')).toBe(points[points.length - 1])
+      expect(path.split('L').length).toBe(50)
+      expect(path.startsWith('M')).toBe(true)
+      expect(path.endsWith('Z')).toBe(true)
     }
   })
 
