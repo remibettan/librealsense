@@ -55,10 +55,6 @@ if(BUILD_WITH_CUDA OR BUILD_WITH_HIP)
     include(${_rel_path}/cuda/CMakeLists.txt)
 endif()
 
-if(LRS_TRY_USE_AVX)
-    set_source_files_properties(image-avx.cpp PROPERTIES COMPILE_FLAGS -mavx2)
-endif()
-
 if(BUILD_SHARED_LIBS)
     target_sources(${LRS_TARGET} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/realsense.def")
 endif()
