@@ -50,75 +50,28 @@ jobs:
 
 
   #--------------------------------------------------------------------------------
-  Win_SH_EX_CfU:  # Windows, shared, with Examples & Tools, Check for Updates, no usage monitoring
+  Win_SH_EX:  # Windows, shared, with Examples & Tools
     runs-on: windows-2025
+    strategy:
+      matrix:
+        include:
+          - name: Win_SH_EX_CfU  # Check for Updates, no usage monitoring
+            cmake-options: -DCHECK_FOR_UPDATES=true -DENABLE_STATS=OFF
+          - name: Win_SH_EX_No_Logs  # no EasyLogging and no Check for Updates
+            cmake-options: -DCHECK_FOR_UPDATES=false -DBUILD_EASYLOGGINGPP=false
+    name: ${{ matrix.name }}
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
-    - name: Enable Long Paths
-      shell: powershell
-      run: |
-       New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+    - uses: ./.github/actions/build-windows
+      with:
+        cmake-options: >-
+          -DBUILD_SHARED_LIBS=true
+          -DBUILD_EXAMPLES=true
+          -DBUILD_TOOLS=true
+          ${{ matrix.cmake-options }}
 
-    - name: PreBuild
-      shell: bash
-      run: |
-       mkdir ${{env.WIN_BUILD_DIR}}
-    
-    - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      shell: bash
-      run: |        
-        LRS_SRC_DIR=$(pwd)
-        cd ${{env.WIN_BUILD_DIR}}
-        pwd
-        ls        
-        cmake ${LRS_SRC_DIR} -A x64 -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=true -DENABLE_STATS=OFF
-
-    - name: Build
-      # Build your program with the given configuration
-      shell: bash
-      run: |
-        cd ${{env.WIN_BUILD_DIR}}
-        cmake --build . --config ${{env.LRS_RUN_CONFIG}} -- -m
-
-  #--------------------------------------------------------------------------------
-  Win_SH_EX_No_Logs:  # Windows, shared, with Examples & Tools, no EasyLogging and no Check for Updates
-    runs-on: windows-2025
-    timeout-minutes: 60
-    steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
-
-    - name: Enable Long Paths
-      shell: powershell
-      run: |
-       New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-
-    - name: PreBuild
-      shell: bash
-      run: |
-       mkdir ${{env.WIN_BUILD_DIR}}
-    
-    - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      shell: bash
-      run: |        
-        LRS_SRC_DIR=$(pwd)
-        cd ${{env.WIN_BUILD_DIR}}
-        pwd
-        ls        
-        cmake ${LRS_SRC_DIR} -A x64 -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=false -DBUILD_EASYLOGGINGPP=false
-
-    - name: Build
-      # Build your program with the given configuration
-      shell: bash
-      run: |
-        cd ${{env.WIN_BUILD_DIR}}
-        cmake --build . --config ${{env.LRS_RUN_CONFIG}} -- -m    
-        
   #--------------------------------------------------------------------------------
   Win_ST_Py_CI:  # Windows, Static, Python, Tools, libCI with executables
     runs-on: windows-2025
@@ -129,32 +82,21 @@ jobs:
       with:
        python-version: '3.9'
 
-    - name: Enable Long Paths
-      shell: powershell
-      run: |
-       New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-
-    - name: PreBuild
+    - name: Install numpy
       shell: bash
-      run: |
-       mkdir ${{env.WIN_BUILD_DIR}}
-       python3 -m pip install numpy
+      run: python3 -m pip install numpy
 
-    - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      shell: bash
-      run: |        
-        LRS_SRC_DIR=$(pwd)
-        cd ${{env.WIN_BUILD_DIR}}
-        cmake ${LRS_SRC_DIR} -A x64 -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DUNIT_TESTS_ARGS="--not-live --context=windows" -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DBUILD_PYTHON_BINDINGS=true
-
-    - name: Build
-      # Build your program with the given configuration
-      shell: bash
-      run: |
-        cd ${{env.WIN_BUILD_DIR}}
-        cmake --build . --config ${{env.LRS_RUN_CONFIG}} -- -m
+    - uses: ./.github/actions/build-windows
+      with:
+        cmake-options: >-
+          -DBUILD_SHARED_LIBS=false
+          -DBUILD_EXAMPLES=false
+          -DBUILD_TOOLS=true
+          -DBUILD_UNIT_TESTS=true
+          -DUNIT_TESTS_ARGS="--not-live --context=windows"
+          -DCHECK_FOR_UPDATES=false
+          -DBUILD_WITH_DDS=false
+          -DBUILD_PYTHON_BINDINGS=true
 
     - name: LibCI
       # Note: requires BUILD_UNIT_TESTS or the executable C++ unit-tests won't run (and it won't complain)
@@ -177,9 +119,8 @@ jobs:
         cmake --build . --config Release -- -m
         ./Release/rs-all-client
 
-
   #--------------------------------------------------------------------------------
-  Win_SH_Py_DDS_CI:  # Windows, Shared, Python, Tools, DDS, libCI without executables
+  Win_SH_Py_DDS_CI:  # Windows, Shared, Python, Tools, DDS, security flags, libCI without executables
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
@@ -188,30 +129,21 @@ jobs:
       with:
        python-version: '3.9'
 
-    - name: Enable Long Paths
-      shell: powershell
-      run: |
-       New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-
-    - name: PreBuild
+    - name: Install numpy
       shell: bash
-      run: |
-       mkdir ${{env.WIN_BUILD_DIR}} 
-       python3 -m pip install numpy
+      run: python3 -m pip install numpy
 
-    - name: Configure CMake
-      shell: bash
-      run: |        
-        LRS_SRC_DIR=$(pwd)   
-        cd ${{env.WIN_BUILD_DIR}}
-        cmake ${LRS_SRC_DIR} -A x64 -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true
-
-    - name: Build
-      # Build your program with the given configuration
-      shell: bash
-      run: |
-        cd ${{env.WIN_BUILD_DIR}}
-        cmake --build . --config ${{env.LRS_RUN_CONFIG}} -- -m
+    - uses: ./.github/actions/build-windows
+      with:
+        cmake-options: >-
+          -DBUILD_SHARED_LIBS=true
+          -DBUILD_EXAMPLES=false
+          -DBUILD_TOOLS=true
+          -DBUILD_UNIT_TESTS=true
+          -DCHECK_FOR_UPDATES=false
+          -DBUILD_WITH_DDS=true
+          -DBUILD_PYTHON_BINDINGS=true
+          -DENABLE_SECURITY_FLAGS=true
 
     - name: LibCI
       shell: bash
@@ -224,77 +156,29 @@ jobs:
         python3 -m pip install -r unit-tests/requirements.txt
         python3 -m pytest unit-tests/ --color=no --debug -s --not-live --context "dds windows" --tag dds
 
-#--------------------------------------------------------------------------------
-  Win_SH_Py_DDS_SEC:  # Windows, Shared, Python, Tools, DDS, additional security checks
-    runs-on: windows-2025
-    timeout-minutes: 60
-    steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
-    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
-      with:
-       python-version: '3.9'
-
-    - name: Enable Long Paths
-      shell: powershell
-      run: |
-       New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-
-    - name: PreBuild
-      shell: bash
-      run: |
-       mkdir ${{env.WIN_BUILD_DIR}} 
-       python3 -m pip install numpy
-
-    - name: Configure CMake
-      shell: bash
-      run: |        
-        LRS_SRC_DIR=$(pwd)   
-        cd ${{env.WIN_BUILD_DIR}}
-        cmake ${LRS_SRC_DIR} -A x64 -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true -DENABLE_SECURITY_FLAGS=true
-
-    - name: Build
-      # Build your program with the given configuration
-      shell: bash
-      run: |
-        cd ${{env.WIN_BUILD_DIR}}
-        cmake --build . --config ${{env.LRS_RUN_CONFIG}} -- -m
-
-
   #--------------------------------------------------------------------------------
-  Win_SH_Py_RSUSB_Csharp:  # Windows, Shared, Python, RSUSB backend, C# bindings
+  Win_SH_Py_RSUSB_Csharp:  # Windows, Shared, Python, RSUSB backend, C# bindings, Debug build
     runs-on: windows-2025
     timeout-minutes: 60
-      
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
     - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 #v6.2.0
       with:
        python-version: '3.9'
 
-    - name: Enable Long Paths
-      shell: powershell
-      run: |
-       New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-
-    - name: PreBuild
-      shell: bash
-      run: |
-       mkdir ${{env.WIN_BUILD_DIR}}
-
-    - name: Configure CMake
-      shell: bash
-      run: |   
-        LRS_SRC_DIR=$(pwd)
-        cd ${{env.WIN_BUILD_DIR}}
-        cmake ${LRS_SRC_DIR} -A x64 -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DCHECK_FOR_UPDATES=false -DBUILD_PYTHON_BINDINGS=true -DFORCE_RSUSB_BACKEND=true -DBUILD_CSHARP_BINDINGS=true -DDOTNET_VERSION_LIBRARY="4.8" -DDOTNET_VERSION_EXAMPLES="4.8"
-
-    - name: Build
-      # Build your program with the given configuration
-      shell: bash
-      run: |
-        cd ${{env.WIN_BUILD_DIR}}
-        cmake --build . --config ${{env.LRS_BUILD_CONFIG}} -- -m    
-
+    - uses: ./.github/actions/build-windows
+      with:
+        config: ${{ env.LRS_BUILD_CONFIG }}
+        cmake-options: >-
+          -DBUILD_SHARED_LIBS=true
+          -DBUILD_EXAMPLES=false
+          -DBUILD_TOOLS=false
+          -DCHECK_FOR_UPDATES=false
+          -DBUILD_PYTHON_BINDINGS=true
+          -DFORCE_RSUSB_BACKEND=true
+          -DBUILD_CSHARP_BINDINGS=true
+          -DDOTNET_VERSION_LIBRARY="4.8"
+          -DDOTNET_VERSION_EXAMPLES="4.8"
 
   #--------------------------------------------------------------------------------
   U22_U24_ST_Py_EX_CfU:  # Ubuntu, Static, Python, Examples & Tools, Check for Updates
@@ -333,15 +217,32 @@ jobs:
           -DPYTHON_EXECUTABLE=$(which python3)
 
   #--------------------------------------------------------------------------------
-  U22_SH_Py_CI:  # Ubuntu 2020, Shared, Python, LibCI with executables, no usage monitoring
-    runs-on: ubuntu-22.04
+  U22_U26_SH_Py_CI:  # Ubuntu, Shared, Python, LibCI with executables
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: U22_SH_Py_CI  # no usage monitoring
+            cmake-options: -DENABLE_STATS=OFF
+          - os: ubuntu-26.04
+            name: U26_SH_Py_CI_SYS_JSON  # system provided nlohmann_json library
+            apt-packages: nlohmann-json3-dev
+            cmake-options: -DUSE_EXTERNAL_NLOHMANN_JSON=ON
+    name: ${{ matrix.name }}
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
     - uses: ./.github/actions/install-linux-deps
       with:
+        apt-packages: ${{ matrix.apt-packages }}
         pip-packages: numpy
+
+    - name: Show system nlohmann_json version
+      if: matrix.os == 'ubuntu-26.04'
+      shell: bash
+      run: dpkg -s nlohmann-json3-dev | grep "Package\|Version" | xargs
 
     - uses: ./.github/actions/build-linux
       with:
@@ -353,53 +254,9 @@ jobs:
           -DBUILD_PYTHON_BINDINGS=true
           -DBUILD_WITH_DDS=false
           -DCHECK_FOR_UPDATES=false
-          -DENABLE_STATS=OFF
           -DPYTHON_EXECUTABLE=$(which python3)
           -DUNIT_TESTS_ARGS="--not-live --context=linux"
-
-    - name: LibCI
-      # Note: requires BUILD_UNIT_TESTS or the executable C++ unit-tests won't run (and it won't complain)
-      shell: bash
-      run: |
-        python3 unit-tests/run-unit-tests.py --no-color --debug --stdout --not-live --context "linux"
-
-    - name: LibCI (pytest)
-      shell: bash
-      run: |
-        python3 -m pip install -r unit-tests/requirements.txt
-        python3 -m pytest unit-tests/ --color=no --debug -s --not-live --context "linux"
-
-  #--------------------------------------------------------------------------------
-  U26_SH_Py_CI_SYS_JSON:  # Ubuntu 26.04, Shared, Python, LibCI with executables and system provided nlohmann_json library
-    runs-on: ubuntu-26.04
-    timeout-minutes: 60
-    steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
-
-    - uses: ./.github/actions/install-linux-deps
-      with:
-        apt-packages: nlohmann-json3-dev
-        pip-packages: numpy
-
-    - name: Specific check
-      shell: bash
-      run: |
-        # for debugging purpose
-        dpkg -s nlohmann-json3-dev | grep "Package\|Version" | xargs
-
-    - uses: ./.github/actions/build-linux
-      with:
-        cmake-options: >-
-          -DBUILD_EXAMPLES=false
-          -DBUILD_PYTHON_BINDINGS=true
-          -DBUILD_SHARED_LIBS=true
-          -DBUILD_TOOLS=true
-          -DBUILD_UNIT_TESTS=true
-          -DBUILD_WITH_DDS=false
-          -DCHECK_FOR_UPDATES=false
-          -DPYTHON_EXECUTABLE=$(which python3)
-          -DUNIT_TESTS_ARGS="--not-live --context=linux"
-          -DUSE_EXTERNAL_NLOHMANN_JSON=ON
+          ${{ matrix.cmake-options }}
 
     - name: LibCI
       # Note: requires BUILD_UNIT_TESTS or the executable C++ unit-tests won't run (and it won't complain)
@@ -501,25 +358,6 @@ jobs:
       run: |
         python3 -m pip install -r unit-tests/requirements.txt
         python3 -m pytest unit-tests/ --color=no --debug -s --not-live --context "dds linux" --tag dds
-
-  #--------------------------------------------------------------------------------
-  U-Latest_ST_Py_EX_CfU:  # Ubuntu latest, Static, Python, Examples & Tools, Check for Updates
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
-
-    - uses: ./.github/actions/install-linux-deps
-
-    - uses: ./.github/actions/build-linux
-      with:
-        cmake-options: >-
-          -DBUILD_EXAMPLES=true
-          -DBUILD_PYTHON_BINDINGS=true
-          -DBUILD_SHARED_LIBS=false
-          -DBUILD_TOOLS=true
-          -DCHECK_FOR_UPDATES=true
-          -DPYTHON_EXECUTABLE=$(which python3)
 
   #--------------------------------------------------------------------------------
   
