@@ -150,6 +150,8 @@ void dds_device::impl::reset()
     _device_options_received = false;
     _options.clear();
     _extrinsics_map.clear();
+    // Streams are gone, so profiles opened on them are stale and must not be re-sent on the next close()
+    _open_profiles_list.clear();
     if( _metadata_reader )
         _metadata_reader->stop();
     _metadata_reader.reset();
