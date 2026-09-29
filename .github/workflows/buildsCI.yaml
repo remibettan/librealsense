@@ -64,7 +64,7 @@ jobs:
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
-    - uses: ./.github/actions/build-windows
+    - uses: ./.github/actions/windows-build
       with:
         cmake-options: >-
           -DBUILD_SHARED_LIBS=true
@@ -86,7 +86,7 @@ jobs:
       shell: bash
       run: python3 -m pip install numpy
 
-    - uses: ./.github/actions/build-windows
+    - uses: ./.github/actions/windows-build
       with:
         cmake-options: >-
           -DBUILD_SHARED_LIBS=false
@@ -133,7 +133,7 @@ jobs:
       shell: bash
       run: python3 -m pip install numpy
 
-    - uses: ./.github/actions/build-windows
+    - uses: ./.github/actions/windows-build
       with:
         cmake-options: >-
           -DBUILD_SHARED_LIBS=true
@@ -166,7 +166,7 @@ jobs:
       with:
        python-version: '3.9'
 
-    - uses: ./.github/actions/build-windows
+    - uses: ./.github/actions/windows-build
       with:
         config: ${{ env.LRS_BUILD_CONFIG }}
         cmake-options: >-
@@ -179,6 +179,24 @@ jobs:
           -DBUILD_CSHARP_BINDINGS=true
           -DDOTNET_VERSION_LIBRARY="4.8"
           -DDOTNET_VERSION_EXAMPLES="4.8"
+
+  #--------------------------------------------------------------------------------
+  Win_ARM64_SH:  # Windows ARM64, shared, library only
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+
+    - uses: ./.github/actions/windows-build
+      with:
+        arch: ARM64
+        target: realsense2
+        cmake-options: >-
+          -DBUILD_SHARED_LIBS=true
+          -DBUILD_EXAMPLES=false
+          -DBUILD_TOOLS=false
+          -DCHECK_FOR_UPDATES=false
+          -DENABLE_STATS=OFF
 
   #--------------------------------------------------------------------------------
   U22_U24_ST_Py_EX_CfU:  # Ubuntu, Static, Python, Examples & Tools, Check for Updates
@@ -204,7 +222,7 @@ jobs:
 
     - uses: ./.github/actions/install-linux-deps
 
-    - uses: ./.github/actions/build-linux
+    - uses: ./.github/actions/linux-build
       # Adding -DENABLE_SECURITY_FLAGS=true here to also check examples and tools. See RSDSO-RSDSO-20629.
       with:
         cmake-options: >-
@@ -244,7 +262,7 @@ jobs:
       shell: bash
       run: dpkg -s nlohmann-json3-dev | grep "Package\|Version" | xargs
 
-    - uses: ./.github/actions/build-linux
+    - uses: ./.github/actions/linux-build
       with:
         cmake-options: >-
           -DBUILD_SHARED_LIBS=true
@@ -281,7 +299,7 @@ jobs:
       with:
         pip-packages: numpy
 
-    - uses: ./.github/actions/build-linux
+    - uses: ./.github/actions/linux-build
       # Note: we force RSUSB because, on Linux, the context creation will fail on GHA:
       #     (backend-v4l2.cpp:555) Cannot access /sys/class/video4linux)
       # And, well, we don't need any specific platform for DDS!
@@ -334,7 +352,7 @@ jobs:
       with:
         apt-packages: python3-numpy
 
-    - uses: ./.github/actions/build-linux
+    - uses: ./.github/actions/linux-build
       # Adding -DENABLE_SECURITY_FLAGS=true here to also check DDS. See RSDSO-RSDSO-20629.
       with:
         cmake-options: >-
@@ -423,7 +441,7 @@ jobs:
 
     - uses: ./.github/actions/install-linux-deps
 
-    - uses: ./.github/actions/build-linux
+    - uses: ./.github/actions/linux-build
       with:
         cmake-options: >-
           -DBUILD_EXAMPLES=false

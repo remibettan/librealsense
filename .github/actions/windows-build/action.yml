@@ -1,0 +1,44 @@
+name: Build on Windows
+description: Enable long paths, configure with CMake in WIN_BUILD_DIR and build
+
+inputs:
+  cmake-options:
+    description: CMake options, one per line
+    default: ""
+  arch:
+    description: Generator platform passed to cmake -A
+    default: x64
+  config:
+    description: Build configuration (Release, Debug, ...); defaults to LRS_RUN_CONFIG
+    default: ""
+  target:
+    description: Build target
+    default: ALL_BUILD
+
+runs:
+  using: composite
+
+  steps:
+    - name: Enable Long Paths
+      shell: powershell
+      run: |
+        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+
+    - name: Configure CMake
+      shell: bash
+      # cmake-options is interpolated into the script on purpose so it can hold quoted values.
+      # This is a local action: inputs come only from workflow files in this repo. Never pass untrusted input here.
+      run: |
+        LRS_SRC_DIR=$(pwd)
+        mkdir -p ${{env.WIN_BUILD_DIR}}
+        cd ${{env.WIN_BUILD_DIR}}
+        cmake ${LRS_SRC_DIR} -A ${{ inputs.arch }} ${{ inputs.cmake-options }}
+
+    - name: Build
+      shell: bash
+      env:
+        CONFIG: ${{ inputs.config || env.LRS_RUN_CONFIG }}
+        TARGET: ${{ inputs.target }}
+      run: |
+        cd ${{env.WIN_BUILD_DIR}}
+        cmake --build . --config "$CONFIG" --target "$TARGET" -- -m
