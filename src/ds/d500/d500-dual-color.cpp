@@ -140,9 +140,8 @@ namespace librealsense
                 continue;
             if( with_depth_or_ir && p->get_framerate() > max_combined_fps )
                 throw wrong_api_call_sequence_exception( rsutils::string::from()
-                    << "Depth/Infrared and Color cannot stream together above " << max_combined_fps << " FPS"
-                    << ( full_passive ? "" : " unless Passive Depth mode is 'Full'" )
-                    << " (" << stream_name( *p ) << " requested " << p->get_framerate() << " FPS)" );
+                    << "Depth/Infrared and Color cannot stream together above " << max_combined_fps
+                    << " FPS (" << stream_name( *p ) << " requested " << p->get_framerate() << " FPS)" );
             if( ! first )
                 first = p.get();
             else if( p->get_framerate() != first->get_framerate() )
