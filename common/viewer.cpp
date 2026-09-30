@@ -2096,10 +2096,12 @@ namespace rs2
     void viewer_model::sample_ruler_pixels( const rs2::video_frame & depth, const rs2::video_frame & colorized,
                                             std::vector< rgb_per_distance > & colors, std::vector< float > & distances )
     {
-        if( RS2_FORMAT_RGB8 != colorized.get_profile().format() )
-            return;
         auto width = depth.get_width();
         auto height = depth.get_height();
+        // The colorized pixels are indexed by depth position, so the two must be the same size
+        if( RS2_FORMAT_RGB8 != colorized.get_profile().format()
+            || colorized.get_width() != width || colorized.get_height() != height )
+            return;
         auto depth_data = static_cast< const uint16_t * >( depth.get_data() );
         auto colorized_data = static_cast< const uint8_t * >( colorized.get_data() );
         // Take the scale off the frame, like the colorizer does: sensors that don't
@@ -2134,7 +2136,7 @@ namespace rs2
                                []( rs2_option o ) { return o == RS2_OPTION_VISUAL_PRESET; } );
         for( auto option : options )
         {
-            if( from.is_option_read_only( option ) || ! to.supports( option ) )
+            if( from.is_option_read_only( option ) || ! to.supports( option ) || to.is_option_read_only( option ) )
                 continue;
             auto value = from.get_option( option );
             if( to.get_option( option ) != value )
@@ -4237,12 +4239,10 @@ namespace rs2
     // UI iteration. Keying the passive class apart keeps the latest of each, so neither tile starves.
     int viewer_model::last_frames_key( const rs2::frame & f, int profile_id )
     {
-        auto origin = streams_origin.find( profile_id );
-        if( origin == streams_origin.end() )
-            return profile_id;
         {
             std::lock_guard< std::mutex > lock( streams_mutex );
-            if( ! passive_streams.count( origin->second ) )
+            auto origin = streams_origin.find( profile_id );
+            if( origin == streams_origin.end() || ! passive_streams.count( origin->second ) )
                 return profile_id;
         }
         return is_passive_frame( f ) ? profile_id + PASSIVE_STREAM_KEY_OFFSET : profile_id;
