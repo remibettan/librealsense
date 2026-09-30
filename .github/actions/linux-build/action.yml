@@ -3,7 +3,7 @@ description: Configure with CMake in a build directory and build
 
 inputs:
   cmake-options:
-    description: CMake options, one per line; shell expressions such as $(which python3) are expanded
+    description: CMake options, one per line
     default: ""
 
 runs:
@@ -12,14 +12,13 @@ runs:
   steps:
     - name: Configure CMake
       shell: bash
-      # cmake-options is interpolated into the script on purpose so $(...) inside it is expanded by the shell.
-      # This is a local action: inputs come only from workflow files in this repo. Never pass untrusted input here.
+      env:
+        CMAKE_OPTIONS: ${{ inputs.cmake-options }}
+      # xargs splits the options like a shell would, so quoted values such as -DFOO="a b" stay one argument
       run: |
         mkdir -p build
         cd build
-        cmake .. \
-          -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} \
-          ${{ inputs.cmake-options }}
+        printf '%s\n' "$CMAKE_OPTIONS" | xargs cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}}
 
     - name: Build
       shell: bash

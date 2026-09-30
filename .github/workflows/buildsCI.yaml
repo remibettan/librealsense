@@ -232,7 +232,6 @@ jobs:
           -DBUILD_TOOLS=true
           -DCHECK_FOR_UPDATES=true
           -DENABLE_SECURITY_FLAGS=true
-          -DPYTHON_EXECUTABLE=$(which python3)
 
   #--------------------------------------------------------------------------------
   U22_U26_SH_Py_CI:  # Ubuntu, Shared, Python, LibCI with executables
@@ -272,7 +271,6 @@ jobs:
           -DBUILD_PYTHON_BINDINGS=true
           -DBUILD_WITH_DDS=false
           -DCHECK_FOR_UPDATES=false
-          -DPYTHON_EXECUTABLE=$(which python3)
           -DUNIT_TESTS_ARGS="--not-live --context=linux"
           ${{ matrix.cmake-options }}
 
@@ -314,7 +312,6 @@ jobs:
           -DCHECK_FOR_UPDATES=false
           -DENABLE_SECURITY_FLAGS=true
           -DFORCE_RSUSB_BACKEND=true
-          -DPYTHON_EXECUTABLE=$(which python3)
 
     - name: Client for realsense2-all
       shell: bash
@@ -364,7 +361,6 @@ jobs:
           -DBUILD_WITH_DDS=true
           -DCHECK_FOR_UPDATES=false
           -DENABLE_SECURITY_FLAGS=true
-          -DPYTHON_EXECUTABLE=$(which python3)
 
     - name: LibCI
       shell: bash

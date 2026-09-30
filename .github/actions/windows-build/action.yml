@@ -26,13 +26,15 @@ runs:
 
     - name: Configure CMake
       shell: bash
-      # cmake-options is interpolated into the script on purpose so it can hold quoted values.
-      # This is a local action: inputs come only from workflow files in this repo. Never pass untrusted input here.
+      env:
+        ARCH: ${{ inputs.arch }}
+        CMAKE_OPTIONS: ${{ inputs.cmake-options }}
+      # xargs splits the options like a shell would, so quoted values such as -DFOO="a b" stay one argument
       run: |
         LRS_SRC_DIR=$(pwd)
         mkdir -p ${{env.WIN_BUILD_DIR}}
         cd ${{env.WIN_BUILD_DIR}}
-        cmake ${LRS_SRC_DIR} -A ${{ inputs.arch }} ${{ inputs.cmake-options }}
+        printf '%s\n' "$CMAKE_OPTIONS" | xargs cmake ${LRS_SRC_DIR} -A "$ARCH"
 
     - name: Build
       shell: bash
