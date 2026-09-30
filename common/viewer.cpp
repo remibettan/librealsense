@@ -1707,14 +1707,14 @@ namespace rs2
 
                         if (frame.is< points >() || streams.find(profile_id) != streams.end())
                         {
-                            last_frames[profile_id] = frame;
+                            last_frames[last_frames_key( frame, profile_id )] = frame;
                             continue;
                         }
 
                         auto stream_origin_iter = streams_origin.find(profile_id);
                         if( (stream_origin_iter != streams_origin.end() && streams.find( stream_origin_iter->second ) != streams.end() ))
                         {
-                            last_frames[ profile_id ] = frame;
+                            last_frames[last_frames_key( frame, profile_id )] = frame;
                         }
                     }
                 }
@@ -1724,14 +1724,14 @@ namespace rs2
 
                     if (f.is< points >() || streams.find(profile_id) != streams.end())
                     {
-                        last_frames[profile_id] = f;
+                        last_frames[last_frames_key( f, profile_id )] = f;
                         continue;
                     }
 
                     auto stream_origin_iter = streams_origin.find(profile_id);
                     if ((stream_origin_iter != streams_origin.end() && streams.find(stream_origin_iter->second) != streams.end()))
                     {
-                        last_frames[profile_id] = f;
+                        last_frames[last_frames_key( f, profile_id )] = f;
                     }
                 }
             }
@@ -4179,6 +4179,21 @@ namespace rs2
     {
         return f.supports_frame_metadata( RS2_FRAME_METADATA_FRAME_EMITTER_MODE )
             && f.get_frame_metadata( RS2_FRAME_METADATA_FRAME_EMITTER_MODE ) == RS2_EMITTER_MODE_OFF;
+    }
+
+    // A split stream delivers both exposure classes on one profile, and several frames can arrive in one
+    // UI iteration. Keying the passive class apart keeps the latest of each, so neither tile starves.
+    int viewer_model::last_frames_key( const rs2::frame & f, int profile_id )
+    {
+        auto origin = streams_origin.find( profile_id );
+        if( origin == streams_origin.end() )
+            return profile_id;
+        {
+            std::lock_guard< std::mutex > lock( streams_mutex );
+            if( ! passive_streams.count( origin->second ) )
+                return profile_id;
+        }
+        return is_passive_frame( f ) ? profile_id + PASSIVE_STREAM_KEY_OFFSET : profile_id;
     }
 
     std::shared_ptr< subdevice_model > viewer_model::get_frame_subdevice( rs2::frame const & frame ) const
