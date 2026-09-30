@@ -1,23 +1,25 @@
 import { useState } from 'react'
-import type { ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
+
+type ToggleSwitchProps = { enabled: boolean } & ButtonHTMLAttributes<HTMLButtonElement>
 
 /** How the three levels of the controls tree are drawn: sensor, section, group. */
 const VARIANTS = {
   sensor: {
-    className: 'bg-gray-800/50 rounded-lg px-2 py-1',
+    className: 'bg-rs-inset/70 border border-rs-border/60 rounded-lg px-2 py-1',
     headerClassName: 'flex items-center justify-between',
     toggleClassName: 'flex items-center gap-2 flex-1 min-w-0 text-left',
     chevronClassName: 'w-3 h-3',
   },
   section: {
-    className: 'border border-gray-700 rounded overflow-hidden',
-    headerClassName: 'flex items-center bg-gray-750 hover:bg-gray-700 transition-colors',
+    className: 'border border-rs-border rounded overflow-hidden',
+    headerClassName: 'flex items-center bg-rs-inset hover:bg-rs-border/50 transition-colors',
     toggleClassName: 'flex-1 flex items-center gap-1.5 p-1.5 min-w-0 text-left',
     chevronClassName: 'w-3 h-3',
   },
   group: {
-    className: 'border border-gray-600 rounded overflow-hidden',
-    headerClassName: 'flex items-center justify-between p-1.5 bg-gray-700/50 hover:bg-gray-700 transition-colors',
+    className: 'border border-rs-border rounded overflow-hidden',
+    headerClassName: 'flex items-center justify-between p-1.5 bg-rs-inset/80 hover:bg-rs-border/50 transition-colors',
     toggleClassName: 'flex items-center gap-1.5 flex-1 min-w-0 text-left',
     chevronClassName: 'w-2.5 h-2.5',
   },
@@ -60,12 +62,14 @@ export function Collapsible({ variant, label, aside, belowHeader, forcedOpen, ch
 }
 
 /** On/off pill switch, sized to sit in a collapsible header as its `aside`. */
-export function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
+export function ToggleSwitch({ enabled, className = '', ...buttonProps }: ToggleSwitchProps) {
   return (
     <button
-      onClick={onToggle}
       aria-pressed={enabled}
-      className={`relative w-8 h-4 rounded-full transition-colors ${enabled ? 'bg-rs-blue' : 'bg-gray-600'}`}
+      className={`relative w-8 h-4 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        enabled ? 'bg-rs-blue' : 'bg-rs-border'
+      } ${className}`}
+      {...buttonProps}
     >
       <span
         className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
@@ -80,7 +84,7 @@ export function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle
 function CollapseChevron({ isOpen, className }: { isOpen: boolean; className: string }) {
   return (
     <svg
-      className={`${className} shrink-0 text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+      className={`${className} shrink-0 text-rs-dim transition-transform ${isOpen ? 'rotate-90' : ''}`}
       fill="none" stroke="currentColor" viewBox="0 0 24 24"
     >
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
