@@ -7,6 +7,7 @@ import {
   motionVector,
   projectIMU,
 } from '@/utils/imuOrientation'
+import { IMU_AXES } from '@/utils/imuChart'
 
 // The reference is the C++ viewer's on-screen layout (common/rendering.h
 // draw_motion_data): +X points up and left, +Z down and left, +Y straight down, and
@@ -59,7 +60,8 @@ describe('static wireframe', () => {
 
   it('gives every axis a line and two arrowhead triangles', () => {
     expect(AXES.map((a) => a.key)).toEqual(['x', 'y', 'z'])
-    expect(AXES.map((a) => a.color)).toEqual(['#ff0000', '#00ff00', '#0000ff'])
+    // Same colors as the graph, so the tile shows one red, one green, one blue.
+    expect(AXES.map((a) => a.color)).toEqual(IMU_AXES.slice(0, 3).map((a) => a.color))
     for (const axis of AXES) {
       expect(axis.heads).toHaveLength(2)
       for (const head of axis.heads) expect(head.endsWith('Z')).toBe(true)

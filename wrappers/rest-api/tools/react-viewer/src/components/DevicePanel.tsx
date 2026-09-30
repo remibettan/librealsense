@@ -256,7 +256,7 @@ export function DevicePanel() {
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="panel-header mb-0 text-3xl tracking-tight">Devices</h2>
+        <h2 className="panel-header mb-0">Devices</h2>
         <button
           onClick={() => fetchDevices(true)}
           disabled={isLoadingDevices}
@@ -707,30 +707,13 @@ function SensorPanel({
         </>
       }
       aside={
-        // Switch + word, matching the C++ viewer's per-sensor control.
         <ToggleSwitch
           enabled={isSensorStreaming}
-          pending={isSensorPending}
-          disabled={!canStartSensor && !isSensorStreaming}
-          onToggle={() => isSensorStreaming ? onStopStreaming() : onStartStreaming()}
-          title={isSensorPending ? 'Stopping...' : isSensorStreaming ? 'Stop' : 'Start'}
-          testId={isSensorStreaming ? 'stop-streaming' : 'start-streaming'}
-        >
-          <span className="sr-only">{isSensorStreaming ? 'Stop' : 'Start'}</span>
-          <span
-            className={`w-7 text-left text-xs font-semibold lowercase tracking-wide transition-colors ${
-              isSensorPending
-                ? 'text-rs-warn'
-                : isSensorStreaming
-                  ? 'text-rs-accent'
-                  : canStartSensor
-                    ? 'text-rs-dim group-hover:text-rs-muted'
-                    : 'text-rs-dim/60'
-            }`}
-          >
-            {isSensorPending ? 'wait' : isSensorStreaming ? 'on' : 'off'}
-          </span>
-        </ToggleSwitch>
+          disabled={isSensorPending || (!canStartSensor && !isSensorStreaming)}
+          onClick={() => (isSensorStreaming ? onStopStreaming() : onStartStreaming())}
+          title={isSensorStreaming ? 'Stop' : 'Start'}
+          data-testid={isSensorStreaming ? 'stop-streaming' : 'start-streaming'}
+        />
       }
       belowHeader={sensorError && (
         <div className="mb-2 text-xs text-rs-err bg-rs-err/10 border border-rs-err/30 rounded px-2 py-1">
@@ -984,7 +967,7 @@ function ControlSection({
           )}
           {sectionSwitch && (
             <span className="pr-1">
-              <ToggleSwitch enabled={sectionSwitch.enabled} onToggle={sectionSwitch.onToggle} />
+              <ToggleSwitch enabled={sectionSwitch.enabled} onClick={sectionSwitch.onToggle} />
             </span>
           )}
         </>
@@ -1008,7 +991,7 @@ function ControlSection({
               aside={group.enabled !== undefined && (
                 <ToggleSwitch
                   enabled={group.enabled}
-                  onToggle={() => onToggleGroup(key, !group.enabled)}
+                  onClick={() => onToggleGroup(key, !group.enabled)}
                 />
               )}
             >

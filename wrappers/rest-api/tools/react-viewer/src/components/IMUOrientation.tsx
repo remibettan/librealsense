@@ -10,7 +10,6 @@ import {
   motionVector,
   type Vec3,
 } from '../utils/imuOrientation'
-import { IMU_AXES } from '../utils/imuChart'
 
 interface IMUOrientationProps {
   sample: Vec3 | null
@@ -76,9 +75,9 @@ function IMUOrientation({ sample, unit }: IMUOrientationProps) {
       </div>
       <div className="mt-2 flex items-center justify-center gap-4 text-xs nums">
         {sample ? (
-          IMU_AXES.filter(({ key }) => key !== 'n').map(({ key, color }) => (
+          AXES.map(({ key, color }) => (
             <span key={key} style={{ color }}>
-              {key.toUpperCase()} {sample[key as 'x' | 'y' | 'z'].toFixed(3)}{' '}
+              {key.toUpperCase()} {sample[key].toFixed(3)}{' '}
               <span className="text-rs-dim">{unit}</span>
             </span>
           ))

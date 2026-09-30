@@ -1,13 +1,6 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2026 RealSense, Inc. All Rights Reserved.
 
-export interface IMUSample {
-  timestamp: number
-  x: number
-  y: number
-  z: number
-}
-
 export interface IMUChartPoint {
   t: number
   x: number
@@ -24,20 +17,30 @@ export const IMU_HISTORY_SIZE = 300
 export const imuMagnitude = (s: { x: number; y: number; z: number }) =>
   Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2)
 
-// Plotted against time, so old samples keep their x as the window slides. Zeros
-// back-dated at the sample cadence fill the window, as graph_model::clear() does,
-// so the trace scrolls in from the right instead of stretching across the plot.
-export function toIMUChartSeries(samples: IMUSample[]): IMUChartPoint[] {
-  const first = samples[0]?.timestamp ?? 0
-  const padding = samples.length === 0 ? 0 : IMU_HISTORY_SIZE - samples.length
-  const zeros = Array.from({ length: padding }, (_, i) => ({
-    t: first - (padding - i) * IMU_SAMPLE_INTERVAL_MS, x: 0, y: 0, z: 0, n: 0,
-  }))
-  return [...zeros, ...samples.map((s) => ({ t: s.timestamp, x: s.x, y: s.y, z: s.z, n: imuMagnitude(s) }))]
+// Adds one sample to a tile's graph window, keeping one per IMU_SAMPLE_INTERVAL_MS
+// (motion frames arrive at up to 400 Hz); returns `points` itself when throttled.
+// The first sample fills the window with zeros back-dated at that cadence, as
+// graph_model::clear() does, so the trace scrolls in from the right. Points are
+// plotted against time, so a point keeps its x as the window slides.
+export function appendIMUPoint(
+  points: IMUChartPoint[],
+  sample: { x: number; y: number; z: number },
+  now: number,
+): IMUChartPoint[] {
+  const last = points[points.length - 1]
+  if (last && now - last.t < IMU_SAMPLE_INTERVAL_MS) return points
+  const point = { t: now, x: sample.x, y: sample.y, z: sample.z, n: imuMagnitude(sample) }
+  if (!last) {
+    const zeros = Array.from({ length: IMU_HISTORY_SIZE - 1 }, (_, i) => ({
+      t: now - (IMU_HISTORY_SIZE - 1 - i) * IMU_SAMPLE_INTERVAL_MS, x: 0, y: 0, z: 0, n: 0,
+    }))
+    return [...zeros, point]
+  }
+  return [...points.slice(1), point]
 }
 
 // The plotted series, matching the C++ viewer's graph (common/graph-model.cpp): the
-// three axes in the colors used for the X/Y/Z bars elsewhere, plus the magnitude.
+// three axes, plus the magnitude. The orientation view uses the same axis colors.
 export const IMU_AXES = [
   { key: 'x', color: '#ef4444' },
   { key: 'y', color: '#22c55e' },

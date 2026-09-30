@@ -30,7 +30,6 @@ interface IMUChartProps {
 function IMUChart({ data, axisFloor }: IMUChartProps) {
   const [hiddenAxes, setHiddenAxes] = useState<Record<string, boolean>>({})
   const [zoomRange, setZoomRange] = useState<[number, number] | null>(null)
-  const [autoBound, setAutoBound] = useState(axisFloor)
   const plotRef = useRef<HTMLDivElement>(null)
 
   const hasData = data.length > 0
@@ -40,11 +39,10 @@ function IMUChart({ data, axisFloor }: IMUChartProps) {
     [hiddenAxes],
   )
 
-  useEffect(() => {
-    setAutoBound((current) => nextIMUAxisBound(data, current, axisFloor, visibleAxes))
-  }, [data, axisFloor, visibleAxes])
-
-  const autoBoundRef = useRef(autoBound)
+  // Computed during render, not in an effect, so a new sample draws once. The ref
+  // carries the previous bound for the hysteresis and feeds the wheel handler.
+  const autoBoundRef = useRef(axisFloor)
+  const autoBound = nextIMUAxisBound(data, autoBoundRef.current, axisFloor, visibleAxes)
   autoBoundRef.current = autoBound
   useEffect(() => {
     const el = plotRef.current

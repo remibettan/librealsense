@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   imuMagnitude,
   nextIMUAxisBound,
-  toIMUChartSeries,
+  appendIMUPoint,
   zoomIMUAxisRange,
   IMU_AXES,
   IMU_HISTORY_SIZE,
@@ -13,40 +13,33 @@ import {
 const point = (t: number, x: number, y = 0, z = 0): IMUChartPoint =>
   ({ t, x, y, z, n: imuMagnitude({ x, y, z }) })
 
-describe('toIMUChartSeries', () => {
-  it('keys points on the sample timestamp, not the array index', () => {
-    const series = toIMUChartSeries([
-      { timestamp: 1_000, x: 1, y: 2, z: 3 },
-      { timestamp: 1_050, x: 4, y: 5, z: 6 },
-    ])
-    expect(series.slice(-2)).toEqual([
-      { t: 1_000, x: 1, y: 2, z: 3, n: Math.sqrt(14) },
-      { t: 1_050, x: 4, y: 5, z: 6, n: Math.sqrt(77) },
-    ])
-  })
+describe('appendIMUPoint', () => {
+  const sample = (x: number) => ({ x, y: 0, z: 0 })
 
-  it('pads a short history to a full window of back-dated zeros', () => {
-    const series = toIMUChartSeries([{ timestamp: 20_000, x: 1, y: 0, z: 0 }])
-    expect(series).toHaveLength(IMU_HISTORY_SIZE)
-    expect(series[0]).toEqual({
+  it('fills the window with back-dated zeros on the first sample', () => {
+    const points = appendIMUPoint([], { x: 1, y: 2, z: 2 }, 20_000)
+    expect(points).toHaveLength(IMU_HISTORY_SIZE)
+    expect(points[0]).toEqual({
       t: 20_000 - (IMU_HISTORY_SIZE - 1) * IMU_SAMPLE_INTERVAL_MS, x: 0, y: 0, z: 0, n: 0,
     })
-    expect(series[IMU_HISTORY_SIZE - 2].t).toBe(20_000 - IMU_SAMPLE_INTERVAL_MS)
+    expect(points[IMU_HISTORY_SIZE - 2].t).toBe(20_000 - IMU_SAMPLE_INTERVAL_MS)
+    expect(points[IMU_HISTORY_SIZE - 1]).toEqual({ t: 20_000, x: 1, y: 2, z: 2, n: 3 })
   })
 
-  it('draws nothing until the first sample arrives', () => {
-    expect(toIMUChartSeries([])).toEqual([])
+  it('keeps one sample per interval and returns the same window otherwise', () => {
+    const first = appendIMUPoint([], sample(1), 1_000)
+    expect(appendIMUPoint(first, sample(2), 1_000 + IMU_SAMPLE_INTERVAL_MS - 1)).toBe(first)
+
+    const next = appendIMUPoint(first, sample(3), 1_000 + IMU_SAMPLE_INTERVAL_MS)
+    expect(next).toHaveLength(IMU_HISTORY_SIZE)
+    expect(next[IMU_HISTORY_SIZE - 1].x).toBe(3)
   })
 
-  it('keeps a sample at the same x after the window slides', () => {
-    const samples = [
-      { timestamp: 1_000, x: 1, y: 0, z: 0 },
-      { timestamp: 1_050, x: 2, y: 0, z: 0 },
-    ]
-    const before = toIMUChartSeries(samples)
-    // Oldest sample drops off, as the ring buffer does.
-    const after = toIMUChartSeries(samples.slice(1))
-    expect(after[after.length - 1].t).toBe(before[before.length - 1].t)
+  it('slides: the oldest point drops and the others keep their time', () => {
+    const first = appendIMUPoint([], sample(1), 1_000)
+    const next = appendIMUPoint(first, sample(2), 1_050)
+    expect(next[0]).toBe(first[1])
+    expect(next[IMU_HISTORY_SIZE - 2]).toBe(first[IMU_HISTORY_SIZE - 1])
   })
 })
 
@@ -79,7 +72,7 @@ describe('nextIMUAxisBound', () => {
 describe('magnitude series', () => {
   it('matches the N line in the C++ viewer: the norm of the three axes', () => {
     expect(imuMagnitude({ x: 3, y: 4, z: 0 })).toBe(5)
-    expect(toIMUChartSeries([{ timestamp: 0, x: 0, y: -9.8, z: 0 }]).at(-1)!.n).toBeCloseTo(9.8)
+    expect(appendIMUPoint([], { x: 0, y: -9.8, z: 0 }, 0).at(-1)!.n).toBeCloseTo(9.8)
   })
 
   it('is plotted as a fourth series', () => {

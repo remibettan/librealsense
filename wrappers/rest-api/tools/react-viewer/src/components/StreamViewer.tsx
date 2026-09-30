@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react'
-import { useAppStore, type DeviceIMUHistory } from '../store'
+import { useAppStore } from '../store'
 import { WebRTCHandler } from '../api/webrtc'
 import { apiClient } from '../api/client'
 import { DepthLegend } from './DepthLegend'
-import { toIMUChartSeries } from '../utils/imuChart'
+import { appendIMUPoint, type IMUChartPoint } from '../utils/imuChart'
 import type { DeviceState, StreamConfig, StreamMetadata } from '../api/types'
 
 import IMUOrientation from './IMUOrientation'
 import IMUChart from './IMUChart'
-
-const NO_SAMPLES: DeviceIMUHistory['accel'] = []
 
 // A stream with its device context
 interface DeviceStream {
@@ -92,7 +90,6 @@ export function StreamViewer() {
               return (
                 <IMUStreamTile
                   key={`${stream.deviceId}-${stream.config.sensor_id}-${stream.config.stream_type}`}
-                  deviceId={stream.deviceId}
                   streamType={stream.config.stream_type}
                   showDeviceName={activeDeviceCount > 1}
                   deviceName={stream.deviceName}
@@ -392,7 +389,6 @@ function StreamTile({ deviceId, deviceName, serialNumber, streamType, showDevice
 
 // IMU Stream Tile - specialized visualization for gyro/accel streams
 interface IMUStreamTileProps {
-  deviceId: string
   streamType: string
   showDeviceName?: boolean
   deviceName: string
@@ -400,10 +396,13 @@ interface IMUStreamTileProps {
   metadata?: StreamMetadata
 }
 
-function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, serialNumber, metadata }: IMUStreamTileProps) {
-  // Selector, not the whole store: this tile re-renders on every IMU sample, and no
-  // other consumer needs to follow along.
-  const deviceHistory = useAppStore((s) => s.imuHistory[deviceId])
+function IMUStreamTile({ streamType, showDeviceName, deviceName, serialNumber, metadata }: IMUStreamTileProps) {
+  // The tile unmounts when its stream stops, so a restart starts a fresh window.
+  const [points, setPoints] = useState<IMUChartPoint[]>([])
+  const motion = metadata?.motion_data
+  useEffect(() => {
+    if (motion) setPoints((prev) => appendIMUPoint(prev, motion, Date.now()))
+  }, [motion])
   const [showGraph, setShowGraph] = useState(false)
   const [fps, setFps] = useState(0)
   const [showMetadata, setShowMetadata] = useState(false)
@@ -423,15 +422,9 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
   }, [metadata?.frame_number])
   
   const isGyro = streamType.toLowerCase() === 'gyro'
-  const isAccel = streamType.toLowerCase() === 'accel'
-  
-  // NO_SAMPLES, not a fresh [], so the identity is stable while the device has no
-  // history yet and the memo below is not invalidated on every render.
-  const data = (isGyro ? deviceHistory?.gyro : isAccel ? deviceHistory?.accel : undefined) ?? NO_SAMPLES
-  const latest = data[data.length - 1]
+  const latest = points[points.length - 1]
 
   const unit = isGyro ? 'rad/s' : 'm/s²'
-  const chartSeries = useMemo(() => (showGraph ? toIMUChartSeries(data) : []), [showGraph, data])
   // Resting noise floor per stream: gyro drift is milli-rad/s, accel carries 1g.
   const axisFloor = isGyro ? 0.5 : 10
 
@@ -478,7 +471,7 @@ function IMUStreamTile({ deviceId, streamType, showDeviceName, deviceName, seria
           in a sparse stream grid the tile is taller than they are. */}
       <div className="flex-1 min-h-0 flex flex-col justify-center p-4">
         {showGraph ? (
-          <IMUChart data={chartSeries} axisFloor={axisFloor} />
+          <IMUChart data={points} axisFloor={axisFloor} />
         ) : (
           <IMUOrientation sample={latest ?? null} unit={unit} />
         )}

@@ -7,7 +7,7 @@
 // sensor is pointing. The vector is normalised, exactly as in the C++ code, so its
 // direction carries the orientation and the magnitude is printed as text.
 
-import { imuMagnitude } from './imuChart'
+import { IMU_AXES, imuMagnitude } from './imuChart'
 
 export interface Vec3 {
   x: number
@@ -61,16 +61,11 @@ export function projectIMU(v: Vec3): [number, number] {
 
 type Point = [number, number]
 
-// Every projected point of the wireframe, so VIEW_BOX can be fitted to it.
-const allPoints: Point[] = []
-
-const toPath = (points: Point[]) => {
-  allPoints.push(...points)
-  return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(4)},${y.toFixed(4)}`).join('')
-}
+const toPath = (points: Point[]) =>
+  points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(4)},${y.toFixed(4)}`).join('')
 
 // One great circle, spanned by two orthogonal unit vectors, as draw_circle() does.
-function circlePath(a: Vec3, b: Vec3, segments = 50): string {
+function circlePoints(a: Vec3, b: Vec3, segments = 50): Point[] {
   const points: Point[] = []
   for (let i = 0; i < segments; i++) {
     const theta = ((2 * Math.PI) / segments) * i
@@ -84,7 +79,7 @@ function circlePath(a: Vec3, b: Vec3, segments = 50): string {
       }),
     )
   }
-  return `${toPath(points)}Z`
+  return points
 }
 
 const X_AXIS: Vec3 = { x: 1, y: 0, z: 0 }
@@ -95,44 +90,52 @@ const scale = (v: Vec3, k: number): Vec3 => ({ x: v.x * k, y: v.y * k, z: v.z * 
 const add = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z })
 
 // The three circles of the wireframe: the XY, YZ and XZ planes.
-export const WIRE_CIRCLES = [
-  circlePath(X_AXIS, Y_AXIS),
-  circlePath(Y_AXIS, Z_AXIS),
-  circlePath(X_AXIS, Z_AXIS),
+const CIRCLE_POINTS = [
+  circlePoints(X_AXIS, Y_AXIS),
+  circlePoints(Y_AXIS, Z_AXIS),
+  circlePoints(X_AXIS, Z_AXIS),
 ]
+
+export const WIRE_CIRCLES = CIRCLE_POINTS.map((points) => `${toPath(points)}Z`)
+
+// Per axis: the line, then two arrowhead triangles, one in each perpendicular plane,
+// so the head stays visible whichever way the axis is pointing.
+function axisPoints(axis: Vec3, perpendiculars: Vec3[]): Point[][] {
+  const tip = scale(axis, ARROW_TIP)
+  const base = scale(axis, AXIS_LENGTH)
+  return [
+    [projectIMU({ x: 0, y: 0, z: 0 }), projectIMU(base)],
+    ...perpendiculars.map((perp) => [
+      projectIMU(tip),
+      projectIMU(add(base, scale(perp, ARROW_HALF_WIDTH))),
+      projectIMU(add(base, scale(perp, -ARROW_HALF_WIDTH))),
+    ]),
+  ]
+}
+
+const AXIS_POINTS = {
+  x: axisPoints(X_AXIS, [Y_AXIS, Z_AXIS]),
+  y: axisPoints(Y_AXIS, [X_AXIS, Z_AXIS]),
+  z: axisPoints(Z_AXIS, [X_AXIS, Y_AXIS]),
+}
 
 export interface AxisGeometry {
   key: 'x' | 'y' | 'z'
   color: string
   line: string
-  // Two arrowhead triangles per axis, one in each perpendicular plane, so the head
-  // stays visible whichever way the axis is pointing.
   heads: string[]
 }
 
-function axisGeometry(key: 'x' | 'y' | 'z', axis: Vec3, color: string, perpendiculars: Vec3[]): AxisGeometry {
-  const tip = scale(axis, ARROW_TIP)
-  const base = scale(axis, AXIS_LENGTH)
+// Same colors as the graph and the X/Y/Z values under the wireframe.
+export const AXES: AxisGeometry[] = (['x', 'y', 'z'] as const).map((key) => {
+  const [line, ...heads] = AXIS_POINTS[key]
   return {
     key,
-    color,
-    line: toPath([projectIMU({ x: 0, y: 0, z: 0 }), projectIMU(base)]),
-    heads: perpendiculars.map((perp) =>
-      `${toPath([
-        projectIMU(tip),
-        projectIMU(add(base, scale(perp, ARROW_HALF_WIDTH))),
-        projectIMU(add(base, scale(perp, -ARROW_HALF_WIDTH))),
-      ])}Z`,
-    ),
+    color: IMU_AXES.find((a) => a.key === key)!.color,
+    line: toPath(line),
+    heads: heads.map((head) => `${toPath(head)}Z`),
   }
-}
-
-// Pure red / green / blue, as in draw_axes().
-export const AXES: AxisGeometry[] = [
-  axisGeometry('x', X_AXIS, '#ff0000', [Y_AXIS, Z_AXIS]),
-  axisGeometry('y', Y_AXIS, '#00ff00', [X_AXIS, Z_AXIS]),
-  axisGeometry('z', Z_AXIS, '#0000ff', [X_AXIS, Y_AXIS]),
-]
+})
 
 export const ORIGIN_2D = projectIMU({ x: 0, y: 0, z: 0 })
 
@@ -140,8 +143,9 @@ export const ORIGIN_2D = projectIMU({ x: 0, y: 0, z: 0 })
 // texture it renders into; fitting the box to the geometry instead reproduces what
 // the C++ tile shows without carrying the empty margin around it.
 export const VIEW_BOX = (() => {
-  const xs = allPoints.map(([x]) => x)
-  const ys = allPoints.map(([, y]) => y)
+  const all = [...CIRCLE_POINTS, ...Object.values(AXIS_POINTS).flat()].flat()
+  const xs = all.map(([x]) => x)
+  const ys = all.map(([, y]) => y)
   // Room for the magnitude label, which sits beside the vector.
   const pad = 0.22
   const minX = Math.min(...xs) - pad

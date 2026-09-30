@@ -5,7 +5,6 @@ import type {
   OptionInfo,
   StreamConfig,
   MetadataUpdate,
-  IMUData,
   ViewMode,
   DeviceState,
   AdvancedControls,
@@ -22,9 +21,6 @@ let currentChatAbortController: AbortController | null = null
 // Map to track pending stop operations by "deviceId:sensorId" key
 // Used to await completion before allowing a new start
 const pendingStopPromises = new Map<string, Promise<void>>()
-
-// A gap this long means streaming stopped and restarted, so the window starts fresh.
-const IMU_STALE_GAP_MS = 1000
 
 // Enumerations are unordered across connections; only the newest response may be applied.
 let _fetchSeq = 0
@@ -138,16 +134,7 @@ import {
 } from '../api/chat'
 import type { ProposedSettings } from '../utils/chatPrompt'
 import type { AssistantChatMessage, AssistantFileAttachment } from '../api/assistantChat'
-import { IMU_HISTORY_SIZE, IMU_SAMPLE_INTERVAL_MS, type IMUSample } from '../utils/imuChart'
 import { createAssistantSlice } from './assistantSlice'
-
-export interface DeviceIMUHistory {
-  accel: IMUSample[]
-  gyro: IMUSample[]
-}
-
-// Keyed by device id.
-type IMUHistory = Record<string, DeviceIMUHistory>
 
 interface AppState {
   // Connection state
@@ -189,11 +176,6 @@ interface AppState {
 
   // Metadata from Socket.IO
   updateMetadata: (metadata: MetadataUpdate) => void
-
-  // IMU sample history for the per-tile graphs, keyed by device id
-  imuHistory: IMUHistory
-  addIMUData: (deviceId: string, type: 'accel' | 'gyro', data: IMUData) => void
-  clearIMUHistory: (deviceId?: string) => void
 
   // UI state
   viewMode: ViewMode
@@ -614,11 +596,6 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
       return
     }
 
-    // A restart begins a new graph window, even one faster than IMU_STALE_GAP_MS.
-    if (enabledStreamConfigs.some(c => ['accel', 'gyro'].includes(c.stream_type.toLowerCase()))) {
-      get().clearIMUHistory(deviceId)
-    }
-
     // Get sensor-level resolution/FPS (shared across all streams from this sensor)
     const sensorConfig = deviceState.sensorConfigs[sensorId]
     if (!sensorConfig) {
@@ -813,16 +790,7 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
       }
     })
 
-    // Extract IMU data if present
-    for (const [streamType, streamData] of Object.entries(metadata.metadata_streams)) {
-      if (streamData.motion_data) {
-        if (streamType.toLowerCase().includes('accel')) {
-          get().addIMUData(deviceId, 'accel', streamData.motion_data)
-        } else if (streamType.toLowerCase().includes('gyro')) {
-          get().addIMUData(deviceId, 'gyro', streamData.motion_data)
-        }
-      }
-
+    for (const streamData of Object.values(metadata.metadata_streams)) {
       // Extract point cloud data if present.
       // Server sends raw float32 bytes as a Socket.IO binary attachment (ArrayBuffer);
       // fall back to base64 string for older servers.
@@ -845,31 +813,6 @@ export const useAppStore = create<AppState>()((set, get, api) => ({
         }
       }
     }
-  },
-
-  // IMU history, per device: two cameras streaming accel would otherwise interleave
-  // into one buffer and both tiles would draw the same mixed trace.
-  imuHistory: {},
-  addIMUData: (deviceId, type, data) => {
-    // Motion frames arrive at up to 400 Hz; keep one per IMU_SAMPLE_INTERVAL_MS.
-    const now = Date.now()
-    const deviceHistory = get().imuHistory[deviceId] ?? { accel: [], gyro: [] }
-    const previous = deviceHistory[type]
-    const gap = now - (previous[previous.length - 1]?.timestamp ?? 0)
-    if (gap < IMU_SAMPLE_INTERVAL_MS) return
-
-    const history = gap > IMU_STALE_GAP_MS ? [] : previous.slice(1 - IMU_HISTORY_SIZE)
-    history.push({ x: data.x, y: data.y, z: data.z, timestamp: now })
-    set((state) => ({
-      imuHistory: { ...state.imuHistory, [deviceId]: { ...deviceHistory, [type]: history } },
-    }))
-  },
-  clearIMUHistory: (deviceId) => {
-    set((state) =>
-      deviceId
-        ? { imuHistory: { ...state.imuHistory, [deviceId]: { accel: [], gyro: [] } } }
-        : { imuHistory: {} },
-    )
   },
 
   // UI state

@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { screen, fireEvent, within } from '@testing-library/react'
 import { StreamViewer } from '@/components/StreamViewer'
 import { render, createMockDevice, createMockDeviceState } from '../../utils/test-utils'
-import type { StreamConfig } from '@/api/types'
+import type { IMUData, StreamConfig } from '@/api/types'
 
 const NOW = 1_700_000_000_000
 
@@ -17,12 +17,9 @@ function motionConfig(streamType: 'accel' | 'gyro'): StreamConfig {
   }
 }
 
-function samples(x: number, y: number, z: number, count = 5) {
-  return Array.from({ length: count }, (_, i) => ({ timestamp: NOW + i * 50, x, y, z }))
-}
-
-// `render` resets the store, so state has to arrive via initialStoreState.
-function streamingDevice(deviceId: string, serial: string) {
+// `render` resets the store, so state has to arrive via initialStoreState. The tile
+// takes its samples from each stream's metadata, as it does live.
+function streamingDevice(deviceId: string, serial: string, accel?: IMUData, gyro?: IMUData) {
   const device = createMockDevice({ device_id: deviceId, serial_number: serial })
   return createMockDeviceState(device, {
     isActive: true,
@@ -33,17 +30,16 @@ function streamingDevice(deviceId: string, serial: string) {
     },
     streamConfigs: [motionConfig('accel'), motionConfig('gyro')],
     streamMetadata: {
-      accel: { frame_number: 1, timestamp: NOW, width: 0, height: 0 },
-      gyro: { frame_number: 1, timestamp: NOW, width: 0, height: 0 },
+      accel: { frame_number: 1, timestamp: NOW, width: 0, height: 0, motion_data: accel },
+      gyro: { frame_number: 1, timestamp: NOW, width: 0, height: 0, motion_data: gyro },
     },
   })
 }
 
 function oneDevice() {
   return {
-    deviceStates: { 'device-1': streamingDevice('device-1', 'SN1') },
-    imuHistory: {
-      'device-1': { accel: samples(0.1, -9.8, 0.2), gyro: samples(0.001, -0.002, 0.003) },
+    deviceStates: {
+      'device-1': streamingDevice('device-1', 'SN1', { x: 0.1, y: -9.8, z: 0.2 }, { x: 0.001, y: -0.002, z: 0.003 }),
     },
   }
 }
@@ -53,12 +49,6 @@ const accelTiles = () =>
 const accelTile = () => accelTiles()[0]
 
 describe('IMUStreamTile', () => {
-  // The chart is a lazy import. Resolve it once up front so the first test to open
-  // the graph does not race the module load.
-  beforeAll(async () => {
-    await import('@/components/IMUChart')
-  })
-
   it('renders the orientation view by default', () => {
     render(<StreamViewer />, { initialStoreState: oneDevice() })
 
@@ -80,7 +70,6 @@ describe('IMUStreamTile', () => {
 
     fireEvent.click(toggle)
 
-    // The chart is a lazy import; the first test to open it pays the module load.
     await within(tile).findByTitle('Hide X')
     const close = within(tile).getByTitle('Close graph view')
     expect(close).toHaveAttribute('aria-pressed', 'true')
@@ -96,7 +85,6 @@ describe('IMUStreamTile', () => {
 
     const tile = accelTile()
     fireEvent.click(within(tile).getByTitle('Open graph view'))
-    // The header toggle flips synchronously; the chart itself is a lazy chunk.
     await within(tile).findByTitle('Hide X')
 
     for (const axis of ['X', 'Y', 'Z', 'N']) {
@@ -113,12 +101,8 @@ describe('IMUStreamTile', () => {
     render(<StreamViewer />, {
       initialStoreState: {
         deviceStates: {
-          'device-1': streamingDevice('device-1', 'SN1'),
-          'device-2': streamingDevice('device-2', 'SN2'),
-        },
-        imuHistory: {
-          'device-1': { accel: samples(0.1, -9.8, 0.2), gyro: [] },
-          'device-2': { accel: samples(1.5, -1.5, 7.7), gyro: [] },
+          'device-1': streamingDevice('device-1', 'SN1', { x: 0.1, y: -9.8, z: 0.2 }),
+          'device-2': streamingDevice('device-2', 'SN2', { x: 1.5, y: -1.5, z: 7.7 }),
         },
       },
     })
@@ -138,7 +122,6 @@ describe('IMUStreamTile', () => {
     render(<StreamViewer />, {
       initialStoreState: {
         deviceStates: { 'device-1': streamingDevice('device-1', 'SN1') },
-        imuHistory: {},
       },
     })
 
