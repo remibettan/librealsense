@@ -1691,7 +1691,7 @@ namespace rs2
         std::map<int, frame> last_frames;
         try
         {
-            // Skip frames of streams no longer shown
+            // Keep frames of shown streams, their post-processed outputs, and the point cloud
             for( auto && kv : ppf.take_latest_frames( f ) )
             {
                 auto stream_origin_iter = streams_origin.find( kv.first );

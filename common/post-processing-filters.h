@@ -101,7 +101,7 @@ namespace rs2
         void zero_first_pixel(const rs2::frame& f);
         rs2::frame last_tex_frame;
         // Keep these above processing_block: members are destroyed bottom-up, and its callback writes into them.
-        // Holding more than the newest frame per stream would use up the SDK's frame pools when drawing is slow
+        // Holding more than the newest frame per stream would use up the SDK's frame pools when drawing is slow.
         std::mutex latest_mutex;
         std::map<int, rs2::frame> latest_frames;
         rs2::frame latest_set;  // the newest frame-set as it arrived, for callers that need it whole (depth-quality)
