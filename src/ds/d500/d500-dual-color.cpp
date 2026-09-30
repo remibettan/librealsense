@@ -4,6 +4,7 @@
 #include "d500-dual-color.h"
 #include "d500-info.h"
 #include "environment.h"
+#include "frame.h"
 #include "metadata.h"
 #include "proc/color-formats-converter.h"  // m420_converter, nv12_converter
 #include <src/proc/identity-processing-block.h>
@@ -61,7 +62,13 @@ namespace librealsense
             raw_fourcc_to_rs2_stream_map->insert( { entry.first, RS2_STREAM_INFRARED } );
         }
 
-        raw_depth_sensor->set_stream_id_resolver( resolve_color_stream );
+        raw_depth_sensor->set_stream_id_resolver( [this]( const std::vector< platform::stream_profile > & all,
+                                                          const platform::stream_profile & p,
+                                                          rs2_stream & type,
+                                                          int & index )
+                                                  { resolve_color_stream( all, p, type, index ); } );
+        depth_sensor.set_frame_stream_resolver( RS2_STREAM_COLOR,
+                                                [this]( const frame_interface * f, int & index ) { return resolve_color_frame( f, index ); } );
 
         // NV12 registered before M420 so RGB targets resolve to NV12 when present, and to M420 when it is not
         // (converter breaks ties by registration order).
@@ -103,10 +110,10 @@ namespace librealsense
                             { return p && p->get_stream_type() == RS2_STREAM_COLOR; } );
     }
 
-    static bool depth_or_ir_requested( const stream_profiles & requests )
+    static bool stream_requested( const stream_profiles & requests, rs2_stream type )
     {
-        return std::any_of( requests.begin(), requests.end(), []( auto & p )
-                            { return p && ( p->get_stream_type() == RS2_STREAM_DEPTH || p->get_stream_type() == RS2_STREAM_INFRARED ); } );
+        return std::any_of( requests.begin(), requests.end(), [type]( auto & p )
+                            { return p && p->get_stream_type() == type; } );
     }
 
     // Produce a friendly stream name to the user, e.g. "Depth" / "Color 1"
@@ -126,20 +133,22 @@ namespace librealsense
             return;
 
         // Depth/IR and color run off the same imagers, so together they cap at 45 FPS - the enumerated
-        // 60 and 90 FPS profiles stream only when each runs without the other.
-        static const uint32_t MAX_COMBINED_FPS = 45;
-
-        bool const with_depth_or_ir = depth_or_ir_requested( requests );
+        // 60 and 90 FPS profiles stream only when each runs without the other. Full Passive Depth lifts
+        // the cap to 60 FPS.
+        bool const with_depth_or_ir = stream_requested( requests, RS2_STREAM_DEPTH )
+                                   || stream_requested( requests, RS2_STREAM_INFRARED );
+        bool const full_passive = _passive_depth_mode && _passive_depth_mode->is_full_passive();
+        uint32_t const max_combined_fps = full_passive ? 60 : 45;
 
         stream_profile_interface * first = nullptr;
         for( auto & p : requests )
         {
             if( ! p )
                 continue;
-            if( with_depth_or_ir && p->get_framerate() > MAX_COMBINED_FPS )
+            if( with_depth_or_ir && p->get_framerate() > max_combined_fps )
                 throw wrong_api_call_sequence_exception( rsutils::string::from()
-                    << "Depth/Infrared and Color cannot stream together at 60 or 90 FPS ("
-                    << stream_name( *p ) << " requested " << p->get_framerate() << " FPS)" );
+                    << "Depth/Infrared and Color cannot stream together above " << max_combined_fps
+                    << " FPS (" << stream_name( *p ) << " requested " << p->get_framerate() << " FPS)" );
             if( ! first )
                 first = p.get();
             else if( p->get_framerate() != first->get_framerate() )
@@ -417,9 +426,50 @@ namespace librealsense
             ++rank;
         }
 
-        // Assign in descending order so the highest pin -> Color 1, matching infrared 1 / 2.
+        _color_pins = static_cast< int >( color_pins.size() );
         type = RS2_STREAM_COLOR;
-        index = static_cast< int >( color_pins.size() ) - rank;
+        // A single pin carries both sources multiplexed; resolve_color_frame assigns Color 1 / 2 per frame.
+        // Separate pins are assigned in descending order so the highest pin -> Color 1, matching infrared 1 / 2.
+        index = _color_pins == 1 ? 0 : _color_pins - rank;
+    }
+
+    // Configuration metadata v4 names the source of every frame on a multiplexed pin; without it such a pin
+    // carries the left source only. Separate pins keep the identity assigned at enumeration.
+    bool d500_dual_color::resolve_color_frame( const frame_interface * f, int & index )
+    {
+        if( _color_pins != 1 )
+            return true;
+
+        constexpr size_t configuration_offset = metadata_raw_mode_offset + offsetof( md_rgb_mode, rgb_mode )
+                                              + offsetof( md_rgb_normal_mode, intel_configuration );
+        constexpr uint32_t source_index_version = 4;
+
+        const md_configuration * configuration = nullptr;
+        if( auto frame = dynamic_cast< const librealsense::frame * >( f ) )
+            if( frame->additional_data.metadata_size >= configuration_offset + sizeof( md_configuration ) )
+            {
+                auto candidate = reinterpret_cast< const md_configuration * >( frame->additional_data.metadata_blob.data() + configuration_offset );
+                if( candidate->header.md_type_id == md_type::META_DATA_INTEL_CONFIGURATION_ID
+                    && candidate->version >= source_index_version )
+                    configuration = candidate;
+            }
+
+        if( ! configuration )
+        {
+            if( ! _warned_no_source_index.exchange( true ) )
+                LOG_WARNING( "Color metadata carries no source index; delivering Color 1 only" );
+            index = 1;
+            return true;
+        }
+        if( configuration->source_index > 1 )
+        {
+            LOG_WARNING( "Dropping color frame with invalid source index " << int( configuration->source_index ) );
+            return false;
+        }
+
+        index = configuration->source_index + 1;
+
+        return true;
     }
 
     // Identify a color pin: it advertises the native color format (M420 or NV12) paired with a YUY2/YUYV
