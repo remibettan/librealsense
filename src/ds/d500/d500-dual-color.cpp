@@ -103,10 +103,10 @@ namespace librealsense
                             { return p && p->get_stream_type() == RS2_STREAM_COLOR; } );
     }
 
-    static bool depth_or_ir_requested( const stream_profiles & requests )
+    static bool stream_requested( const stream_profiles & requests, rs2_stream type )
     {
-        return std::any_of( requests.begin(), requests.end(), []( auto & p )
-                            { return p && ( p->get_stream_type() == RS2_STREAM_DEPTH || p->get_stream_type() == RS2_STREAM_INFRARED ); } );
+        return std::any_of( requests.begin(), requests.end(), [type]( auto & p )
+                            { return p && p->get_stream_type() == type; } );
     }
 
     // Produce a friendly stream name to the user, e.g. "Depth" / "Color 1"
@@ -126,20 +126,22 @@ namespace librealsense
             return;
 
         // Depth/IR and color run off the same imagers, so together they cap at 45 FPS - the enumerated
-        // 60 and 90 FPS profiles stream only when each runs without the other.
-        static const uint32_t MAX_COMBINED_FPS = 45;
-
-        bool const with_depth_or_ir = depth_or_ir_requested( requests );
+        // 60 and 90 FPS profiles stream only when each runs without the other. Full Passive Depth lifts
+        // the cap to 60 FPS.
+        bool const with_depth_or_ir = stream_requested( requests, RS2_STREAM_DEPTH )
+                                   || stream_requested( requests, RS2_STREAM_INFRARED );
+        bool const full_passive = _passive_depth_mode && _passive_depth_mode->is_full_passive();
+        uint32_t const max_combined_fps = full_passive ? 60 : 45;
 
         stream_profile_interface * first = nullptr;
         for( auto & p : requests )
         {
             if( ! p )
                 continue;
-            if( with_depth_or_ir && p->get_framerate() > MAX_COMBINED_FPS )
+            if( with_depth_or_ir && p->get_framerate() > max_combined_fps )
                 throw wrong_api_call_sequence_exception( rsutils::string::from()
-                    << "Depth/Infrared and Color cannot stream together at 60 or 90 FPS ("
-                    << stream_name( *p ) << " requested " << p->get_framerate() << " FPS)" );
+                    << "Depth/Infrared and Color cannot stream together above " << max_combined_fps
+                    << " FPS (" << stream_name( *p ) << " requested " << p->get_framerate() << " FPS)" );
             if( ! first )
                 first = p.get();
             else if( p->get_framerate() != first->get_framerate() )
