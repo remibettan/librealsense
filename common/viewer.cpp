@@ -1084,6 +1084,7 @@ namespace rs2
                 last_texture.reset();
                 selected_tex_source_uid = -1;
             }
+            _gpu_ruler_samples.erase( i );
             streams.erase(i);
         }
         {
@@ -2092,6 +2093,91 @@ namespace rs2
         glEnd();
     }
 
+    void viewer_model::sample_ruler_pixels( const rs2::video_frame & depth, const rs2::video_frame & colorized,
+                                            std::vector< rgb_per_distance > & colors, std::vector< float > & distances )
+    {
+        if( RS2_FORMAT_RGB8 != colorized.get_profile().format() )
+            return;
+        auto width = depth.get_width();
+        auto height = depth.get_height();
+        auto depth_data = static_cast< const uint16_t * >( depth.get_data() );
+        auto colorized_data = static_cast< const uint8_t * >( colorized.get_data() );
+        // Take the scale off the frame, like the colorizer does: sensors that don't
+        // expose RS2_OPTION_DEPTH_UNITS (DDS) leave the cached value at its 1.0 default.
+        const float depth_scale = depth.as< depth_frame >().get_units();
+        static const auto skip_pixels_factor = 30;
+        for( uint64_t i = 0; i < height; i += skip_pixels_factor )
+        {
+            for( uint64_t j = 0; j < width; j += skip_pixels_factor )
+            {
+                auto depth_index = i * width + j;
+                auto length = depth_data[depth_index] * depth_scale;
+                if( length > 0.f )
+                {
+                    auto colorized_index = depth_index * 3;
+                    colors.push_back( { length,
+                                        { colorized_data[colorized_index],
+                                          colorized_data[colorized_index + 1],
+                                          colorized_data[colorized_index + 2] } } );
+                    distances.push_back( length );
+                }
+            }
+        }
+    }
+
+    // Mirrors the tile colorizer's settings, so the ruler colors match what the tile shows.
+    static void copy_colorizer_options( rs2::colorizer & from, rs2::colorizer & to )
+    {
+        // The preset rewrites the other options, so it goes first and the explicit values land on top of it.
+        auto options = from.get_supported_options();
+        std::stable_partition( options.begin(), options.end(),
+                               []( rs2_option o ) { return o == RS2_OPTION_VISUAL_PRESET; } );
+        for( auto option : options )
+        {
+            if( from.is_option_read_only( option ) || ! to.supports( option ) )
+                continue;
+            auto value = from.get_option( option );
+            if( to.get_option( option ) != value )
+                to.set_option( option, value );
+        }
+    }
+
+    bool viewer_model::sample_ruler( int stream_key, stream_model & s_model,
+                                     std::vector< rgb_per_distance > & colors, std::vector< float > & distances )
+    {
+        auto depth = s_model.texture->get_last_frame().as< video_frame >();
+        auto colorized = s_model.texture->get_last_frame( true ).as< video_frame >();
+        if( ! depth || ! colorized )
+            return false;
+
+        // CPU-colorized tile: its pixels are already in memory, so sampling every frame costs next to nothing.
+        if( ! colorized.is< gl::gpu_frame >() )
+        {
+            sample_ruler_pixels( depth, colorized, colors, distances );
+            return ! distances.empty();
+        }
+
+        // GPU-colorized tile: reading its pixels waits on the GPU while holding the GL context the post-processing thread
+        // uploads through, stalling both under load. The depth pixels are kept on the CPU, so colorize those there instead.
+        // That is an extra colorization, redo only for a new frame and at most every 100 ms, refreshes fast enough for a scale.
+        auto & cached = _gpu_ruler_samples[stream_key];
+        auto now = std::chrono::steady_clock::now();
+        if( depth.get_frame_number() != cached.frame_number && now - cached.taken > std::chrono::milliseconds( 100 ) )
+        {
+            if( ! _ruler_colorizer )
+                _ruler_colorizer = std::make_shared< rs2::colorizer >();
+            copy_colorizer_options( *s_model.texture->colorize, *_ruler_colorizer );
+            cached.colors.clear();
+            cached.distances.clear();
+            sample_ruler_pixels( depth, _ruler_colorizer->colorize( depth ), cached.colors, cached.distances );
+            cached.frame_number = depth.get_frame_number();
+            cached.taken = now;
+        }
+        colors = cached.colors;
+        distances = cached.distances;
+        return ! distances.empty();
+    }
+
     viewer_model::ruler_bounds viewer_model::calculate_ruler_bounds(
         std::vector<float> distances, stream_model& s_model)
     {
@@ -2499,52 +2585,18 @@ namespace rs2
             stream_rect.w += 1;
             draw_rect(stream_rect);
 
-            auto frame = streams[stream].texture->get_last_frame().as<video_frame>();
-            auto textured_frame = streams[stream].texture->get_last_frame(true).as<video_frame>();
-            if (streams[stream].show_map_ruler && frame && textured_frame &&
+            std::vector<rgb_per_distance> rgb_per_distance_vec;
+            std::vector<float> distances;
+            if (streams[stream].show_map_ruler &&
                 RS2_STREAM_DEPTH == stream_mv.profile.stream_type() &&
-                RS2_FORMAT_Z16 == stream_mv.profile.format())
+                RS2_FORMAT_Z16 == stream_mv.profile.format() &&
+                sample_ruler( stream, streams[stream], rgb_per_distance_vec, distances ))
             {
-                if(RS2_FORMAT_RGB8 == textured_frame.get_profile().format())
-                {
-                    static const std::string depth_units = "m";
-                    auto depth_vid_profile = stream_mv.profile.as<video_stream_profile>();
-                    auto depth_width = depth_vid_profile.width();
-                    auto depth_height = depth_vid_profile.height();
-                    auto depth_data = static_cast<const uint16_t*>(frame.get_data());
-                    auto textured_depth_data = static_cast<const uint8_t*>(textured_frame.get_data());
-                    // Take the scale off the frame, like the colorizer does: sensors that don't
-                    // expose RS2_OPTION_DEPTH_UNITS (DDS) leave the cached value at its 1.0 default.
-                    const float depth_scale = frame.as<depth_frame>().get_units();
-                    static const auto skip_pixels_factor = 30;
-                    std::vector<rgb_per_distance> rgb_per_distance_vec;
-                    std::vector<float> distances;
-                    for (uint64_t i = 0; i < depth_height; i+= skip_pixels_factor)
-                    {
-                        for (uint64_t j = 0; j < depth_width; j+= skip_pixels_factor)
-                        {
-                            auto depth_index = i*depth_width + j;
-                            auto length = depth_data[depth_index] * depth_scale;
-                            if (length > 0.f)
-                            {
-                                auto textured_depth_index = depth_index * 3;
-                                auto r = textured_depth_data[textured_depth_index];
-                                auto g = textured_depth_data[textured_depth_index + 1];
-                                auto b = textured_depth_data[textured_depth_index + 2];
-                                rgb_per_distance_vec.push_back({ length, { r, g, b } });
-                                distances.push_back(length);
-                            }
-                        }
-                    }
-
-                    if (!distances.empty())
-                    {
-                        auto bounds = calculate_ruler_bounds(std::move(distances),
-                                                             streams[stream]);
-                        draw_color_ruler(active_mouse, streams[stream], stream_rect,
-                                         rgb_per_distance_vec, bounds, depth_units);
-                    }
-                }
+                static const std::string depth_units = "m";
+                auto bounds = calculate_ruler_bounds(std::move(distances),
+                                                     streams[stream]);
+                draw_color_ruler(active_mouse, streams[stream], stream_rect,
+                                 rgb_per_distance_vec, bounds, depth_units);
             }
         }
 
