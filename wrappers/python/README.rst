@@ -25,13 +25,13 @@ NVIDIA Jetson (aarch64)
 The ``aarch64`` wheels are built with CUDA on a specific JetPack release. The wheel's
 Python version selects the JetPack it was built for:
 
-==========  =====  ====================
-JetPack     CUDA   Wheel Python version
-==========  =====  ====================
-JetPack 5   11.4   3.9
-JetPack 6   12.x   3.10
-JetPack 7   13.x   3.12
-==========  =====  ====================
+============  =============  =====  ====================
+Runs on       Built on       CUDA   Wheel Python version
+============  =============  =====  ====================
+JetPack 5.x   JetPack 5.0.2  11.4   3.9
+JetPack 6.x   JetPack 6.0    12.2   3.10
+JetPack 7.x   JetPack 7.0    13.0   3.12
+============  =============  =====  ====================
 
 Install with the matching Python (e.g. ``python3.10 -m pip install pyrealsense2`` on
 JetPack 6). Installing with a different Python pulls a wheel built against another

@@ -78,11 +78,13 @@ See [building-from-source-using-native-backend](https://github.com/realsenseai/l
 
 The [`pyrealsense2`](https://pypi.org/project/pyrealsense2/) wheels on PyPI for `aarch64` are built **with CUDA**, and each one is built on a specific JetPack release against that release's CUDA toolkit. A wheel filename can only carry the Python version, not the JetPack or CUDA version, so **the Python version of the wheel is what selects the JetPack it was built for**:
 
-| JetPack | L4T | Ubuntu | CUDA | Wheel Python version |
-|---|---|---|---|---|
-| JetPack 5.x | R35 | 20.04 | 11.4 | **3.9** |
-| JetPack 6.x | R36 | 22.04 | 12.x | **3.10** |
-| JetPack 7.x | R38 | 24.04 | 13.x | **3.12** |
+| Runs on | Built on | L4T | Ubuntu | CUDA | Wheel Python version |
+|---|---|---|---|---|---|
+| JetPack 5.x | JetPack 5.0.2 | R35.1.0 | 20.04 | 11.4 | **3.9** |
+| JetPack 6.x | JetPack 6.0 | R36.3.0 | 22.04 | 12.2 | **3.10** |
+| JetPack 7.x | JetPack 7.0 | R38 | 24.04 | 13.0 | **3.12** |
+
+A wheel built on the first release of a JetPack line runs on every later release of that line (newer CUDA drivers run older CUDA runtimes), but not on an older line.
 
 Install with the Python version that matches your JetPack:
 
