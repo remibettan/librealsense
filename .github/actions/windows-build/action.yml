@@ -29,11 +29,12 @@ runs:
       env:
         ARCH: ${{ inputs.arch }}
         CMAKE_OPTIONS: ${{ inputs.cmake-options }}
+        BUILD_DIR: ${{ env.WIN_BUILD_DIR }}
       # xargs splits the options like a shell would, so quoted values such as -DFOO="a b" stay one argument
       run: |
         LRS_SRC_DIR=$(pwd)
-        mkdir -p ${{env.WIN_BUILD_DIR}}
-        cd ${{env.WIN_BUILD_DIR}}
+        mkdir -p "$BUILD_DIR"
+        cd "$BUILD_DIR"
         printf '%s\n' "$CMAKE_OPTIONS" | xargs cmake ${LRS_SRC_DIR} -A "$ARCH"
 
     - name: Build
@@ -41,6 +42,7 @@ runs:
       env:
         CONFIG: ${{ inputs.config || env.LRS_RUN_CONFIG }}
         TARGET: ${{ inputs.target }}
+        BUILD_DIR: ${{ env.WIN_BUILD_DIR }}
       run: |
-        cd ${{env.WIN_BUILD_DIR}}
+        cd "$BUILD_DIR"
         cmake --build . --config "$CONFIG" --target "$TARGET" -- -m
