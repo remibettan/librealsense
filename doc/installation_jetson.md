@@ -76,29 +76,13 @@ See [building-from-source-using-native-backend](https://github.com/realsenseai/l
 
 ### 5. Install the Python Wrapper with pip
 
-The [`pyrealsense2`](https://pypi.org/project/pyrealsense2/) wheels on PyPI for `aarch64` are built **with CUDA**, and each one is built on a specific JetPack release against that release's CUDA toolkit. A wheel filename can only carry the Python version, not the JetPack or CUDA version, so **the Python version of the wheel is what selects the JetPack it was built for**:
-
-| Runs on | Built on | L4T | Ubuntu | CUDA | Wheel Python version |
-|---|---|---|---|---|---|
-| JetPack 5.x | JetPack 5.0.2 | R35.1.0 | 20.04 | 11.4 | **3.9** |
-| JetPack 6.x | JetPack 6.0 | R36.3.0 | 22.04 | 12.2 | **3.10** |
-| JetPack 7.x | JetPack 7.0 | R38 | 24.04 | 13.0 | **3.12** |
-
-A wheel built on the first release of a JetPack line runs on every later release of that line (newer CUDA drivers run older CUDA runtimes), but not on an older line.
-
-Install with the Python version that matches your JetPack:
+The [`pyrealsense2`](https://pypi.org/project/pyrealsense2/) `aarch64` wheels are CUDA builds, one per JetPack line, and **the wheel's Python version selects the JetPack it was built for**. Install with the Python version that matches your JetPack; the JetPack ↔ Python table for the current release is on the [PyPI project page](https://pypi.org/project/pyrealsense2/).
 
 ```sh
-# JetPack 6 example
-python3.10 -m pip install pyrealsense2
+python3.<X> -m pip install pyrealsense2
 ```
 
-Things to be aware of:
-
-* **Use only the Python version listed for your JetPack.** Installing with a different Python (for example Python 3.10 on JetPack 5, or Python 3.9 on JetPack 6) silently pulls a wheel built against another JetPack's CUDA. `pip` cannot detect this. Formats that need no GPU conversion (e.g. `YUYV`, `Z16`) may still stream while CUDA-accelerated paths such as `RGB8`/`BGR8` color conversion, align and pointcloud fail.
-* **JetPack 5 ships Python 3.8**, which is end-of-life and not supported by the wrapper. The minimum supported Python is **3.9**, so install it (e.g. `sudo apt-get install python3.9`) before `pip install`, or build from source with the system Python.
-* **Other Python versions are not available for Jetson** from PyPI. For any other Python version, or to run without CUDA, build the wrapper from source with the Python of your choice (see [Building from Source](#building-from-source-using-native-backend) and the [Python wrapper readme](../wrappers/python/readme.md#building-from-source)).
-* The `x86_64` and Windows wheels are not affected; this applies to `aarch64` only.
+Installing with a different Python silently pulls a wheel built for another JetPack's CUDA and GPU-accelerated paths will fail. For any other Python version, or to run without CUDA, [build the wrapper from source](../wrappers/python/readme.md#building-from-source).
 
 ## Building from Source using **RSUSB** Backend
 
