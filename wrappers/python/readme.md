@@ -26,6 +26,8 @@ Users who wish to create a python package (wheel) can create it from this folder
 
 Windows users can install the RealSense SDK 2.0 from the release tab to get pre-compiled binaries of the wrapper, for both x86 and x64 architectures. (Python versions 3.10, 3.11, 3.12, 3.13 and 3.14 are supported).
 
+> **NVIDIA Jetson users:** the `aarch64` wheels are CUDA builds and each Python version maps to one JetPack release (3.9 → JetPack 5, 3.10 → JetPack 6, 3.12 → JetPack 7). Installing with a different Python pulls a wheel built for another JetPack's CUDA and GPU-accelerated paths will not work. See [Install the Python Wrapper with pip](../../doc/installation_jetson.md#5-install-the-python-wrapper-with-pip) in the Jetson guide.
+
 > **Note:**
 > EOL Python 3.9 distributables can be found for pyrealsense2 versions <= 2.57.4
 > EOL Python 3.8 distributables can be found for pyrealsense2 versions <= 2.55.2

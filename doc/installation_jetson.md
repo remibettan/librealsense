@@ -74,6 +74,30 @@ You can also double-TAB after typing `rs-` to see the full list of SDK examples.
 > Note: you may need to also run the driver patch script in order for the camera to work on your platform:
 See [building-from-source-using-native-backend](https://github.com/realsenseai/librealsense/edit/development/doc/installation_jetson.md#building-from-source-using-native-backend)
 
+### 5. Install the Python Wrapper with pip
+
+The [`pyrealsense2`](https://pypi.org/project/pyrealsense2/) wheels on PyPI for `aarch64` are built **with CUDA**, and each one is built on a specific JetPack release against that release's CUDA toolkit. A wheel filename can only carry the Python version, not the JetPack or CUDA version, so **the Python version of the wheel is what selects the JetPack it was built for**:
+
+| JetPack | L4T | Ubuntu | CUDA | Wheel Python version |
+|---|---|---|---|---|
+| JetPack 5.x | R35 | 20.04 | 11.4 | **3.9** |
+| JetPack 6.x | R36 | 22.04 | 12.x | **3.10** |
+| JetPack 7.x | R38 | 24.04 | 13.x | **3.12** |
+
+Install with the Python version that matches your JetPack:
+
+```sh
+# JetPack 6 example
+python3.10 -m pip install pyrealsense2
+```
+
+Things to be aware of:
+
+* **Use only the Python version listed for your JetPack.** Installing with a different Python (for example Python 3.10 on JetPack 5, or Python 3.9 on JetPack 6) silently pulls a wheel built against another JetPack's CUDA. `pip` cannot detect this. Formats that need no GPU conversion (e.g. `YUYV`, `Z16`) may still stream while CUDA-accelerated paths such as `RGB8`/`BGR8` color conversion, align and pointcloud fail.
+* **JetPack 5 ships Python 3.8**, which is below the wrapper's minimum (`>=3.9`). Install Python 3.9 (e.g. `sudo apt-get install python3.9`) before `pip install`, or build from source with the system Python.
+* **Other Python versions are not available for Jetson** from PyPI. For any other Python version, or to run without CUDA, build the wrapper from source with the Python of your choice (see [Building from Source](#building-from-source-using-native-backend) and the [Python wrapper readme](../wrappers/python/readme.md#building-from-source)).
+* The `x86_64` and Windows wheels are not affected; this applies to `aarch64` only.
+
 ## Building from Source using **RSUSB** Backend
 
 ⮕ Use the RSUSB backend without the kernel patching

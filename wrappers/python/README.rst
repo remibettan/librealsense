@@ -18,3 +18,24 @@ Quick start
         print(f.profile)
   finally:
       pipe.stop()
+
+NVIDIA Jetson (aarch64)
+-----------------------
+
+The ``aarch64`` wheels are built with CUDA on a specific JetPack release. The wheel's
+Python version selects the JetPack it was built for:
+
+==========  =====  ====================
+JetPack     CUDA   Wheel Python version
+==========  =====  ====================
+JetPack 5   11.4   3.9
+JetPack 6   12.x   3.10
+JetPack 7   13.x   3.12
+==========  =====  ====================
+
+Install with the matching Python (e.g. ``python3.10 -m pip install pyrealsense2`` on
+JetPack 6). Installing with a different Python pulls a wheel built against another
+JetPack's CUDA; ``pip`` cannot detect this and GPU-accelerated paths (e.g. RGB8/BGR8
+color conversion, align, pointcloud) will fail. For other
+Python versions, build from source. Details:
+https://github.com/realsenseai/librealsense/blob/master/doc/installation_jetson.md#5-install-the-python-wrapper-with-pip
