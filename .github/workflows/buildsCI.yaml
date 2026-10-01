@@ -120,7 +120,7 @@ jobs:
         ./Release/rs-all-client
 
   #--------------------------------------------------------------------------------
-  Win_SH_Py_DDS_CI:  # Windows, Shared, Python, Tools, DDS, security flags, libCI without executables
+  Win_SH_Py_DDS_SEC_CI:  # Windows, Shared, Python, Tools, DDS, security flags, libCI without executables
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
@@ -326,7 +326,7 @@ jobs:
   
 
   #--------------------------------------------------------------------------------
-  U22_U24_SH_Py_DDS_CI:  # Ubuntu, Shared, Python, DDS, LibCI without executables
+  U22_U24_SH_Py_DDS_SEC_CI:  # Ubuntu, Shared, Python, DDS, security flags, LibCI without executables
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -336,7 +336,7 @@ jobs:
             name: U22
           - os: ubuntu-24.04
             name: U24
-    name: ${{ matrix.name }}_SH_Py_DDS_CI
+    name: ${{ matrix.name }}_SH_Py_DDS_SEC_CI
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
