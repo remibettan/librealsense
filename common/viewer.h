@@ -313,7 +313,8 @@ namespace rs2
         void draw_3d_labeled_points(const rect& viewer_rect, rs2::labeled_points labeled_points);
         bool should_texture_frame_be_updated(const rs2::frame& f) const;
         bool is_passive_frame(const rs2::frame& f) const;
-        int last_frames_key( const rs2::frame & f, int profile_id );
+        bool is_split_passive_frame( const rs2::frame & f );
+        int last_frames_key( const rs2::frame & f );
 
         streams_layout _layout;
         streams_layout _old_layout;

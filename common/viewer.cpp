@@ -1708,14 +1708,14 @@ namespace rs2
 
                         if (frame.is< points >() || streams.find(profile_id) != streams.end())
                         {
-                            last_frames[last_frames_key( frame, profile_id )] = frame;
+                            last_frames[last_frames_key( frame )] = frame;
                             continue;
                         }
 
                         auto stream_origin_iter = streams_origin.find(profile_id);
                         if( (stream_origin_iter != streams_origin.end() && streams.find( stream_origin_iter->second ) != streams.end() ))
                         {
-                            last_frames[last_frames_key( frame, profile_id )] = frame;
+                            last_frames[last_frames_key( frame )] = frame;
                         }
                     }
                 }
@@ -1725,14 +1725,14 @@ namespace rs2
 
                     if (f.is< points >() || streams.find(profile_id) != streams.end())
                     {
-                        last_frames[last_frames_key( f, profile_id )] = f;
+                        last_frames[last_frames_key( f )] = f;
                         continue;
                     }
 
                     auto stream_origin_iter = streams_origin.find(profile_id);
                     if ((stream_origin_iter != streams_origin.end() && streams.find(stream_origin_iter->second) != streams.end()))
                     {
-                        last_frames[last_frames_key( f, profile_id )] = f;
+                        last_frames[last_frames_key( f )] = f;
                     }
                 }
             }
@@ -1763,7 +1763,8 @@ namespace rs2
 
                 auto texture = upload_frame( std::move( f ) );
 
-                if ( should_texture_frame_be_updated(f) )
+                // A split stream's passive frames carry the offset key; the point cloud texture follows the active class
+                if ( frame.first == f.get_profile().unique_id() && should_texture_frame_be_updated(f) )
                 {
                     texture_frame = texture;
                 }
@@ -2131,9 +2132,14 @@ namespace rs2
     static void copy_colorizer_options( rs2::colorizer & from, rs2::colorizer & to )
     {
         // The preset rewrites the other options, so it goes first and the explicit values land on top of it.
+        // Setting min/max distance turns histogram equalization off, so that one goes last.
         auto options = from.get_supported_options();
-        std::stable_partition( options.begin(), options.end(),
-                               []( rs2_option o ) { return o == RS2_OPTION_VISUAL_PRESET; } );
+        auto rank = []( rs2_option o )
+        {
+            return o == RS2_OPTION_VISUAL_PRESET ? 0 : o == RS2_OPTION_HISTOGRAM_EQUALIZATION_ENABLED ? 2 : 1;
+        };
+        std::stable_sort( options.begin(), options.end(),
+                          [&]( rs2_option a, rs2_option b ) { return rank( a ) < rank( b ); } );
         for( auto option : options )
         {
             if( from.is_option_read_only( option ) || ! to.supports( option ) || to.is_option_read_only( option ) )
@@ -4187,20 +4193,13 @@ namespace rs2
 
     bool viewer_model::is_3d_depth_source(frame f)
     {
+        // While the stream is split the point cloud follows the active class; Full Passive is not split,
+        // so its passive frames still feed the 3D view.
+        if( is_split_passive_frame( f ) )
+            return false;
 
         auto index = f.get_profile().unique_id();
         auto mapped_index = streams_origin[index];
-
-        // While the stream is split the point cloud follows the active class; Full Passive is not split,
-        // so its passive frames still feed the 3D view. Reached from the frame callback and the
-        // post-processing thread, so the lookup needs the lock begin_stream writes under.
-        bool split = false;
-        {
-            std::lock_guard< std::mutex > lock( streams_mutex );
-            split = passive_streams.count( index ) || passive_streams.count( mapped_index );
-        }
-        if( split && is_passive_frame( f ) )
-            return false;
 
         if(index == selected_depth_source_uid || mapped_index  == selected_depth_source_uid
                 ||(selected_depth_source_uid == -1 && f.get_profile().stream_type() == RS2_STREAM_DEPTH))
@@ -4237,15 +4236,25 @@ namespace rs2
 
     // A split stream delivers both exposure classes on one profile, and several frames can arrive in one
     // UI iteration. Keying the passive class apart keeps the latest of each, so neither tile starves.
-    int viewer_model::last_frames_key( const rs2::frame & f, int profile_id )
+    int viewer_model::last_frames_key( const rs2::frame & f )
     {
+        auto profile_id = f.get_profile().unique_id();
+        return is_split_passive_frame( f ) ? profile_id + PASSIVE_STREAM_KEY_OFFSET : profile_id;
+    }
+
+    // A laser-off frame of a stream that Alternating Passive Depth splits into two tiles. Reached from the UI,
+    // frame callback and post-processing threads, so the lookup needs the lock begin_stream writes under.
+    bool viewer_model::is_split_passive_frame( const rs2::frame & f )
+    {
+        auto index = f.get_profile().unique_id();
         {
             std::lock_guard< std::mutex > lock( streams_mutex );
-            auto origin = streams_origin.find( profile_id );
-            if( origin == streams_origin.end() || ! passive_streams.count( origin->second ) )
-                return profile_id;
+            auto origin = streams_origin.find( index );
+            if( ! passive_streams.count( index )
+                && ( origin == streams_origin.end() || ! passive_streams.count( origin->second ) ) )
+                return false;
         }
-        return is_passive_frame( f ) ? profile_id + PASSIVE_STREAM_KEY_OFFSET : profile_id;
+        return is_passive_frame( f );
     }
 
     std::shared_ptr< subdevice_model > viewer_model::get_frame_subdevice( rs2::frame const & frame ) const
