@@ -157,6 +157,8 @@ namespace rs2
         // Alternating Passive Depth interleaves laser-on and laser-off frames on one profile, so each
         // depth/IR stream gets a second tile for the passive class - mapped here from the stream's uid.
         std::map<int, int> passive_streams;
+        // Keys the passive tile of a split stream; kept clear of the unique ids the SDK hands out.
+        static constexpr int PASSIVE_STREAM_KEY_OFFSET = 0x10000000;
         bool fullscreen = false;
         stream_model* selected_stream = nullptr;
         // When true, stream tiles can be re-arranged by dragging one onto another (toggled from the top bar)

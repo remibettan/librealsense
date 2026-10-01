@@ -206,7 +206,6 @@ namespace rs2
                         error_message = "Exporter not implemented";
                     else if (auto ret = file_dialog_open(save_file, curr_exporter->second.filters.data(), NULL, NULL))
                     {
-                        auto model = ppf.get_points();
                         frame tex;
                         if (selected_tex_source_uid >= 0 && streams.find(selected_tex_source_uid) != streams.end())
                         {
@@ -1693,47 +1692,20 @@ namespace rs2
         std::map<int, frame> last_frames;
         try
         {
-            size_t index = 0;
-            while (ppf.resulting_queue.poll_for_frame(&f) && ++index < ppf.resulting_queue_max_size)
+            // Keep frames of shown streams, their post-processed outputs, and the point cloud
+            for( auto && kv : ppf.take_latest_frames( f ) )
             {
-                // Open the frame-set and validate the incoming frame originated from one of the source streams
-                // and save the frames on last_frames
-                // if one of the streams is missing we will use the last frame arrived
-                // point cloud is not a stream type yet it's a frame we want to display
-                if (f.is<rs2::frameset>())
+                // Keyed by uid here; re-key per tile, and where a stream is not split keep its newest class
+                auto & frame = kv.second;
+                auto profile_id = frame.get_profile().unique_id();
+                auto stream_origin_iter = streams_origin.find( profile_id );
+                if( frame.is< points >() || streams.find( profile_id ) != streams.end()
+                    || ( stream_origin_iter != streams_origin.end()
+                         && streams.find( stream_origin_iter->second ) != streams.end() ) )
                 {
-                    for (auto frame : f.as<rs2::frameset>())
-                    {
-                        auto profile_id = frame.get_profile().unique_id();
-
-                        if (frame.is< points >() || streams.find(profile_id) != streams.end())
-                        {
-                            last_frames[last_frames_key( frame )] = frame;
-                            continue;
-                        }
-
-                        auto stream_origin_iter = streams_origin.find(profile_id);
-                        if( (stream_origin_iter != streams_origin.end() && streams.find( stream_origin_iter->second ) != streams.end() ))
-                        {
-                            last_frames[last_frames_key( frame )] = frame;
-                        }
-                    }
-                }
-                else
-                {
-                    auto profile_id = f.get_profile().unique_id();
-
-                    if (f.is< points >() || streams.find(profile_id) != streams.end())
-                    {
-                        last_frames[last_frames_key( f )] = f;
-                        continue;
-                    }
-
-                    auto stream_origin_iter = streams_origin.find(profile_id);
-                    if ((stream_origin_iter != streams_origin.end() && streams.find(stream_origin_iter->second) != streams.end()))
-                    {
-                        last_frames[last_frames_key( f )] = f;
-                    }
+                    auto & slot = last_frames[last_frames_key( frame )];
+                    if( ! slot || frame.get_frame_number() > slot.get_frame_number() )
+                        slot = frame;
                 }
             }
 
@@ -4087,9 +4059,6 @@ namespace rs2
 
         mouse.prev_cursor = mouse.cursor;
     }
-
-    // Keys the passive tile of a split stream; kept clear of the unique ids the SDK hands out.
-    static const int PASSIVE_STREAM_KEY_OFFSET = 0x10000000;
 
     // Only Alternating Passive Depth interleaves the two exposure classes on one profile. Full Passive
     // delivers passive frames alone, so they stay on the stream's own tile.
