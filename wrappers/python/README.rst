@@ -36,6 +36,7 @@ JetPack 7   13.x   3.12
 Install with the matching Python (e.g. ``python3.10 -m pip install pyrealsense2`` on
 JetPack 6). Installing with a different Python pulls a wheel built against another
 JetPack's CUDA; ``pip`` cannot detect this and GPU-accelerated paths (e.g. RGB8/BGR8
-color conversion, align, pointcloud) will fail. For other
-Python versions, build from source. Details:
+color conversion, align, pointcloud) will fail. Python 3.8 (the JetPack 5 system Python) is
+end-of-life and not supported; the minimum is Python 3.9. For other Python versions, build
+from source. Details:
 https://github.com/realsenseai/librealsense/blob/master/doc/installation_jetson.md#5-install-the-python-wrapper-with-pip

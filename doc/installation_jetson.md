@@ -94,7 +94,7 @@ python3.10 -m pip install pyrealsense2
 Things to be aware of:
 
 * **Use only the Python version listed for your JetPack.** Installing with a different Python (for example Python 3.10 on JetPack 5, or Python 3.9 on JetPack 6) silently pulls a wheel built against another JetPack's CUDA. `pip` cannot detect this. Formats that need no GPU conversion (e.g. `YUYV`, `Z16`) may still stream while CUDA-accelerated paths such as `RGB8`/`BGR8` color conversion, align and pointcloud fail.
-* **JetPack 5 ships Python 3.8**, which is below the wrapper's minimum (`>=3.9`). Install Python 3.9 (e.g. `sudo apt-get install python3.9`) before `pip install`, or build from source with the system Python.
+* **JetPack 5 ships Python 3.8**, which is end-of-life and not supported by the wrapper. The minimum supported Python is **3.9**, so install it (e.g. `sudo apt-get install python3.9`) before `pip install`, or build from source with the system Python.
 * **Other Python versions are not available for Jetson** from PyPI. For any other Python version, or to run without CUDA, build the wrapper from source with the Python of your choice (see [Building from Source](#building-from-source-using-native-backend) and the [Python wrapper readme](../wrappers/python/readme.md#building-from-source)).
 * The `x86_64` and Windows wheels are not affected; this applies to `aarch64` only.
 
