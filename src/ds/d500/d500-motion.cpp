@@ -35,6 +35,8 @@ namespace librealsense
 {
     namespace
     {
+        // Raw counts per dps. HID backends multiply by it (set_gyro_scale_factor); the MIPI processing block
+        // uses its reciprocal via get_gyro_default_scale(), so both paths yield the same dps value.
         constexpr double RAW_TO_DPS_SCALE = 10000.0;
     }
 
@@ -119,7 +121,8 @@ namespace librealsense
             {
                 _motion_module_device_idx = static_cast<uint8_t>(add_sensor(sensor_ep));
                 sensor_ep->get_raw_sensor()->register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_hid_header_parser(&hid_header::timestamp));
-                register_gyro_sensitivity();
+                if( ! _is_mipi_device )
+                    register_gyro_sensitivity();
                 if( supports_physical_units() && ! _is_mipi_device )  // HID only, MIPI scales in the processing block
                     get_raw_motion_sensor()->set_gyro_scale_factor( RAW_TO_DPS_SCALE );
             }
