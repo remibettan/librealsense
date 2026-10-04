@@ -366,6 +366,7 @@ namespace rs2
         bool is_color_streaming() const;
         bool metadata_supported = false;
         bool get_curr_advanced_controls = true;
+        std::string _last_visual_preset;
         device dev;
         std::string id;
         bool is_recording = false;

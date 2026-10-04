@@ -2144,7 +2144,15 @@ namespace rs2
 
                     auto & visual_preset_opt_model = sub->options_metadata.at(RS2_OPTION_VISUAL_PRESET);
                     visual_preset_opt_model.custom_draw_method = draw_preset_combo_box;
-                    
+
+                    // The preset can change outside the GUI (e.g. by calibration), re-read the controls it affects
+                    auto const visual_preset = visual_preset_opt_model.value_as_string();
+                    if( visual_preset != _last_visual_preset )
+                    {
+                        _last_visual_preset = visual_preset;
+                        get_curr_advanced_controls = true;
+                    }
+
                     if (sub->draw_option(RS2_OPTION_VISUAL_PRESET, dev.is<playback>() || update_read_only_options, error_message, *viewer.not_model))
                     {
                         get_curr_advanced_controls = true;

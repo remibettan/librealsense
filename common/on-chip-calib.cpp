@@ -97,8 +97,16 @@ namespace rs2
         // Restore might be called several times, restore only if options where actually saved.
         if( _options_saved )
         {
-            restore_laser_emitter_state();
-            restore_thermal_loop_state();
+            // Called from GUI button handlers, an escaping exception would leave the ImGui frame unbalanced
+            try
+            {
+                restore_laser_emitter_state();
+                restore_thermal_loop_state();
+            }
+            catch( const std::exception & e )
+            {
+                log( rsutils::string::from() << "Failed to restore options after calibration: " << e.what() );
+            }
             _options_saved = false;
         }
     }
@@ -174,6 +182,9 @@ namespace rs2
                         _sub->stop(_viewer.not_model);
                     if (_sub_color.get() && _sub_color->streaming)
                         _sub_color->stop(_viewer.not_model);
+
+                    // Calibration may change and restore advanced controls on its own, re-read them once it ends
+                    _model.get_curr_advanced_controls = true;
                 });
 
             // Wait until frames from all active profiles stop arriving
