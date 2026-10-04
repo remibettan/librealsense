@@ -18,7 +18,7 @@ export function AssistantDisclaimer({ onAccept }: { onAccept: () => void }) {
           and reliance on the information provided. By using the AI Assistant, you acknowledge and accept these
           terms. For any critical, sensitive, or complex inquiries, please{' '}
           <a
-            href="https://realsenseai.com/contact-us/"
+            href="https://github.com/realsenseai/librealsense/issues/new"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sky-400 hover:underline"

@@ -170,7 +170,7 @@ namespace rs2
               "provided by the AI Assistant. Users of the AI Assistant bear sole responsibility for their "
               "interactions and reliance on the information provided. By using the AI Assistant, you acknowledge "
               "and accept these terms. For any critical, sensitive, or complex inquiries, please", nullptr },
-            { "contact the RealSense team", "https://realsenseai.com/contact-us/" },
+            { "contact the RealSense team", "https://github.com/realsenseai/librealsense/issues/new" },
             { "directly for confirmation and further assistance.", nullptr },
         };
         ImGui::PushFont(win.get_font());
