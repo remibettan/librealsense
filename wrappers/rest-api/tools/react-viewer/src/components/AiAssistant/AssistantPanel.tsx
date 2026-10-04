@@ -54,6 +54,13 @@ export function AssistantPanel() {
     }
     setDisclaimerAccepted(true)
   }
+  const showDisclaimer = !isChatbotMode && !disclaimerAccepted
+
+  // Keeps Tab from reaching the chat input behind the disclaimer overlay.
+  const contentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.inert = showDisclaimer
+  }, [showDisclaimer])
 
   const wasOpenRef = useRef(isAssistantOpen)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -209,8 +216,10 @@ export function AssistantPanel() {
       </div>
 
       <div className="relative flex-1 flex flex-col min-h-0">
-        {isChatbotMode ? <ChatBotContent /> : <AssistantContent />}
-        {!isChatbotMode && !disclaimerAccepted && <AssistantDisclaimer onAccept={acceptDisclaimer} />}
+        <div ref={contentRef} className="flex-1 flex flex-col min-h-0">
+          {isChatbotMode ? <ChatBotContent /> : <AssistantContent />}
+        </div>
+        {showDisclaimer && <AssistantDisclaimer onAccept={acceptDisclaimer} />}
       </div>
     </div>
   )

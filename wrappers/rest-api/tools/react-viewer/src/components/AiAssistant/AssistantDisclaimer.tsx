@@ -8,6 +8,7 @@ export function AssistantDisclaimer({ onAccept }: { onAccept: () => void }) {
     <div className="absolute inset-0 z-10 flex items-center justify-center p-3 bg-black/60">
       <div
         role="alertdialog"
+        aria-modal="true"
         aria-labelledby="rsai-disclaimer-title"
         className="w-full rounded-lg border border-gray-600 bg-rs-darker p-5 shadow-2xl"
       >
