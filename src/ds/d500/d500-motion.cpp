@@ -55,7 +55,7 @@ namespace librealsense
     bool d500_motion::supports_physical_units() const
     {
         static const firmware_version min_fw_supporting_physical_units( "7.58.40672.12546" );
-        return get_pid() != ds::D585S_PID && ! _is_mipi_device
+        return get_pid() != ds::D585S_PID
             && _fw_version >= min_fw_supporting_physical_units;
     }
 
@@ -120,7 +120,7 @@ namespace librealsense
                 _motion_module_device_idx = static_cast<uint8_t>(add_sensor(sensor_ep));
                 sensor_ep->get_raw_sensor()->register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_hid_header_parser(&hid_header::timestamp));
                 register_gyro_sensitivity();
-                if( supports_physical_units() )
+                if( supports_physical_units() && ! _is_mipi_device )  // HID only, MIPI scales in the processing block
                     get_raw_motion_sensor()->set_gyro_scale_factor( RAW_TO_DPS_SCALE );
             }
 #endif
@@ -206,13 +206,15 @@ namespace librealsense
         double gyro_scale_factor = get_gyro_default_scale();
         double accel_scale_factor = get_accel_default_scale();
         bool high_accuracy = is_imu_high_accuracy();
+        bool physical_units = supports_physical_units();
         motion_ep->register_processing_block(
             { {RS2_FORMAT_MOTION_XYZ32F} },
             { {RS2_FORMAT_MOTION_XYZ32F, RS2_STREAM_ACCEL}, {RS2_FORMAT_MOTION_XYZ32F, RS2_STREAM_GYRO} },
-            [mm_calib, high_accuracy, mm_correct_opt, gyro_scale_factor, accel_scale_factor, gyro_sensitivity_option]()
+            [mm_calib, high_accuracy, mm_correct_opt, gyro_scale_factor, accel_scale_factor, gyro_sensitivity_option, physical_units]()
             {
                 double scale = gyro_scale_factor;
-                if( gyro_sensitivity_option )
+                // FW delivers physical units: the sensitivity option only selects the range, the scale is fixed.
+                if( ! physical_units && gyro_sensitivity_option )
                 {
                     try
                     {
@@ -250,7 +252,7 @@ namespace librealsense
 
     void d500_motion::register_gyro_sensitivity()
     {
-        if( supports_physical_units() && ! _has_motion_module_failed )
+        if( supports_physical_units() && ! _is_mipi_device && ! _has_motion_module_failed )
         {
             auto raw_motion_sensor = get_raw_motion_sensor();
             raw_motion_sensor->enable_gyro_sensitivity_range_index();
