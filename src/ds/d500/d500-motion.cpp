@@ -191,24 +191,29 @@ namespace librealsense
 
         motion_ep->register_option(RS2_OPTION_GLOBAL_TIME_ENABLED, enable_global_time_option);
 
-        std::shared_ptr< option > gyro_sensitivity_option;
-        try
+        // Register a sensitivity control only when the driver reports exactly [0, max_level] with step 1.
+        auto register_mipi_sensitivity = [&]( rs2_option id, float max_level ) -> std::shared_ptr< option >
         {
-            auto candidate = std::make_shared< d500_mipi_gyro_sensitivity_option >( raw_motion_ep );
-            const auto range = candidate->get_range();
-            if( range.min == 0.f && range.max == 4.f && range.step == 1.f )
+            try
             {
-                gyro_sensitivity_option = candidate;
-                motion_ep->register_option( RS2_OPTION_GYRO_SENSITIVITY, candidate );
-            }
-            else
-                LOG_WARNING( "MIPI gyro sensitivity control has unexpected range ["
+                auto candidate = std::make_shared< d500_mipi_imu_sensitivity_option >( raw_motion_ep, id );
+                const auto range = candidate->get_range();
+                if( range.min == 0.f && range.max == max_level && range.step == 1.f )
+                {
+                    motion_ep->register_option( id, candidate );
+                    return candidate;
+                }
+                LOG_WARNING( "MIPI " << rs2_option_to_string( id ) << " control has unexpected range ["
                              << range.min << ", " << range.max << ", " << range.step << "]" );
-        }
-        catch( const std::exception & e )
-        {
-            LOG_WARNING( "MIPI gyro sensitivity control is unavailable: " << e.what() );
-        }
+            }
+            catch( const std::exception & e )
+            {
+                LOG_WARNING( "MIPI " << rs2_option_to_string( id ) << " control is unavailable: " << e.what() );
+            }
+            return nullptr;
+        };
+        auto gyro_sensitivity_option = register_mipi_sensitivity( RS2_OPTION_GYRO_SENSITIVITY, RS2_GYRO_SENSITIVITY_COUNT - 1.f );
+        register_mipi_sensitivity( RS2_OPTION_ACCEL_SENSITIVITY, RS2_ACCEL_SENSITIVITY_COUNT - 1.f );
 
         // register pre-processing
         std::shared_ptr<enable_motion_correction> mm_correct_opt = nullptr;
@@ -281,6 +286,8 @@ namespace librealsense
             register_feature(
                 std::make_shared< gyro_sensitivity_feature >(
                     raw_motion_sensor, get_motion_sensor(), 4.f ) );
+            get_motion_sensor().register_option( RS2_OPTION_ACCEL_SENSITIVITY,
+                                                 std::make_shared< d500_hid_accel_sensitivity_option >( raw_motion_sensor ) );
         }
     }
 
