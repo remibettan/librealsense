@@ -633,6 +633,9 @@ std::string const & get_string_( rs2_option value )
         CASE( EMITTER_MODE )
         CASE( ENABLE_ALIGNED_DEPTH )
         CASE( PASSIVE_DEPTH_MODE )
+        CASE( RGB_ENABLE_AUTO_EXPOSURE )
+        CASE( RGB_EXPOSURE )
+        CASE( RGB_GAIN )
 #undef CASE
         return arr;
     }();
