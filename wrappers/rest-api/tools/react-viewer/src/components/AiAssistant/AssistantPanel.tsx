@@ -7,8 +7,19 @@ import { useAppStore } from '../../store'
 import { getActiveProviderName } from '../../api/chat'
 import { AssistantContent } from './AssistantContent'
 import { ChatBotContent } from './ChatBotContent'
+import { AssistantDisclaimer } from './AssistantDisclaimer'
 
 type PanelMode = 'assistant' | 'chatbot'
+
+const DISCLAIMER_STORAGE_KEY = 'rs-assistant-disclaimer-accepted'
+
+function isDisclaimerAccepted(): boolean {
+  try {
+    return localStorage.getItem(DISCLAIMER_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
 
 /**
  * Slide-out panel for the RealSense AI Assistant. Always mounted (not conditionally
@@ -33,6 +44,16 @@ export function AssistantPanel() {
   const [mode, setMode] = useState<PanelMode>('assistant')
   const isChatbotMode = mode === 'chatbot'
   const providerName = getActiveProviderName()
+
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(isDisclaimerAccepted)
+  const acceptDisclaimer = () => {
+    try {
+      localStorage.setItem(DISCLAIMER_STORAGE_KEY, 'true')
+    } catch {
+      // localStorage may be unavailable — the disclaimer will just show again next launch
+    }
+    setDisclaimerAccepted(true)
+  }
 
   const wasOpenRef = useRef(isAssistantOpen)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -187,7 +208,10 @@ export function AssistantPanel() {
         </div>
       </div>
 
-      {isChatbotMode ? <ChatBotContent /> : <AssistantContent />}
+      <div className="relative flex-1 flex flex-col min-h-0">
+        {isChatbotMode ? <ChatBotContent /> : <AssistantContent />}
+        {!isChatbotMode && !disclaimerAccepted && <AssistantDisclaimer onAccept={acceptDisclaimer} />}
+      </div>
     </div>
   )
 }
