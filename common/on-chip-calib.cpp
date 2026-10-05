@@ -652,8 +652,23 @@ namespace rs2
 
             if (!_sub->is_selected_combination_supported())
             {
-                return false;
+                // (0, 0, 0) keeps the user's selection, which may not support the enabled streams
+                // (e.g. D455 1280x800 is IR only, no depth). Fall back to the sensor default profiles.
+                if( w != 0 || h != 0 )
+                    return false;
+
+                std::vector< stream_profile > defaults;
+                for( auto && p : _sub->profiles )
+                    if( p.is_default() && _sub->stream_enabled[p.unique_id()] )
+                        defaults.push_back( p );
+                _sub->update_ui( defaults );
+
+                if( defaults.empty() || ! _sub->is_selected_combination_supported() )
+                    return false;
             }
+
+            // Selection was changed directly, not via the UI
+            _sub->store_ui_selection();
 
             auto profiles = _sub->get_selected_profiles();
 
@@ -1425,6 +1440,10 @@ namespace rs2
                 _sub_color->ui = *_ui_color;
                 _ui_color.reset();
             }
+
+            _sub->store_ui_selection();
+            if( _sub_color.get() )
+                _sub_color->store_ui_selection();
 
             _sub->post_processing_enabled = _post_processing;
 
