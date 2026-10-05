@@ -35,10 +35,11 @@ interface CollapsibleProps {
   belowHeader?: ReactNode
   /** Pins it open and ignores clicks, so the user's own choice survives a search. */
   forcedOpen?: boolean
+  testId?: string
   children: ReactNode
 }
 
-export function Collapsible({ variant, label, aside, belowHeader, forcedOpen, children }: CollapsibleProps) {
+export function Collapsible({ variant, label, aside, belowHeader, forcedOpen, testId, children }: CollapsibleProps) {
   const style = VARIANTS[variant]
   const [localOpen, setLocalOpen] = useState(false)
   const isOpen = forcedOpen || localOpen
@@ -47,7 +48,7 @@ export function Collapsible({ variant, label, aside, belowHeader, forcedOpen, ch
   }
 
   return (
-    <div className={style.className}>
+    <div className={style.className} data-testid={testId}>
       <div className={style.headerClassName}>
         <button onClick={toggle} aria-expanded={isOpen} className={style.toggleClassName}>
           <CollapseChevron isOpen={isOpen} className={style.chevronClassName} />
