@@ -395,6 +395,11 @@ namespace librealsense
             make_rs400_sensor_ts_parser( make_attribute_parser( &md_capture_stats::hw_timestamp, md_capture_stat_attributes::hw_timestamp_attribute, md_prop_offset_stats ),
                 make_attribute_parser( &md_capture_timing::sensor_timestamp, md_capture_timing_attributes::sensor_timestamp_attribute, md_prop_offset_timing ) ) );
 
+        // Firmware reports the color exposure in 100-usec units; publish microseconds like the RGB exposure option.
+        depth_sensor.register_metadata( RS2_FRAME_METADATA_ACTUAL_EXPOSURE,
+            make_attribute_parser( &md_rgb_control::manual_exp, md_rgb_control_attributes::manual_exp_attribute, md_prop_offset,
+                []( rs2_metadata_type param ) { return param * 100; } ) );
+
         // The remaining RGB control/stats attributes (gain, exposure, white balance, brightness, ...) are common to
         // all DS color sensors - reuse the shared registration on the depth sensor.
         ds_color_common color_md( get_raw_depth_sensor(), depth_sensor, _fw_version, _hw_monitor, this );
