@@ -4,7 +4,7 @@
 import pytest
 import pyrealsense2 as rs
 import logging
-from calibrations_common import is_mipi_device, on_calib_cb, TARE_TIMEOUT_MS
+from calibrations_common import on_calib_cb, TARE_TIMEOUT_MS
 
 log = logging.getLogger(__name__)
 
@@ -13,6 +13,7 @@ pytestmark = [
     pytest.mark.device_each("D400*"),
     pytest.mark.device_each("D555"),  # The only D500 supporting tare
     pytest.mark.device_exclude("D401"),
+    pytest.mark.device_type_exclude("GMSL"),  # Tare over GMSL requires host assistance, enough to test USB and DDS, code path identical
     pytest.mark.context("calibration"),
 ]
 
@@ -30,6 +31,9 @@ def preset_name(sensor):
 @pytest.fixture
 def depth_sensor(test_device):
     dev, _ = test_device
+    # Skip before yield, the teardown cannot set the preset without advanced mode
+    if not rs.rs400_advanced_mode(dev).is_enabled():
+        pytest.skip("Custom visual preset requires advanced mode")
     sensor = dev.first_depth_sensor()
     yield sensor
     sensor.set_option(rs.option.visual_preset, int(rs.rs400_visual_preset.default))
@@ -37,11 +41,7 @@ def depth_sensor(test_device):
 
 def test_tare_restores_custom_preset(test_device, depth_sensor):
     dev, ctx = test_device
-    if is_mipi_device(dev):
-        pytest.skip("MIPI/GMSL devices require host assistance for tare calibration")
     am = rs.rs400_advanced_mode(dev)
-    if not am.is_enabled():
-        pytest.skip("Custom visual preset requires advanced mode")
 
     depth_sensor.set_option(rs.option.visual_preset, int(rs.rs400_visual_preset.default))
     depth_control = am.get_depth_control()
