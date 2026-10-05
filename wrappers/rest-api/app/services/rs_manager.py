@@ -11,7 +11,6 @@ from collections import defaultdict, deque
 from typing import Callable, Deque, Dict, List, Optional, Any, Tuple, Set
 import pyrealsense2 as rs
 import numpy as np
-import cv2
 from app.core.errors import RealSenseError
 from app.services import advanced_mode, options
 from app.models.device import Device, DeviceInfo
@@ -1770,11 +1769,8 @@ class RealSenseManager:
                                         "y": float(motion_data.y),
                                         "z": float(motion_data.z),
                                     }
-                                    # Create simple visualization frame for motion data
+                                    # Placeholder frame; viewers draw motion from metadata["motion_data"]
                                     frame = np.zeros((120, 320, 3), dtype=np.uint8)
-                                    cv2.putText(frame, f"X: {motion_data.x:.3f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 100), 1)
-                                    cv2.putText(frame, f"Y: {motion_data.y:.3f}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 255, 100), 1)
-                                    cv2.putText(frame, f"Z: {motion_data.z:.3f}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 100, 255), 1)
                             else:
                                 continue  # Unknown stream type
 
@@ -2153,12 +2149,6 @@ class RealSenseManager:
                 "z": float(motion_data.z),
             }
             processed_frame = np.zeros((120, 320, 3), dtype=np.uint8)
-            cv2.putText(processed_frame, f"X: {motion_data.x:.3f}", (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 100), 1)
-            cv2.putText(processed_frame, f"Y: {motion_data.y:.3f}", (10, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 255, 100), 1)
-            cv2.putText(processed_frame, f"Z: {motion_data.z:.3f}", (10, 90),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 100, 255), 1)
 
         metadata.update(self._build_viewer_info(info_source))
         return processed_frame, metadata
