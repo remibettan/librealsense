@@ -296,8 +296,7 @@ namespace librealsense
             auto auto_exposure = std::make_shared< uvc_pu_auto_exposure_option >( raw_ep, exposure, rgb_pu );
             color_ep.register_option( RS2_OPTION_RGB_ENABLE_AUTO_EXPOSURE, auto_exposure );
             color_ep.register_option( RS2_OPTION_RGB_EXPOSURE,
-                                      std::make_shared< auto_disabling_control >( std::make_shared< rgb_exposure_option >( exposure ),
-                                                                                  auto_exposure ) );
+                                      std::make_shared< auto_disabling_control >( exposure, auto_exposure ) );
             color_ep.register_option( RS2_OPTION_RGB_GAIN,
                                       std::make_shared< auto_disabling_control >( make_rgb_option( RS2_OPTION_GAIN ), auto_exposure ) );
         }

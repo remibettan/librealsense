@@ -248,21 +248,6 @@ namespace librealsense
         std::weak_ptr< passive_depth_mode_option > _passive_depth_mode;
     };
 
-    // The backends report exposure in 100-usec units; the RGB exposure option is published in microseconds.
-    class rgb_exposure_option : public proxy_option
-    {
-    public:
-        explicit rgb_exposure_option( std::shared_ptr< option > exposure_100us )
-            : proxy_option( std::move( exposure_100us ) )
-        {
-        }
-
-        void set( float value ) override;
-        float query() const override;
-        option_range get_range() const override;
-        const char * get_description() const override { return "RGB exposure time in microseconds"; }
-    };
-
     class power_line_freq_option : public uvc_pu_option
     {
     public:

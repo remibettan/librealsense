@@ -146,7 +146,7 @@ extern "C" {
         RS2_OPTION_ENABLE_ALIGNED_DEPTH, /**< Device-side depth-to-color alignment: the depth stream returns Z16 aligned to the color viewport. */
         RS2_OPTION_PASSIVE_DEPTH_MODE, /**< D585 2C: which exposure classes produce depth, see rs2_passive_depth_mode for values (pre-stream only) */
         RS2_OPTION_RGB_ENABLE_AUTO_EXPOSURE, /**< D585 2C: enable / disable auto-exposure of the RGB cameras, independent of the depth auto-exposure */
-        RS2_OPTION_RGB_EXPOSURE, /**< D585 2C: RGB exposure time in microseconds, in steps of 100. Setting any value disables RGB auto-exposure */
+        RS2_OPTION_RGB_EXPOSURE, /**< D585 2C: RGB exposure time in 100 microsecond units, like other color sensors. Setting any value disables RGB auto-exposure */
         RS2_OPTION_RGB_GAIN, /**< D585 2C: RGB gain. Setting any value disables RGB auto-exposure */
         RS2_OPTION_COUNT /**< Number of enumeration values. Not a valid input: intended to be used in for-loops. */
     } rs2_option;

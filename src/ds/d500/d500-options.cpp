@@ -5,29 +5,8 @@
 #include "d500-options.h"
 #include "d500-private.h"
 
-#include <cmath>
-
 namespace librealsense
 {
-    static constexpr float RGB_EXPOSURE_UNIT_USEC = 100.f;
-
-    void rgb_exposure_option::set( float value )
-    {
-        _proxy->set( std::round( value / RGB_EXPOSURE_UNIT_USEC ) );
-    }
-
-    float rgb_exposure_option::query() const
-    {
-        return _proxy->query() * RGB_EXPOSURE_UNIT_USEC;
-    }
-
-    option_range rgb_exposure_option::get_range() const
-    {
-        auto range = _proxy->get_range();
-        return { range.min * RGB_EXPOSURE_UNIT_USEC, range.max * RGB_EXPOSURE_UNIT_USEC,
-                 RGB_EXPOSURE_UNIT_USEC, range.def * RGB_EXPOSURE_UNIT_USEC };
-    }
-
     d500_mipi_gyro_sensitivity_option::d500_mipi_gyro_sensitivity_option(
         const std::weak_ptr< uvc_sensor > & ep )
         : uvc_pu_option( ep, RS2_OPTION_GYRO_SENSITIVITY )
