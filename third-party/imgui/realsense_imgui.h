@@ -28,6 +28,9 @@ namespace RsImGui
         ~ScopePushStyleVar() { ImGui::PopStyleVar(); }
     };
     bool          SliderIntWithSteps(const char* label, int* v, int v_min, int v_max, int v_step = 1);
+    // Call right after a slider: while it has keyboard focus and is not being dragged, Left/Right
+    // arrows move *v by one step (clamped). Returns true when *v changed this frame.
+    bool          SliderArrowNudge(float* v, float v_min, float v_max, float v_step);
     float         RoundScalar(float value, int decimal_precision);
     bool          CustomComboBox(const char* label, int* current_item, const char* const items[], int items_count);
     bool          SliderBehavior(const ImRect& frame_bb, ImGuiID id, float* v, float v_min, float v_max, float power, int decimal_precision, ImGuiSliderFlags flags, bool render_bg);

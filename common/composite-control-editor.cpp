@@ -168,6 +168,15 @@ namespace rs2
                 touch();
             if( ImGui::IsItemDeactivatedAfterEdit() )
                 finalize( numeric_commit_delay );
+            // One arrow press is one complete, discrete edit; a held key keeps re-arming the
+            // countdown, so the whole burst still lands as a single SET once the key is released.
+            float nudged = (float)value;
+            if( RsImGui::SliderArrowNudge( &nudged, (float)min_v, (float)max_v, (float)step ) )
+            {
+                value = (int)std::lround( nudged );
+                touch();
+                finalize( fast_commit_delay );
+            }
         }
 
         ImGui::PopStyleColor( 2 );

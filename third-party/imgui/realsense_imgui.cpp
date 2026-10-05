@@ -6,6 +6,23 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
+bool RsImGui::SliderArrowNudge(float* v, float v_min, float v_max, float v_step)
+{
+    if (!ImGui::IsItemFocused() || ImGui::IsItemActive())
+        return false;
+    // No key repeat: the viewer renders lazily when idle, so a frame can be long enough for ImGui's
+    // typematic repeat to count several steps for one press, and a held key would run away to the limit.
+    float nudged = *v;
+    if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false))
+        nudged = ImMin(*v + v_step, v_max);
+    else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false))
+        nudged = ImMax(*v - v_step, v_min);
+    if (nudged == *v)
+        return false;
+    *v = nudged;
+    return true;
+}
+
 bool RsImGui::SliderIntWithSteps(const char* label, int* v, int v_min, int v_max, int v_step)
 {
     float originalValue = static_cast<float>(*v);
