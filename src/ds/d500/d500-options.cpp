@@ -54,8 +54,8 @@ namespace librealsense
         auto sensor = _sensor.lock();
         if( ! sensor )
             throw invalid_value_exception( "Hid sensor is not alive for setting" );
-        if( sensor->is_streaming() )
-            throw invalid_value_exception( "setting this option during streaming is not allowed!" );
+        if( sensor->is_opened() )
+            throw invalid_value_exception( "setting this option while the sensor is open is not allowed!" );
         if( ! is_valid( value ) )
             throw invalid_value_exception( "set(accel_sensitivity) failed! Invalid accel sensitivity request " + std::to_string( value ) );
 
