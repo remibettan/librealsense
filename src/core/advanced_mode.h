@@ -159,6 +159,7 @@ namespace librealsense
         virtual void device_specific_initialization();
 
         friend class auto_calibrated;
+        friend class d500_auto_calibrated;
 
         void set_exposure( sensor_base * sensor, const exposure_control & val );
         void set_auto_exposure( sensor_base * sensor, const auto_exposure_control & val );
