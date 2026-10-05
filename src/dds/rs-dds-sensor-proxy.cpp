@@ -53,6 +53,13 @@ using rsutils::json;
 namespace librealsense {
 
 
+// Mirrors realdds::dds_video_stream_profile::is_compressed_encoding()
+static bool is_compressed_format( rs2_format format )
+{
+    return format == RS2_FORMAT_MJPEG || format == RS2_FORMAT_H264;
+}
+
+
 dds_sensor_proxy::dds_sensor_proxy( std::string const & sensor_name,
                                     software_device * owner,
                                     std::shared_ptr< realdds::dds_device > const & dev )
@@ -410,12 +417,19 @@ void dds_sensor_proxy::handle_video_data( std::vector< uint8_t > && buffer,
     if( ! vid_profile )
         throw invalid_value_exception( "non-video profile provided to on_video_frame" );
 
+    auto format = vid_profile->get_format();
     auto height = vid_profile->get_height();
     auto width = vid_profile->get_width();
     auto stride = static_cast< int >(height > 0 ? data.raw_size / height : data.raw_size );
-    auto expected_bpp = get_image_bpp(vid_profile->get_format()) / 8;
+    auto expected_bpp = get_image_bpp( format ) / 8;
     auto expected_size = height * width * expected_bpp;
-    if( data.raw_size != expected_size )
+    if( is_compressed_format( format ) )
+    {
+        // realdds already drops empty payloads; this guards in case that ever changes
+        if( ! data.raw_size )
+            throw invalid_value_exception( "Received an empty compressed frame" );
+    }
+    else if( data.raw_size != expected_size )
         throw invalid_value_exception( rsutils::string::from() << "Received frame with unexpected size " << data.raw_size << ", expected " << expected_size );
 
     auto new_frame_interface = allocate_new_video_frame( vid_profile, stride, expected_bpp, std::move( data ) );    
