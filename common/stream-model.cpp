@@ -1260,6 +1260,9 @@ namespace rs2
             { RS2_FRAME_METADATA_POWER_LINE_FREQUENCY                 , "Power Line Frequency for anti-flickering Off/50Hz/60Hz/Auto. " },
         };
 
+        // Color sensors report the exposure in 100 usec units
+        if( profile.stream_type() == RS2_STREAM_COLOR )
+            descriptions[RS2_FRAME_METADATA_ACTUAL_EXPOSURE] = "Sensor's exposure width. When Auto Exposure (AE) is on the value is controlled by firmware. 100 usec units";
 
         //add_descriptions_for_d500_metadata_fields(descriptions);
         bool use_depth_mapping_metadata_adaptations = false;
