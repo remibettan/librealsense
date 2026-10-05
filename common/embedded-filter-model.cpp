@@ -202,7 +202,7 @@ namespace rs2
         {
             ImGui::Dummy( ImVec2( 0, 4 ) );
             ImVec2 frame_min = ImGui::GetCursorScreenPos();
-            frame_min.x -= 4.f;
+            frame_min.x -= 9.f;   // same gap to the sliders on the left as the right
             frame_min.y -= 4.f;
             float frame_width = ImGui::GetContentRegionAvail().x;
 
