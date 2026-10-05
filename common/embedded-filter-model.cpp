@@ -303,7 +303,7 @@ namespace rs2
 
         any_field_active |= _temporal_filter_dpp_editor.draw_enum_field(
             "Persistency mode", temporal_persistency_description, "temporal_filter_dpp_persistency_index",
-            temporal_persistency_labels, 9, v.persistency_index );
+            temporal_persistency_labels, v.persistency_index );
 
         return any_field_active;
     }
@@ -338,7 +338,7 @@ namespace rs2
         auto & v = _hdrd_editor.value;
         bool any_field_active = _hdrd_editor.draw_enum_field( "Filter Type",
             "Downscale: reduce resolution by a fixed ratio. Lookup Shift: shift the disparity lookup by a pixel count.",
-            "hdrd_filter_type", filter_type_labels, 2, v.filter_type );
+            "hdrd_filter_type", filter_type_labels, v.filter_type );
 
         const bool downscale_relevant = ( v.filter_type == 0 );
         if( ! downscale_relevant )
@@ -346,7 +346,7 @@ namespace rs2
         // Wire values are 1 (x2) and 2 (x4), not 0-based like the other enum fields - value_offset
         // converts to and from a 0-based index rather than changing the documented wire values.
         any_field_active |= _hdrd_editor.draw_enum_field( "Downscale Ratio", "Resolution reduction applied by the Downscale filter type.",
-            "hdrd_downscale_ratio", downscale_ratio_labels, 2, v.downscale_ratio, 1 );
+            "hdrd_downscale_ratio", downscale_ratio_labels, v.downscale_ratio, 1 );
         if( ! downscale_relevant )
             ImGui::EndDisabled();
 
@@ -354,7 +354,7 @@ namespace rs2
         if( ! shift_relevant )
             ImGui::BeginDisabled();
         any_field_active |= _hdrd_editor.draw_enum_field( "Shift Mode", "Fixed shift preset, or Manual to use the Shift Pixels value below.",
-            "hdrd_shift_mode", shift_mode_labels, 3, v.shift_mode );
+            "hdrd_shift_mode", shift_mode_labels, v.shift_mode );
         if( ! shift_relevant )
             ImGui::EndDisabled();
 
@@ -370,7 +370,7 @@ namespace rs2
             "Zero range: fill only originally-empty depth pixels.\n"
             "MinZ (computed): firmware picks the threshold for the active resolution.\n"
             "Manual: use the threshold value below.",
-            "hdrd_threshold_mode", threshold_mode_labels, 3, v.threshold_mode );
+            "hdrd_threshold_mode", threshold_mode_labels, v.threshold_mode );
 
         const bool threshold_relevant = ( v.threshold_mode == 2 );
         if( ! threshold_relevant )

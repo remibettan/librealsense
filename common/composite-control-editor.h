@@ -54,6 +54,12 @@ namespace rs2
         // Label + combobox of labels; value = selected index + value_offset.
         bool draw_enum_field( const char * name, const char * description, const char * id,
                               const char * const labels[], int count, int & value, int value_offset = 0 );
+        template< int N >
+        bool draw_enum_field( const char * name, const char * description, const char * id,
+                              const char * const ( &labels )[N], int & value, int value_offset = 0 )
+        {
+            return draw_enum_field( name, description, id, labels, N, value, value_offset );
+        }
 
     protected:
         // Blue border around the group plus a bar along its bottom edge that shrinks as the countdown
