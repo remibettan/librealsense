@@ -40,6 +40,7 @@ namespace RsImGui
     void          CustomTooltip( const char * fmt, const char * label );
     void          CustomTooltip( const char * label );
     void          CustomTooltip(const char* fmt, float value);
+    void          BetaBadge(const char* tooltip = nullptr);   // small gradient "BETA" pill drawn as an inline item
     }
 
 // Macros to create unique function names using the current line number (__LINE__)

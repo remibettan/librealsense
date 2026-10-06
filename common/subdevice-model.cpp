@@ -100,6 +100,21 @@ namespace rs2
             && std::string(dev.get_info(RS2_CAMERA_INFO_PRODUCT_LINE)) == "D500";
     }
 
+    bool is_beta_stream(rs2_stream type)
+    {
+        return type == RS2_STREAM_OCCUPANCY
+            || type == RS2_STREAM_LABELED_POINT_CLOUD
+            || type == RS2_STREAM_OBJECT_DETECTION;
+    }
+
+    static void draw_beta_badge_if_needed(rs2_stream type)
+    {
+        if (!is_beta_stream(type))
+            return;
+        ImGui::SameLine();
+        RsImGui::BetaBadge("Beta feature - still maturing, behavior and output may change");
+    }
+
     void subdevice_model::populate_options( const std::string & opt_base_label,
                                             bool * options_invalidated,
                                             std::string & error_message )
@@ -878,6 +893,7 @@ namespace rs2
                     }
                     if (mode_locked) ImGui::EndDisabled();
                 }
+                draw_beta_badge_if_needed(stream_type_of(f.first));
             }
 
             if (stream_enabled[f.first])
@@ -1142,6 +1158,7 @@ namespace rs2
                     }
                     if (mode_locked) ImGui::EndDisabled();
                 }
+                draw_beta_badge_if_needed(stream_type_of(f.first));
             }
 
             if (stream_enabled[f.first])

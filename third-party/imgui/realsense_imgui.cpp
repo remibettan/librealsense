@@ -430,3 +430,37 @@ void RsImGui::CustomTooltip(const char* fmt, float value)
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar();
 }
+void RsImGui::BetaBadge(const char* tooltip)
+{
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    if (window->SkipItems)
+        return;
+
+    const char* text = "BETA";
+    const float pad_x = 5.f, pad_y = 1.f, rounding = 4.f, thickness = 1.5f;
+    const ImVec2 text_size = ImGui::CalcTextSize(text);
+    const ImVec2 size(text_size.x + 2 * pad_x, text_size.y + 2 * pad_y);
+    // Center the badge on the current text line so it sits next to a label or checkbox
+    const ImVec2 pos(window->DC.CursorPos.x, window->DC.CursorPos.y + (window->DC.CurrLineSize.y > 0 ? (window->DC.CurrLineSize.y - size.y) * 0.5f : 0.f));
+    const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
+    ImGui::ItemSize(size);
+    if (!ImGui::ItemAdd(bb, 0))
+        return;
+
+    // Blue-to-violet gradient on the frame and a lighter one on the text; the alpha stays from the white base color
+    const ImU32 frame_top = IM_COL32(0x3E, 0x5C, 0xFF, 0xFF), frame_bottom = IM_COL32(0x8A, 0x3E, 0xFF, 0xFF);
+    const ImU32 text_top = IM_COL32(0x9C, 0xC4, 0xFF, 0xFF), text_bottom = IM_COL32(0xCC, 0xB2, 0xFF, 0xFF);
+    const ImVec2 grad_p0(bb.Min.x, bb.Min.y), grad_p1(bb.Min.x, bb.Max.y);
+    ImDrawList* dl = window->DrawList;
+
+    int vtx_start = dl->VtxBuffer.Size;
+    dl->AddRect(bb.Min, bb.Max, IM_COL32_WHITE, rounding, 0, thickness);
+    ImGui::ShadeVertsLinearColorGradientKeepAlpha(dl, vtx_start, dl->VtxBuffer.Size, grad_p0, grad_p1, frame_top, frame_bottom);
+
+    vtx_start = dl->VtxBuffer.Size;
+    dl->AddText(ImVec2(pos.x + pad_x, pos.y + pad_y), IM_COL32_WHITE, text);
+    ImGui::ShadeVertsLinearColorGradientKeepAlpha(dl, vtx_start, dl->VtxBuffer.Size, grad_p0, grad_p1, text_top, text_bottom);
+
+    if (tooltip && ImGui::IsItemHovered())
+        RsImGui::CustomTooltip(tooltip);
+}
