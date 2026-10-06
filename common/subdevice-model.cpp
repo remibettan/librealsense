@@ -107,9 +107,17 @@ namespace rs2
             || type == RS2_STREAM_OBJECT_DETECTION;
     }
 
-    static void draw_beta_badge()
+    static void draw_beta_badge(bool streaming)
     {
-        RsImGui::BetaBadgeSuperscript("Beta feature - still maturing, behavior and output may change");
+        const char* tooltip = "Beta feature - still maturing, behavior and output may change";
+        // Checkbox rows have padding to float the badge in, the tighter text rows shown while streaming do not
+        if (streaming)
+        {
+            ImGui::SameLine();
+            RsImGui::BetaBadge(tooltip);
+        }
+        else
+            RsImGui::BetaBadgeSuperscript(tooltip);
     }
 
     void subdevice_model::populate_options( const std::string & opt_base_label,
@@ -892,7 +900,7 @@ namespace rs2
                     if (mode_locked) ImGui::EndDisabled();
                 }
                 if (beta)
-                    draw_beta_badge();
+                    draw_beta_badge(streaming);
             }
 
             if (stream_enabled[f.first])
@@ -1161,7 +1169,7 @@ namespace rs2
                     if (mode_locked) ImGui::EndDisabled();
                 }
                 if (beta)
-                    draw_beta_badge();
+                    draw_beta_badge(streaming);
             }
 
             if (stream_enabled[f.first])
