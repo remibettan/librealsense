@@ -659,8 +659,11 @@ namespace rs2
 
                 std::vector< stream_profile > defaults;
                 for( auto && p : _sub->profiles )
-                    if( p.is_default() && _sub->stream_enabled[p.unique_id()] )
+                {
+                    auto enabled = _sub->stream_enabled.find( p.unique_id() );
+                    if( p.is_default() && enabled != _sub->stream_enabled.end() && enabled->second )
                         defaults.push_back( p );
+                }
                 if( defaults.empty() )
                     return false;
 
@@ -686,6 +689,7 @@ namespace rs2
                 }
 
                 _sub_color->select_resolution( w, h, RS2_STREAM_COLOR );
+                _sub_color->store_ui_selection();
 
                 profiles_color = _sub_color->get_selected_profiles();
             }
@@ -1364,16 +1368,7 @@ namespace rs2
             {
                 log( "Calibration failed with exception" );
                 stop_viewer(invoke);
-                if (_ui.get())
-                {
-                    _sub->ui = *_ui;
-                    _ui.reset();
-                }
-                if (action == RS2_CALIB_ACTION_UVMAPPING_CALIB && _sub_color.get() && _ui_color.get())
-                {
-                    _sub_color->ui = *_ui_color;
-                    _ui_color.reset();
-                }
+                restore_ui_selection();
 
                 if (_was_streaming)
                     start_viewer(0, 0, 0, invoke);
@@ -1394,16 +1389,7 @@ namespace rs2
         if (action != RS2_CALIB_ACTION_UVMAPPING_CALIB)
         {
             stop_viewer(invoke);
-            if (_sub.get() && _ui.get())
-            {
-                _sub->ui = *_ui;
-                _ui.reset();
-            }
-            if (_sub_color.get() && _ui_color.get())
-            {
-                _sub_color->ui = *_ui_color;
-                _ui_color.reset();
-            }
+            restore_ui_selection();
         }
 
         if (action != RS2_CALIB_ACTION_TARE_GROUND_TRUTH && action != RS2_CALIB_ACTION_UVMAPPING_CALIB)
@@ -1421,6 +1407,22 @@ namespace rs2
         _done = true;
     }
 
+    void on_chip_calib_manager::restore_ui_selection()
+    {
+        if( _sub.get() && _ui.get() )
+        {
+            _sub->ui = *_ui;
+            _sub->store_ui_selection();
+            _ui.reset();
+        }
+        if( _sub_color.get() && _ui_color.get() ) // Color selection saved only for UV-mapping
+        {
+            _sub_color->ui = *_ui_color;
+            _sub_color->store_ui_selection();
+            _ui_color.reset();
+        }
+    }
+
     void on_chip_calib_manager::restore_workspace(invoker invoke)
     {
         try
@@ -1431,21 +1433,7 @@ namespace rs2
             _viewer.synchronization_enable = _synchronized;
 
             stop_viewer(invoke);
-
-            if (_sub.get() && _ui.get())
-            {
-                _sub->ui = *_ui;
-                _ui.reset();
-            }
-            if (action == RS2_CALIB_ACTION_UVMAPPING_CALIB && _sub_color.get() && _ui_color.get())
-            {
-                _sub_color->ui = *_ui_color;
-                _ui_color.reset();
-            }
-
-            _sub->store_ui_selection();
-            if( _sub_color.get() )
-                _sub_color->store_ui_selection();
+            restore_ui_selection();
 
             _sub->post_processing_enabled = _post_processing;
 
