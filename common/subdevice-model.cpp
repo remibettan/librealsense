@@ -107,7 +107,8 @@ namespace rs2
             || type == RS2_STREAM_OBJECT_DETECTION;
     }
 
-    static void draw_beta_badge(bool streaming)
+    // Returns the badge's right edge (screen x) when it floats over the row, so whatever follows on the row can start past it
+    static float draw_beta_badge(bool streaming)
     {
         const char* tooltip = "Beta feature - still maturing, behavior and output may change";
         // Checkbox rows have padding to float the badge in, the tighter text rows shown while streaming do not
@@ -115,9 +116,9 @@ namespace rs2
         {
             ImGui::SameLine();
             RsImGui::BetaBadge(tooltip);
+            return 0.f;
         }
-        else
-            RsImGui::BetaBadgeSuperscript(tooltip);
+        return RsImGui::BetaBadgeSuperscript(tooltip);
     }
 
     void subdevice_model::populate_options( const std::string & opt_base_label,
@@ -835,6 +836,7 @@ namespace rs2
 
             auto formats_chars = get_string_pointers(f.second);
             const bool beta = is_beta_stream(stream_type_of(f.first));
+            float badge_right = 0.f;
             if (!streaming || (streaming && stream_enabled[f.first]))
             {
                 if (streaming)
@@ -900,7 +902,7 @@ namespace rs2
                     if (mode_locked) ImGui::EndDisabled();
                 }
                 if (beta)
-                    draw_beta_badge(streaming);
+                    badge_right = draw_beta_badge(streaming);
             }
 
             if (stream_enabled[f.first])
@@ -908,9 +910,12 @@ namespace rs2
                 if (show_single_fps_list)
                 {
                     ImGui::SameLine();
-                    // A long stream name can run past the column; the combo then starts after it
+                    // A long stream name can run past the column; the combo then starts after it, and after a floating badge
                     if (ImGui::GetCursorPosX() < col1)
                         ImGui::SetCursorPosX(col1);
+                    const float badge_clearance = badge_right + ImGui::GetStyle().ItemSpacing.x;
+                    if (ImGui::GetCursorScreenPos().x < badge_clearance)
+                        ImGui::SetCursorScreenPos({ badge_clearance, ImGui::GetCursorScreenPos().y });
                 }
 
                 label = rsutils::string::from()
@@ -1137,6 +1142,7 @@ namespace rs2
 
             auto formats_chars = get_string_pointers(f.second);
             const bool beta = is_beta_stream(stream_type_of(f.first));
+            float badge_right = 0.f;
             if (!streaming || (streaming && stream_enabled[f.first]))
             {
                 if (streaming)
@@ -1169,7 +1175,7 @@ namespace rs2
                     if (mode_locked) ImGui::EndDisabled();
                 }
                 if (beta)
-                    draw_beta_badge(streaming);
+                    badge_right = draw_beta_badge(streaming);
             }
 
             if (stream_enabled[f.first])
@@ -1177,9 +1183,12 @@ namespace rs2
                 if (show_single_fps_list)
                 {
                     ImGui::SameLine();
-                    // A long stream name can run past the column; the combo then starts after it
+                    // A long stream name can run past the column; the combo then starts after it, and after a floating badge
                     if (ImGui::GetCursorPosX() < col1)
                         ImGui::SetCursorPosX(col1);
+                    const float badge_clearance = badge_right + ImGui::GetStyle().ItemSpacing.x;
+                    if (ImGui::GetCursorScreenPos().x < badge_clearance)
+                        ImGui::SetCursorScreenPos({ badge_clearance, ImGui::GetCursorScreenPos().y });
                 }
 
                 label = rsutils::string::from()

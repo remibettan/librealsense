@@ -41,7 +41,7 @@ namespace RsImGui
     void          CustomTooltip( const char * label );
     void          CustomTooltip(const char* fmt, float value);
     void          BetaBadge(const char* tooltip = nullptr);   // small gradient "BETA" pill drawn as an inline item
-    void          BetaBadgeSuperscript(const char* tooltip = nullptr);   // same pill floated above the end of the last item, taking no layout room
+    float         BetaBadgeSuperscript(const char* tooltip = nullptr);   // same pill on the upper-right corner of the last item, taking no layout room; returns its right edge (screen x)
     }
 
 // Macros to create unique function names using the current line number (__LINE__)
