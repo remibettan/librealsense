@@ -661,9 +661,11 @@ namespace rs2
                 for( auto && p : _sub->profiles )
                     if( p.is_default() && _sub->stream_enabled[p.unique_id()] )
                         defaults.push_back( p );
-                _sub->update_ui( defaults );
+                if( defaults.empty() )
+                    return false;
 
-                if( defaults.empty() || ! _sub->is_selected_combination_supported() )
+                _sub->update_ui( defaults );
+                if( ! _sub->is_selected_combination_supported() )
                     return false;
             }
 
