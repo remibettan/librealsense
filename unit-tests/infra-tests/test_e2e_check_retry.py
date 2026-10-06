@@ -37,3 +37,13 @@ class TestCheckRetry:
         assert outcomes.get("error", 0) == 0, out
         assert outcomes.get("failed", 0) == 0, out
         assert outcomes.get("rerun") == 1, f"expected exactly 1 rerun: {out}"
+
+    def test_soft_check_failures_logged_with_context(self):
+        """Every failed soft check is logged with its file:line context (pytest-check would
+        drop it because conftest sets tbstyle=no, and by default only the first gets it)."""
+        rc, out, tracking = run_e2e("pytest-check-retry.py", "-k", "test_soft_check_context")
+        assert rc != 0, out
+        log = tracking["logs"].get("pytest-check-retry.log", "")
+        assert "Failed Checks: 2" in log, log
+        assert "pytest-check-retry.py:" in log and "in helper() -> check.is_true(False, \"first\")" in log, log
+        assert "in test_soft_check_context() -> check.equal(1, 2, \"second\")" in log, log

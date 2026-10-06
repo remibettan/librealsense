@@ -301,6 +301,8 @@ def pytest_configure(config):
     if config.getoption("--tb") == "auto":
         config.option.tbstyle = "no"
     config.option.reportchars = "fE"
+    # Show the file:line context for every failed soft check, not just the first one
+    config.option.check_max_tb = sys.maxsize
 
     # Suppress paramiko and cryptography deprecation warnings
     config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning:cryptography")
@@ -543,6 +545,10 @@ def pytest_runtest_call(item):
 def pytest_sessionstart(session):
     """Configure the junitxml plugin once it exists (after pytest_configure)."""
     configure_junit_logging(session.config)
+    # pytest-check copies tbstyle ("no", set above) at configure time and would drop the
+    # file:line context of each failed check; restore it so the per-test logs show it.
+    from pytest_check import pseudo_traceback
+    pseudo_traceback._traceback_style = "auto"
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
