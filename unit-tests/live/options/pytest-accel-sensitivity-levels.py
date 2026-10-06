@@ -24,7 +24,7 @@ def test_accel_sensitivity_all_levels(test_device):
     if not motion_sensor.supports(rs.option.accel_sensitivity):
         pytest.skip("Accel Sensitivity option not supported on this device/FW/driver")
 
-    for value in range(int(rs.accel_sensitivity.count)):
+    for value in range(len(rs.accel_sensitivity.__members__)):
         expected = float(value)
         motion_sensor.set_option(rs.option.accel_sensitivity, expected)
         assert motion_sensor.get_option(rs.option.accel_sensitivity) == expected, f"level {value}: readback before streaming"
