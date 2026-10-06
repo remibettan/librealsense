@@ -536,10 +536,11 @@ def pytest_runtest_call(item):
         return
     num_failures = check_log._num_failures
     check_log.clear_failures()
-    message = "\n".join(failures + ["-" * 60, f"Failed Checks: {num_failures}"])
+    footer = f"Failed Checks: {num_failures}"
     ensure_newline()
-    log.error(f"call failed: {num_failures} soft-check failure(s):\n{message}")
-    raise AssertionError(message)
+    log.error(f"call failed: {num_failures} soft-check failure(s):\n" + "\n".join(failures + ["-" * 60, footer]))
+    # Keep the console short: only the first failed check, the per-test log has them all
+    raise AssertionError(f"{failures[0]}\n{footer}")
 
 
 def pytest_sessionstart(session):
