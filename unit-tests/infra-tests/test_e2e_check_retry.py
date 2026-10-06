@@ -47,5 +47,6 @@ class TestCheckRetry:
         assert rc != 0, out
         log = tracking["logs"].get("pytest-check-retry.log", "")
         assert "Failed Checks: 2" in log, log
-        assert "pytest-check-retry.py:" in log and "in helper() -> check.is_true(False, \"first\")" in log, log
+        assert "pytest-check-retry.py:" in log, log
+        assert "in helper() -> check.is_true(False, \"first\")" in log, log
         assert "in test_soft_check_context() -> check.equal(1, 2, \"second\")" in log, log
