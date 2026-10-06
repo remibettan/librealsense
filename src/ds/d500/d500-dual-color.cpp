@@ -287,7 +287,9 @@ namespace librealsense
             if( is_pu_published( raw_ep, rgb_pu, id ) )
                 color_ep.register_option( id, make_rgb_option( id ) );
 
-        // RGB exposure / gain / AE live under their own IDs: the standard ones stay with the depth sensor's controls.
+        // The standard exposure / gain / AE options stay with the depth sensor, so RGB gets its own IDs.
+        // A user's RS2_OPTION_RGB_EXPOSURE is routed to the standard RS2_OPTION_EXPOSURE, which is the ID the backends
+        // know, but bound to the RGB PU. Same for RGB_GAIN -> GAIN and RGB_ENABLE_AUTO_EXPOSURE -> ENABLE_AUTO_EXPOSURE.
         if( is_pu_published( raw_ep, rgb_pu, RS2_OPTION_ENABLE_AUTO_EXPOSURE )
             && is_pu_published( raw_ep, rgb_pu, RS2_OPTION_EXPOSURE )
             && is_pu_published( raw_ep, rgb_pu, RS2_OPTION_GAIN ) )
