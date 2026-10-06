@@ -503,7 +503,7 @@ def _reset_pytest_timeout_for_retry(item):
     hooks.pytest_timeout_set_timer(item=item, settings=settings)
 
 
-@pytest.hookimpl(hookwrapper=True)
+@pytest.hookimpl(wrapper=True)
 def pytest_runtest_call(item):
     """Reset pytest-timeout between rerun attempts + surface pytest-check
     soft-check failures in the call phase.
@@ -516,31 +516,28 @@ def pytest_runtest_call(item):
     """
     _reset_pytest_timeout_for_retry(item)
 
-    outcome = yield
-
     # Log every call-phase failure here — one place that fires on every rerun attempt —
     # so each attempt's failure is captured in the per-test .log file.
-    if outcome.excinfo is not None and not issubclass(outcome.excinfo[0], pytest.skip.Exception):
-        ensure_newline()
-        log.error(f"call failed: {outcome.excinfo[0].__name__}: {outcome.excinfo[1]}")
-
     try:
-        from pytest_check import check_log
-    except ImportError:
-        return
+        result = yield
+    except BaseException as e:
+        if not isinstance(e, pytest.skip.Exception):
+            ensure_newline()
+            log.error(f"call failed: {type(e).__name__}: {e}")
+        raise  # a real exception is never masked by soft-check failures
+
+    from pytest_check import check_log
     failures = check_log.get_failures()
-    if not failures:
-        return
-    # Don't mask a real exception, and leave pytest-check's xfail handling to it.
-    if outcome.excinfo is not None or item.get_closest_marker("xfail"):
-        return
+    # Leave pytest-check's xfail handling to it.
+    if not failures or item.get_closest_marker("xfail"):
+        return result
     num_failures = check_log._num_failures
     check_log.clear_failures()
     footer = f"Failed Checks: {num_failures}"
     ensure_newline()
     log.error(f"call failed: {num_failures} soft-check failure(s):\n" + "\n".join(failures + ["-" * 60, footer]))
-    # Keep the console short: only the first failed check, the per-test log has them all
-    raise AssertionError(f"{failures[0]}\n{footer}")
+    # Keep the console to one line: first failed check + count; the per-test log has it all
+    raise AssertionError(f"{failures[0].splitlines()[0]} ({footer})")
 
 
 def pytest_sessionstart(session):
