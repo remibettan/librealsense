@@ -109,8 +109,7 @@ namespace rs2
 
     static void draw_beta_badge()
     {
-        ImGui::SameLine();
-        RsImGui::BetaBadge("Beta feature - still maturing, behavior and output may change");
+        RsImGui::BetaBadgeSuperscript("Beta feature - still maturing, behavior and output may change");
     }
 
     void subdevice_model::populate_options( const std::string & opt_base_label,
@@ -901,7 +900,7 @@ namespace rs2
                 if (show_single_fps_list)
                 {
                     ImGui::SameLine();
-                    // A long stream name (plus the BETA badge) can run past the column; the combo then starts after it
+                    // A long stream name can run past the column; the combo then starts after it
                     if (ImGui::GetCursorPosX() < col1)
                         ImGui::SetCursorPosX(col1);
                 }
@@ -1170,7 +1169,7 @@ namespace rs2
                 if (show_single_fps_list)
                 {
                     ImGui::SameLine();
-                    // A long stream name (plus the BETA badge) can run past the column; the combo then starts after it
+                    // A long stream name can run past the column; the combo then starts after it
                     if (ImGui::GetCursorPosX() < col1)
                         ImGui::SetCursorPosX(col1);
                 }
