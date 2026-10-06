@@ -553,6 +553,7 @@ export function MetadataPanel({ metadata, streamType, fps, show, onToggle, butto
       <button
         type="button"
         onClick={() => onToggle(!show)}
+        data-testid="toggle-metadata"
         title={show ? 'Hide frame metadata' : 'Show frame metadata'}
         className={`px-2 py-0.5 bg-black/60 hover:bg-black/80 rounded text-xs text-white border border-rs-border z-20 ${buttonClassName}`}
       >
@@ -573,7 +574,7 @@ export function MetadataItem({ label, value }: { label: string; value: ReactNode
   return (
     <div className="flex justify-between border-b border-rs-border/50 py-0.5">
       <span className="text-rs-muted truncate pr-2">{label}</span>
-      <span className="text-right shrink-0">{value}</span>
+      <span className="text-right shrink-0" data-testid={`metadata-${label.toLowerCase().replace(/\s+/g, '-')}`}>{value}</span>
     </div>
   )
 }
