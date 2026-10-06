@@ -288,18 +288,18 @@ namespace librealsense
                 color_ep.register_option( id, make_rgb_option( id ) );
 
         // The standard exposure / gain / AE options stay with the depth sensor, so RGB gets its own IDs.
-        // A user's RS2_OPTION_RGB_EXPOSURE is routed to the standard RS2_OPTION_EXPOSURE, which is the ID the backends
-        // know, but bound to the RGB PU. Same for RGB_GAIN -> GAIN and RGB_ENABLE_AUTO_EXPOSURE -> ENABLE_AUTO_EXPOSURE.
+        // A user's RS2_OPTION_DUAL_RGB_EXPOSURE is routed to the standard RS2_OPTION_EXPOSURE, which is the ID the backends
+        // know, but bound to the RGB PU. Same for DUAL_RGB_GAIN -> GAIN and DUAL_RGB_ENABLE_AUTO_EXPOSURE -> ENABLE_AUTO_EXPOSURE.
         if( is_pu_published( raw_ep, rgb_pu, RS2_OPTION_ENABLE_AUTO_EXPOSURE )
             && is_pu_published( raw_ep, rgb_pu, RS2_OPTION_EXPOSURE )
             && is_pu_published( raw_ep, rgb_pu, RS2_OPTION_GAIN ) )
         {
             auto exposure = make_rgb_option( RS2_OPTION_EXPOSURE );
             auto auto_exposure = std::make_shared< uvc_pu_auto_exposure_option >( raw_ep, exposure, rgb_pu );
-            color_ep.register_option( RS2_OPTION_RGB_ENABLE_AUTO_EXPOSURE, auto_exposure );
-            color_ep.register_option( RS2_OPTION_RGB_EXPOSURE,
+            color_ep.register_option( RS2_OPTION_DUAL_RGB_ENABLE_AUTO_EXPOSURE, auto_exposure );
+            color_ep.register_option( RS2_OPTION_DUAL_RGB_EXPOSURE,
                                       std::make_shared< auto_disabling_control >( exposure, auto_exposure ) );
-            color_ep.register_option( RS2_OPTION_RGB_GAIN,
+            color_ep.register_option( RS2_OPTION_DUAL_RGB_GAIN,
                                       std::make_shared< auto_disabling_control >( make_rgb_option( RS2_OPTION_GAIN ), auto_exposure ) );
         }
 
