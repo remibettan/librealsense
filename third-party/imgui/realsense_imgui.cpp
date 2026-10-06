@@ -489,7 +489,8 @@ void RsImGui::BetaBadgeSuperscript(const char* tooltip)
     const ImVec2 size = beta_badge_size(font_size, 0.f);
     const ImVec2 item_min = ImGui::GetItemRectMin(), item_max = ImGui::GetItemRectMax();
     const float text_top = item_min.y + (item_max.y - item_min.y - ImGui::GetTextLineHeight()) * 0.5f;
-    const ImVec2 pos(item_max.x - size.x * 0.5f, text_top - size.y + 3.f);
+    // Right-aligned with the label end: anything drawn next on the same row (e.g. a combo) would cover a badge that sticks out
+    const ImVec2 pos(item_max.x - size.x, text_top - size.y + 3.f);
     const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
 
     draw_beta_badge(window->DrawList, bb, font_size, 0.f);
