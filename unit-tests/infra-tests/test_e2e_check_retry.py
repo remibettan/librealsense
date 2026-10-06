@@ -18,13 +18,15 @@ class TestCheckRetry:
     def test_persistent_soft_check_stays_failed(self):
         """A soft check that fails every attempt ends as a plain FAILED test —
         attributed to the call phase, not a teardown ERROR, and not a false pass."""
-        rc, out, *_ = run_e2e("pytest-check-retry.py",
-                               "-k", "test_persistent_soft_check", "--reruns", "2")
+        rc, out, tracking = run_e2e("pytest-check-retry.py",
+                                    "-k", "test_persistent_soft_check", "--reruns", "2")
         assert rc != 0, out
         outcomes = parse_outcomes(out)
         assert outcomes.get("failed") == 1, out
         assert outcomes.get("error", 0) == 0, f"check failure leaked to teardown:\n{out}"
-        assert "Failed Checks: 1" in out, out
+        assert "PluggyTeardownRaisedWarning" not in out, out
+        log = tracking["logs"].get("pytest-check-retry.log", "")
+        assert log.count("Failed Checks: 1") == 3, log   # --reruns 2 == 3 attempts, each logged
 
     def test_flaky_soft_check_passes_on_retry(self):
         """A soft check that fails attempt 1 and passes attempt 2 genuinely PASSES —
