@@ -430,16 +430,26 @@ void RsImGui::CustomTooltip(const char* fmt, float value)
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar();
 }
+namespace {
+    const char* BETA_BADGE_TEXT = "BETA";
+    const float BETA_BADGE_PAD_X = 4.f, BETA_BADGE_PAD_Y = 1.f;
+    // Smaller than the surrounding text so the badge reads as a tag, not as part of the label
+    float beta_badge_font_size() { return ImGui::GetFontSize() * 0.7f; }
+    ImVec2 beta_badge_size()
+    {
+        const ImVec2 text_size = ImGui::GetFont()->CalcTextSizeA(beta_badge_font_size(), FLT_MAX, 0.f, BETA_BADGE_TEXT);
+        return ImVec2(text_size.x + 2 * BETA_BADGE_PAD_X, text_size.y + 2 * BETA_BADGE_PAD_Y);
+    }
+}
+
 void RsImGui::BetaBadge(const char* tooltip)
 {
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if (window->SkipItems)
         return;
 
-    const char* text = "BETA";
-    const float pad_x = 5.f, pad_y = 1.f, rounding = 4.f, thickness = 1.5f;
-    const ImVec2 text_size = ImGui::CalcTextSize(text);
-    const ImVec2 size(text_size.x + 2 * pad_x, text_size.y + 2 * pad_y);
+    const float rounding = 3.f, thickness = 1.f;
+    const ImVec2 size = beta_badge_size();
     // Center the badge on the current text line so it sits next to a label or checkbox
     const ImVec2 pos(window->DC.CursorPos.x, window->DC.CursorPos.y + (window->DC.CurrLineSize.y > 0 ? (window->DC.CurrLineSize.y - size.y) * 0.5f : 0.f));
     const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
@@ -458,7 +468,7 @@ void RsImGui::BetaBadge(const char* tooltip)
     ImGui::ShadeVertsLinearColorGradientKeepAlpha(dl, vtx_start, dl->VtxBuffer.Size, grad_p0, grad_p1, frame_top, frame_bottom);
 
     vtx_start = dl->VtxBuffer.Size;
-    dl->AddText(ImVec2(pos.x + pad_x, pos.y + pad_y), IM_COL32_WHITE, text);
+    dl->AddText(ImGui::GetFont(), beta_badge_font_size(), ImVec2(pos.x + BETA_BADGE_PAD_X, pos.y + BETA_BADGE_PAD_Y), IM_COL32_WHITE, BETA_BADGE_TEXT);
     ImGui::ShadeVertsLinearColorGradientKeepAlpha(dl, vtx_start, dl->VtxBuffer.Size, grad_p0, grad_p1, text_top, text_bottom);
 
     if (tooltip && ImGui::IsItemHovered())

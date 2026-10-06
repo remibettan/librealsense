@@ -543,7 +543,7 @@ namespace rs2
         std::string tooltip;
         // Keep room next to the label for the BETA badge of maturing perception streams
         const bool beta = is_beta_stream(profile.stream_type());
-        const float beta_badge_width = beta ? 50.f : 0.f;
+        const float beta_badge_width = beta ? 40.f : 0.f;
         if (dev->dev.supports(RS2_CAMERA_INFO_NAME) &&
             dev->dev.supports(RS2_CAMERA_INFO_SERIAL_NUMBER) &&
             dev->s->supports(RS2_CAMERA_INFO_NAME))
@@ -598,7 +598,8 @@ namespace rs2
         if (tooltip != label && ImGui::IsItemHovered())
             RsImGui::CustomTooltip("%s", tooltip.c_str());
         ImGui::PopTextWrapPos();
-        if (beta)
+        // A narrow window can leave no room between the label and the buttons; the badge is dropped rather than drawn under them
+        if (beta && ImGui::GetItemRectMax().x + beta_badge_width <= stream_rect.x + stream_rect.w - 32 * num_of_buttons)
         {
             ImGui::SameLine();
             RsImGui::BetaBadge("Beta feature - still maturing, behavior and output may change");
