@@ -10,8 +10,7 @@
 #include "ux-window.h"
 #include "assistant-ui-utils.h"
 #include "rs-config.h"
-#include "os.h"
-#include <sstream>
+#include "assistant-markdown.h"
 
 namespace rs2
 {
@@ -164,46 +163,15 @@ namespace rs2
         ImGui::PopFont();
         ImGui::Spacing();
 
-        // Word-by-word layout so the inline "contact" link wraps with the surrounding sentence.
-        static const struct { const char* text; const char* url; } segments[] = {
-            { "RealSense does not guarantee the accuracy, completeness, or up-to-date nature of the information "
-              "provided by the AI Assistant. Users of the AI Assistant bear sole responsibility for their "
-              "interactions and reliance on the information provided. By using the AI Assistant, you acknowledge "
-              "and accept these terms. For any critical, sensitive, or complex inquiries, please", nullptr },
-            { "contact the RealSense team", "https://github.com/realsenseai/librealsense/issues/new" },
-            { "directly for confirmation and further assistance.", nullptr },
-        };
-        ImGui::PushFont(win.get_font());
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::CalcTextSize(" ").x, 2.f));
-        float wrap_x = ImGui::GetContentRegionMax().x;
-        bool first = true;
-        for (auto& seg : segments)
-        {
-            std::istringstream words(seg.text);
-            std::string word;
-            while (words >> word)
-            {
-                float word_w = ImGui::CalcTextSize(word.c_str()).x;
-                if (!first)
-                {
-                    ImGui::SameLine();
-                    if (ImGui::GetCursorPosX() + word_w > wrap_x)
-                        ImGui::NewLine();
-                }
-                first = false;
-                ImGui::PushStyleColor(ImGuiCol_Text, seg.url ? light_blue : light_grey);
-                ImGui::TextUnformatted(word.c_str());
-                ImGui::PopStyleColor();
-                if (seg.url && ImGui::IsItemHovered())
-                {
-                    win.link_hovered();
-                    if (ImGui::IsItemClicked())
-                        open_url(seg.url);
-                }
-            }
-        }
-        ImGui::PopStyleVar();
-        ImGui::PopFont();
+        static const std::string text =
+            "RealSense does not guarantee the accuracy, completeness, or up-to-date nature of the information "
+            "provided by the AI Assistant. Users of the AI Assistant bear sole responsibility for their "
+            "interactions and reliance on the information provided. By using the AI Assistant, you acknowledge "
+            "and accept these terms. For any critical, sensitive, or complex inquiries, please "
+            "[contact the RealSense team](https://github.com/realsenseai/librealsense/issues/new) "
+            "directly for confirmation and further assistance.";
+        // No images in this text, so the image-fetch invoke is never used.
+        assistant_detail::draw_markdown_body(win, text, ImGui::GetContentRegionAvail().x, *_image_cache, {});
 
         ImGui::Spacing();
         ImGui::Spacing();
