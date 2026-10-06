@@ -133,7 +133,12 @@ namespace rs2
             std::vector<stream_profile>& results, V key, int num_streams, stream_profile& def_p);
 
         void restore_ui_selection() { ui = last_valid_ui; }
-        void store_ui_selection() { last_valid_ui = ui; }
+        // Mark current selection as valid, baseline for detecting user changes in get_supported_profiles
+        void store_ui_selection()
+        {
+            last_valid_ui = ui;
+            prev_stream_enabled = stream_enabled;
+        }
 
         template<typename T>
         bool get_default_selection_index(const std::vector<T>& values, const T& def, int* index)

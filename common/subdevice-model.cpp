@@ -1336,8 +1336,7 @@ namespace rs2
                 }
             }
         }
-        last_valid_ui = ui;
-        prev_stream_enabled = stream_enabled; // prev differs from curr only after user changes
+        store_ui_selection(); // prev_stream_enabled differs from stream_enabled only after user changes
     }
 
     template<typename T, typename V>
@@ -1524,8 +1523,8 @@ namespace rs2
             get_sorted_profiles(sorted_profiles);
             std::vector<stream_profile> matching_profiles;
             std::map<std::tuple<int, int, int>, std::map<int, stream_profile>> profiles_by_fps_res; //fps, width, height
-            rs2_format format;
-            int stream_id;
+            rs2_format format = RS2_FORMAT_ANY;
+            int stream_id = -1;
             // find the stream to which the user made changes
             for (auto& it : ui.selected_format_id)
             {
@@ -1538,6 +1537,12 @@ namespace rs2
                         stream_id = it.first;
                     }
                 }
+            }
+            // Format change was on a disabled stream only, nothing to match
+            if (stream_id == -1)
+            {
+                last_valid_ui = ui;
+                return results;
             }
             for (auto&& p : sorted_profiles)
             {
