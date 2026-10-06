@@ -210,7 +210,7 @@ namespace rs2
         ImGui::PushStyleColor(ImGuiCol_Button, regular_blue);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, light_blue);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, light_blue);
-        if (ImGui::Button("Start Chatting", { ImGui::GetContentRegionAvail().x, 32.f }))
+        if (ImGui::Button("Accept & Continue", { ImGui::GetContentRegionAvail().x, 32.f }))
         {
             config_file::instance().set_and_save(configurations::viewer::assistant_disclaimer_accepted, true);
             _focus_input_next_frame = true;

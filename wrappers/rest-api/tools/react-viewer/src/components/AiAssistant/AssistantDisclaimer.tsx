@@ -33,7 +33,7 @@ export function AssistantDisclaimer({ onAccept }: { onAccept: () => void }) {
           autoFocus
           className="mt-4 w-full rounded-md bg-rs-blue py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-600"
         >
-          Start Chatting
+          Accept &amp; Continue
         </button>
       </div>
     </div>
