@@ -1264,13 +1264,15 @@ namespace rs2
         bool use_depth_mapping_metadata_adaptations = false;
         if (dev)
         {
-            // D555 shares the white-balance metadata quirk with the other depth-mapping
-            // devices, so it rides along on the same check here.
-            // D500 color streams report the exposure in 100 usec units
-            if( profile.stream_type() == RS2_STREAM_COLOR && dev->dev.supports( RS2_CAMERA_INFO_PRODUCT_LINE )
-                && std::string( dev->dev.get_info( RS2_CAMERA_INFO_PRODUCT_LINE ) ) == "D500" )
+            // A separate color sensor, and the D500 color streams, report the exposure in 100 usec units.
+            // Color streams of the depth sensor (e.g. D405) report the depth exposure, in usec.
+            bool const is_d500 = dev->dev.supports( RS2_CAMERA_INFO_PRODUCT_LINE )
+                              && std::string( dev->dev.get_info( RS2_CAMERA_INFO_PRODUCT_LINE ) ) == "D500";
+            if( profile.stream_type() == RS2_STREAM_COLOR && ( is_d500 || ( dev->s && dev->s->is< color_sensor >() ) ) )
                 descriptions[RS2_FRAME_METADATA_ACTUAL_EXPOSURE] = "Sensor's exposure width. When Auto Exposure (AE) is on the value is controlled by firmware. 100 usec units";
 
+            // D555 shares the white-balance metadata quirk with the other depth-mapping
+            // devices, so it rides along on the same check here.
             use_depth_mapping_metadata_adaptations = device_has_depth_mapping(dev->dev);
             if (use_depth_mapping_metadata_adaptations)
                 add_depth_mapping_metadata_descriptions(descriptions);
