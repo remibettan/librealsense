@@ -4,6 +4,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { PlusCircle, Sparkles, Wrench, Maximize2, Minimize2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { loadPersisted, persist } from '../../store/assistantSlice'
 import { getActiveProviderName } from '../../api/chat'
 import { AssistantContent } from './AssistantContent'
 import { ChatBotContent } from './ChatBotContent'
@@ -11,15 +12,7 @@ import { AssistantDisclaimer } from './AssistantDisclaimer'
 
 type PanelMode = 'assistant' | 'chatbot'
 
-const DISCLAIMER_STORAGE_KEY = 'rs-assistant-disclaimer-accepted'
-
-function isDisclaimerAccepted(): boolean {
-  try {
-    return localStorage.getItem(DISCLAIMER_STORAGE_KEY) === 'true'
-  } catch {
-    return false
-  }
-}
+const DISCLAIMER_STORAGE_KEY = 'rsai_disclaimer_accepted'
 
 /**
  * Slide-out panel for the RealSense AI Assistant. Always mounted (not conditionally
@@ -45,13 +38,9 @@ export function AssistantPanel() {
   const isChatbotMode = mode === 'chatbot'
   const providerName = getActiveProviderName()
 
-  const [disclaimerAccepted, setDisclaimerAccepted] = useState(isDisclaimerAccepted)
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(() => loadPersisted(DISCLAIMER_STORAGE_KEY) === 'true')
   const acceptDisclaimer = () => {
-    try {
-      localStorage.setItem(DISCLAIMER_STORAGE_KEY, 'true')
-    } catch {
-      // localStorage may be unavailable — the disclaimer will just show again next launch
-    }
+    persist(DISCLAIMER_STORAGE_KEY, 'true')
     setDisclaimerAccepted(true)
   }
   const showDisclaimer = !disclaimerAccepted
