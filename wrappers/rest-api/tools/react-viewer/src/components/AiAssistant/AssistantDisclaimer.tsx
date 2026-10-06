@@ -30,7 +30,6 @@ export function AssistantDisclaimer({ onAccept }: { onAccept: () => void }) {
         </p>
         <button
           onClick={onAccept}
-          autoFocus
           className="mt-4 w-full rounded-md bg-rs-blue py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-600"
         >
           Accept &amp; Continue
