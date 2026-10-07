@@ -720,6 +720,7 @@ void option_model::flush_arrow_nudge( std::string & error_message )
         return;
     _arrow_nudge_pending = false;
     write_value( _arrow_nudge_value, error_message );
+    RsImGui::ClearItemFocus();
 }
 
 bool option_model::slider_unselected( rs2_option opt,

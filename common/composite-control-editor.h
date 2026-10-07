@@ -27,9 +27,7 @@ namespace rs2
     class composite_control_editor_base
     {
     public:
-        static constexpr double commit_delay = 2.04;          // seconds of quiet before auto-sending
-        static constexpr double numeric_commit_delay = 0.42;  // ditto, for a plain value slider/typed number
-        static constexpr double fast_commit_delay = 0.12;     // ditto, for a discrete pick
+        static constexpr double commit_delay = 1.5;   // seconds of quiet before auto-sending, for every kind of edit
 
         // Call while a field is actively being changed (every tick of a slider drag). Flags the group
         // dirty and parks the deadline at +infinity so nothing commits mid-edit.
@@ -40,6 +38,7 @@ namespace rs2
         }
 
         // Call once a field's edit is finalized (slider released, value submitted, combo picked).
+        // A zero delay commits on this frame, without the countdown.
         void finalize( double delay_seconds = commit_delay );
 
         // progress: 0 = just touched, 1 = about to commit. False when nothing is pending.
@@ -72,11 +71,7 @@ namespace rs2
         void collapse_deadline_on_focus_loss( bool any_field_active_this_frame );
 
         bool commit_due() const { return _dirty && ImGui::GetTime() >= _commit_deadline; }
-        void clear_dirty()
-        {
-            _dirty = false;
-            _commit_deadline = std::numeric_limits< double >::max();
-        }
+        void clear_dirty();
 
     private:
         void draw_field_header( const char * name, const char * description, const char * id,
@@ -86,6 +81,7 @@ namespace rs2
         double _commit_deadline = std::numeric_limits< double >::max();
         double _active_delay = commit_delay;   // the delay finalize() last actually used
         bool _just_finalized = false;
+        bool _release_focus_on_commit = false;   // an arrow-key edit is pending; drop the slider's focus once sent
     };
 
     // Debounced auto-commit editor for a composite option's struct T.
@@ -119,8 +115,8 @@ namespace rs2
             return initialized;
         }
 
-        // Right-aligned "Reset to Default" button; on click adopts the FW-reported default through the
-        // same touch()/finalize() pipeline as any other edit.
+        // Right-aligned "Reset to Default" button; on click adopts the FW-reported default and sends it
+        // right away.
         template< typename RangeT >
         bool draw_reset_to_default( const std::shared_ptr< rs2::embedded_filter > & filter,
                                     rs2_composite_option_id id,
@@ -138,7 +134,7 @@ namespace rs2
                     value = filter->get_composite_option_range_as< RangeT >( id ).def;
                     sanitize( value );
                     touch();
-                    finalize();
+                    finalize( 0.0 );
                 }
                 catch( const std::exception & e )
                 {

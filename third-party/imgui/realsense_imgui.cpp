@@ -43,6 +43,12 @@ bool RsImGui::SliderArrowNudge(float* v, float v_min, float v_max, float v_step)
     return true;
 }
 
+void RsImGui::ClearItemFocus()
+{
+    GImGui->NavId = 0;
+    GImGui->NavDisableHighlight = true;
+}
+
 bool RsImGui::SliderIntWithSteps(const char* label, int* v, int v_min, int v_max, int v_step)
 {
     float originalValue = static_cast<float>(*v);

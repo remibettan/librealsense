@@ -51,12 +51,21 @@ namespace rs2
 
     bool composite_control_editor_base::try_get_progress( float & progress ) const
     {
-        if( ! _dirty )
+        if( ! _dirty || _active_delay <= 0.0 )
             return false;
         double remaining = _commit_deadline - ImGui::GetTime();
         double frac_remaining = std::min( std::max( remaining / _active_delay, 0.0 ), 1.0 );
         progress = static_cast< float >( 1.0 - frac_remaining );
         return true;
+    }
+
+    void composite_control_editor_base::clear_dirty()
+    {
+        _dirty = false;
+        _commit_deadline = std::numeric_limits< double >::max();
+        if( _release_focus_on_commit )
+            RsImGui::ClearItemFocus();
+        _release_focus_on_commit = false;
     }
 
     void composite_control_editor_base::collapse_deadline_on_focus_loss( bool any_field_active_this_frame )
@@ -163,7 +172,7 @@ namespace rs2
                 {
                     value = (int)std::lround( new_value * scale );
                     touch();
-                    finalize( numeric_commit_delay );
+                    finalize();
                 }
                 edit.edit_mode = false;
             }
@@ -185,7 +194,7 @@ namespace rs2
             if( changed || ImGui::IsItemActive() )
                 touch();
             if( ImGui::IsItemDeactivatedAfterEdit() )
-                finalize( numeric_commit_delay );
+                finalize();
             // Each arrow step re-arms the countdown; the delay outlasts the key-repeat interval, so a
             // held key lands as a single SET once released.
             float nudged = (float)value;
@@ -193,7 +202,8 @@ namespace rs2
             {
                 value = (int)std::lround( nudged );
                 touch();
-                finalize( numeric_commit_delay );
+                finalize();
+                _release_focus_on_commit = true;
             }
         }
 
@@ -222,7 +232,7 @@ namespace rs2
         {
             value = selected + value_offset;
             touch();
-            finalize( fast_commit_delay );
+            finalize();
         }
         ImGui::PopStyleColor();
         ImGui::PopItemWidth();
