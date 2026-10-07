@@ -35,6 +35,7 @@ namespace rs2
         {
             _dirty = true;
             _commit_deadline = std::numeric_limits< double >::max();
+            _release_focus_on_commit = false;   // a new interaction supersedes a pending arrow-edit focus drop
         }
 
         // Call once a field's edit is finalized (slider released, value submitted, combo picked).
