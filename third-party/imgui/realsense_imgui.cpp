@@ -14,7 +14,13 @@ bool RsImGui::SliderArrowNudge(float* v, float v_min, float v_max, float v_step)
     // frame can be long enough for ImGui to count several repeats at once. Here a held key yields at
     // most one step per frame, and never more often than repeat_rate.
     static double next_repeat_time = 0.0;
+    static ImGuiID repeat_owner = 0;
     const double now = ImGui::GetTime(), repeat_delay = 0.4, repeat_rate = 0.1;
+    if (ImGui::GetItemID() != repeat_owner)   // focus moved to another slider: restart the initial delay
+    {
+        repeat_owner = ImGui::GetItemID();
+        next_repeat_time = now + repeat_delay;
+    }
     float dir = 0.f;
     const ImGuiKey keys[2] = { ImGuiKey_RightArrow, ImGuiKey_LeftArrow };
     for (int i = 0; i < 2 && dir == 0.f; i++)

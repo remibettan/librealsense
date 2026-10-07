@@ -27,9 +27,9 @@ namespace rs2
     class composite_control_editor_base
     {
     public:
-        static constexpr double commit_delay = 1.7;           // seconds of quiet before auto-sending
-        static constexpr double numeric_commit_delay = 0.35;  // ditto, for a plain value slider/typed number
-        static constexpr double fast_commit_delay = 0.1;      // ditto, for a discrete pick
+        static constexpr double commit_delay = 2.04;          // seconds of quiet before auto-sending
+        static constexpr double numeric_commit_delay = 0.42;  // ditto, for a plain value slider/typed number
+        static constexpr double fast_commit_delay = 0.12;     // ditto, for a discrete pick
 
         // Call while a field is actively being changed (every tick of a slider drag). Flags the group
         // dirty and parks the deadline at +infinity so nothing commits mid-edit.

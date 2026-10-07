@@ -692,6 +692,7 @@ bool option_model::slider_selected( rs2_option opt,
                                     notifications_model & /*model*/ )
 {
     check_opt( opt, __func__ );
+    _arrow_nudge_pending = false;  // a drag supersedes a queued arrow nudge
     // Async (FW) path: dispatch every UI tick — the dispatcher action coalesces (per-option
     // _latest_pending_value) and its try_sleep enforces the FW-write floor, so per-tick calls
     // are cheap; invalidate + add_log fire later from draw_option once a write completes.
