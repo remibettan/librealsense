@@ -35,8 +35,7 @@ namespace librealsense
 {
     namespace
     {
-        // Raw counts per dps. HID backends multiply by it (set_gyro_scale_factor); the MIPI processing block
-        // uses its reciprocal via get_gyro_default_scale(), so both paths yield the same dps value.
+        // Raw counts per dps on the HID path (set_gyro_scale_factor), and its reciprocal as the default scale.
         constexpr double RAW_TO_DPS_SCALE = 10000.0;
     }
 
@@ -71,7 +70,8 @@ namespace librealsense
 
     double d500_motion::get_gyro_default_scale() const
     {
-        if( supports_physical_units() )
+        // GMSL FW still sends the gyro as the raw BMI08x register value, so only the HID path has a physical scale.
+        if( supports_physical_units() && ! _is_mipi_device )
             return 1. / RAW_TO_DPS_SCALE;
 
         // Legacy D500 reports signed 16-bit raw samples at a fixed 125 dps assumption.
@@ -219,15 +219,14 @@ namespace librealsense
         double gyro_scale_factor = get_gyro_default_scale();
         double accel_scale_factor = get_accel_default_scale();
         bool high_accuracy = is_imu_high_accuracy();
-        bool physical_units = supports_physical_units();
         motion_ep->register_processing_block(
             { {RS2_FORMAT_MOTION_XYZ32F} },
             { {RS2_FORMAT_MOTION_XYZ32F, RS2_STREAM_ACCEL}, {RS2_FORMAT_MOTION_XYZ32F, RS2_STREAM_GYRO} },
-            [mm_calib, high_accuracy, mm_correct_opt, gyro_scale_factor, accel_scale_factor, gyro_sensitivity_option, physical_units]()
+            [mm_calib, high_accuracy, mm_correct_opt, gyro_scale_factor, accel_scale_factor, gyro_sensitivity_option]()
             {
                 double scale = gyro_scale_factor;
-                // FW delivers physical units: the sensitivity option only selects the range, the scale is fixed.
-                if( ! physical_units && gyro_sensitivity_option )
+                // MIPI gyro is a raw register value, its scale follows the selected range.
+                if( gyro_sensitivity_option )
                 {
                     try
                     {
