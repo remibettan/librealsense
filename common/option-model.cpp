@@ -714,7 +714,7 @@ void option_model::queue_arrow_nudge( float value )
 
 void option_model::flush_arrow_nudge( std::string & error_message )
 {
-    constexpr long long quiet_ms = 100;
+    constexpr long long quiet_ms = 300;  // longer than the key-repeat interval, so a held key is one write
     if( ! _arrow_nudge_pending || _arrow_nudge_stopwatch.get_elapsed_ms() < quiet_ms )
         return;
     _arrow_nudge_pending = false;

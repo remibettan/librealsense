@@ -62,8 +62,8 @@ namespace rs2
         }
 
     protected:
-        // Blue border around the group plus a bar along its bottom edge that shrinks as the countdown
-        // runs out - visible only while a commit is pending.
+        // Blue border around the group that is erased clockwise as the countdown runs out - visible
+        // only while a commit is pending.
         void draw_pending_highlight( const ImVec2 & frame_min, const ImVec2 & frame_max ) const;
 
         // If focus left the group entirely (not just the normal gap between fields), finish the

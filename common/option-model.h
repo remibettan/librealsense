@@ -155,8 +155,8 @@ namespace rs2
         rsutils::time::stopwatch _user_request_stopwatch;
 
         // Arrow-key nudges on the slider are batched: the value is shown at once (through the
-        // user-request mask above) but written only after a short quiet period, so a held key
-        // produces one FW write instead of one per key repeat.
+        // user-request mask above) but written only after a short quiet period, so a held or
+        // repeatedly pressed key produces one FW write instead of one per step.
         void queue_arrow_nudge( float value );
         void flush_arrow_nudge( std::string & error_message );
         bool _arrow_nudge_pending = false;

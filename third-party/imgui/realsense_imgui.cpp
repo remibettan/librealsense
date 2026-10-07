@@ -10,13 +10,27 @@ bool RsImGui::SliderArrowNudge(float* v, float v_min, float v_max, float v_step)
 {
     if (!ImGui::IsItemFocused() || ImGui::IsItemActive())
         return false;
-    // No key repeat: the viewer renders lazily when idle, so a frame can be long enough for ImGui's
-    // typematic repeat to count several steps for one press, and a held key would run away to the limit.
-    float nudged = *v;
-    if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false))
-        nudged = ImMin(*v + v_step, v_max);
-    else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false))
-        nudged = ImMax(*v - v_step, v_min);
+    // Own repeat timing rather than ImGui's typematic one: the viewer renders lazily, so a single
+    // frame can be long enough for ImGui to count several repeats at once. Here a held key yields at
+    // most one step per frame, and never more often than repeat_rate.
+    static double next_repeat_time = 0.0;
+    const double now = ImGui::GetTime(), repeat_delay = 0.4, repeat_rate = 0.1;
+    float dir = 0.f;
+    const ImGuiKey keys[2] = { ImGuiKey_RightArrow, ImGuiKey_LeftArrow };
+    for (int i = 0; i < 2 && dir == 0.f; i++)
+    {
+        if (ImGui::IsKeyPressed(keys[i], false))
+        {
+            dir = i == 0 ? 1.f : -1.f;
+            next_repeat_time = now + repeat_delay;
+        }
+        else if (ImGui::IsKeyDown(keys[i]) && now >= next_repeat_time)
+        {
+            dir = i == 0 ? 1.f : -1.f;
+            next_repeat_time = now + repeat_rate;
+        }
+    }
+    float nudged = ImClamp(*v + dir * v_step, v_min, v_max);
     if (nudged == *v)
         return false;
     *v = nudged;

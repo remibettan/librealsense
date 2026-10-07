@@ -211,7 +211,7 @@ namespace rs2
 
             bool any_field_active = draw_fields();
             any_field_active |= editor.template draw_reset_to_default< RangeT >( filter, id, error_message, sanitize );
-            ImGui::Dummy( ImVec2( 0, 6 ) );   // room for the pending-commit bar along the bottom edge
+            ImGui::Dummy( ImVec2( 0, 6 ) );   // bottom padding inside the pending-commit border
 
             ImVec2 frame_max( frame_min.x + frame_width, ImGui::GetCursorScreenPos().y );
             editor.end_frame_and_maybe_commit( filter, id, error_message, frame_min, frame_max, any_field_active, before_commit );

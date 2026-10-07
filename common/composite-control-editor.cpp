@@ -71,13 +71,31 @@ namespace rs2
         float progress;
         if( ! try_get_progress( progress ) )
             return;
-        ImVec4 border = regular_blue;
-        border.w = 1.f - 0.6f * progress;
+        // Clockwise from the top-left corner; the part already consumed by the countdown is not drawn.
+        constexpr float thickness = 3.f;
+        const float half = thickness * 0.5f;
+        const ImVec2 corners[5] = { { frame_min.x + half, frame_min.y + half }, { frame_max.x - half, frame_min.y + half },
+                                    { frame_max.x - half, frame_max.y - half }, { frame_min.x + half, frame_max.y - half },
+                                    { frame_min.x + half, frame_min.y + half } };
+        const float width = corners[1].x - corners[0].x, height = corners[2].y - corners[1].y;
+        const float side[4] = { width, height, width, height };
+        float skip = 2.f * ( width + height ) * progress;
         auto * draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddRect( frame_min, frame_max, ImGui::ColorConvertFloat4ToU32( border ), 3.f, 0, 2.f );
-        draw_list->AddRectFilled( { frame_min.x, frame_max.y - 2.f },
-                                  { frame_min.x + ( frame_max.x - frame_min.x ) * ( 1.f - progress ), frame_max.y },
-                                  ImGui::ColorConvertFloat4ToU32( regular_blue ) );
+        for( int i = 0; i < 4; ++i )
+        {
+            if( skip >= side[i] )
+            {
+                skip -= side[i];
+                continue;
+            }
+            const float t = skip / side[i];
+            if( draw_list->_Path.Size == 0 )
+                draw_list->PathLineTo( { corners[i].x + ( corners[i + 1].x - corners[i].x ) * t,
+                                         corners[i].y + ( corners[i + 1].y - corners[i].y ) * t } );
+            draw_list->PathLineTo( corners[i + 1] );
+            skip = 0.f;
+        }
+        draw_list->PathStroke( ImGui::ColorConvertFloat4ToU32( regular_blue ), 0, thickness );
     }
 
     // Same layout as option_model::draw_slider's label row: name, "?" help at x=257, pencil at x=280.
@@ -168,14 +186,14 @@ namespace rs2
                 touch();
             if( ImGui::IsItemDeactivatedAfterEdit() )
                 finalize( numeric_commit_delay );
-            // One arrow press is one complete, discrete edit; a held key keeps re-arming the
-            // countdown, so the whole burst still lands as a single SET once the key is released.
+            // Each arrow step re-arms the countdown; the delay outlasts the key-repeat interval, so a
+            // held key lands as a single SET once released.
             float nudged = (float)value;
             if( RsImGui::SliderArrowNudge( &nudged, (float)min_v, (float)max_v, (float)step ) )
             {
                 value = (int)std::lround( nudged );
                 touch();
-                finalize( fast_commit_delay );
+                finalize( numeric_commit_delay );
             }
         }
 

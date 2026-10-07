@@ -4561,7 +4561,8 @@ namespace rs2
                 _measurements.show_tooltip(window);
         }
 
-        if (ImGui::IsKeyPressed(ImGuiKey_Space))
+        // Space also activates the focused widget (combo, checkbox, button); only pause when it didn't
+        if (ImGui::IsKeyPressed(ImGuiKey_Space) && !GImGui->NavActivateId && !ImGui::GetActiveID())
         {
             if (paused)
             {
