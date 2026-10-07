@@ -457,14 +457,21 @@ namespace {
     }
 }
 
+// Smaller than the surrounding text so the badge reads as a tag, not as part of the label
+static float beta_badge_inline_font_size() { return ImGui::GetFontSize() * 0.7f; }
+
+float RsImGui::BetaBadgeWidth()
+{
+    return beta_badge_size(beta_badge_inline_font_size(), BETA_BADGE_PAD_Y).x;
+}
+
 void RsImGui::BetaBadge(const char* tooltip)
 {
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if (window->SkipItems)
         return;
 
-    // Smaller than the surrounding text so the badge reads as a tag, not as part of the label
-    const float font_size = ImGui::GetFontSize() * 0.7f;
+    const float font_size = beta_badge_inline_font_size();
     const ImVec2 size = beta_badge_size(font_size, BETA_BADGE_PAD_Y);
     // Center the badge on the current text line so it sits next to a label or checkbox
     const ImVec2 pos(window->DC.CursorPos.x, window->DC.CursorPos.y + (window->DC.CurrLineSize.y > 0 ? (window->DC.CurrLineSize.y - size.y) * 0.5f : 0.f));

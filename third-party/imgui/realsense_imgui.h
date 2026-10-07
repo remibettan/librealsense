@@ -41,6 +41,7 @@ namespace RsImGui
     void          CustomTooltip( const char * label );
     void          CustomTooltip(const char* fmt, float value);
     void          BetaBadge(const char* tooltip = nullptr);   // small gradient "BETA" pill drawn as an inline item
+    float         BetaBadgeWidth();   // width BetaBadge() takes in the current font
     float         BetaBadgeSuperscript(const char* tooltip = nullptr);   // same pill on the upper-right corner of the last item, taking no layout room; returns its right edge (screen x)
     }
 

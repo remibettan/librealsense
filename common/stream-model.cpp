@@ -543,7 +543,7 @@ namespace rs2
         std::string tooltip;
         // Keep room next to the label for the BETA badge of maturing perception streams
         const bool beta = is_beta_stream(profile.stream_type());
-        const float beta_badge_width = beta ? 40.f : 0.f;
+        const float beta_badge_width = beta ? RsImGui::BetaBadgeWidth() + ImGui::GetStyle().ItemSpacing.x : 0.f;
         if (dev->dev.supports(RS2_CAMERA_INFO_NAME) &&
             dev->dev.supports(RS2_CAMERA_INFO_SERIAL_NUMBER) &&
             dev->s->supports(RS2_CAMERA_INFO_NAME))
