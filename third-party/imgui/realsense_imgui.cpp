@@ -484,23 +484,3 @@ void RsImGui::BetaBadge(const char* tooltip)
     if (tooltip && ImGui::IsItemHovered())
         RsImGui::CustomTooltip(tooltip);
 }
-
-float RsImGui::BetaBadgeSuperscript(const char* tooltip)
-{
-    ImGuiWindow* window = ImGui::GetCurrentWindow();
-    if (window->SkipItems)
-        return ImGui::GetItemRectMax().x;
-
-    // Pinned to the upper-right corner of the previous item's label and raised above its text, taking no room in the row
-    const float font_size = ImGui::GetFontSize() * 0.6f;
-    const ImVec2 size = beta_badge_size(font_size, 0.f);
-    const ImVec2 item_min = ImGui::GetItemRectMin(), item_max = ImGui::GetItemRectMax();
-    const float text_top = item_min.y + (item_max.y - item_min.y - ImGui::GetTextLineHeight()) * 0.5f;
-    const ImVec2 pos(item_max.x - size.x * 0.25f, text_top - size.y + 3.f);
-    const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
-
-    draw_beta_badge(window->DrawList, bb, font_size, 0.f);
-    if (tooltip && ImGui::IsMouseHoveringRect(bb.Min, bb.Max))
-        RsImGui::CustomTooltip(tooltip);
-    return bb.Max.x;
-}

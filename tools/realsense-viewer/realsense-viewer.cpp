@@ -559,7 +559,8 @@ int run_viewer( int argc, const char ** argv,
         // *********************
         // Creating window menus
         // *********************
-        ImGui::Begin("Control Panel", nullptr, flags | ImGuiWindowFlags_AlwaysVerticalScrollbar);
+        // Scrollbar only on overflow, so the device panels reach the same right edge as the top bar
+        ImGui::Begin("Control Panel", nullptr, flags);
 
         if (device_models->size() > 0)
         {
