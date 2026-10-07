@@ -57,8 +57,11 @@ namespace librealsense
     bool d500_motion::supports_physical_units() const
     {
         static const firmware_version min_fw_supporting_physical_units( "7.58.40672.12546" );
+        // GMSL streams the true 38-byte int32 record only from this FW; older FW sends the interim int16 payload
+        static const firmware_version min_fw_supporting_physical_units_mipi( "7.59.46486.16342" );
         return get_pid() != ds::D585S_PID
-            && _fw_version >= min_fw_supporting_physical_units;
+            && _fw_version >= ( _is_mipi_device ? min_fw_supporting_physical_units_mipi
+                                                : min_fw_supporting_physical_units );
     }
 
     bool d500_motion::is_imu_high_accuracy() const
