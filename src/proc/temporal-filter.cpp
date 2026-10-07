@@ -8,10 +8,13 @@
 #include "environment.h"
 #include "proc/synthetic-stream.h"
 #include "proc/temporal-filter.h"
+#include "stream.h"
+#include "core/video.h"
 
 #include <rsutils/string/from.h>
 
 #include <algorithm>
+#include <cstring>
 
 
 namespace librealsense
@@ -181,7 +184,14 @@ namespace librealsense
     // setters take - so the map needs no locking of its own
     temporal_filter::stream_state & temporal_filter::state_of( const rs2::frame & f )
     {
-        auto & state = _states[{ f.get_profile().stream_type(), f.get_profile().stream_index() }];
+        auto profile = f.get_profile();
+        auto & state = _states[{ profile.stream_type(), profile.stream_index() }];
+
+        // Rotation keeps the frame size but moves every pixel, so history must go when geometry changes. Profile identity
+        // can't tell - upstream blocks re-clone it per frame with several streams, and options change intrinsics under it.
+        auto const geometry = geometry_of( profile );
+        bool const geometry_changed = std::memcmp( &geometry, &state.geometry, sizeof( geometry ) ) != 0;
+        state.geometry = geometry;
 
         auto const size_bytes = _current_frm_size_pixels * _bpp;
         if( state.last_frame.size() != size_bytes )
@@ -190,8 +200,32 @@ namespace librealsense
             state.history.assign( size_bytes, 0 );
             state.cur_frame_index = 0;
         }
+        else if( geometry_changed )
+            clear_state( state );
 
         return state;
+    }
+
+
+    // Intrinsics describe where each pixel looks; profiles without them fall back to the dimensions
+    rs2_intrinsics temporal_filter::geometry_of( const rs2::stream_profile & profile )
+    {
+        rs2_intrinsics geometry{};
+        auto vsp = dynamic_cast< video_stream_profile_interface * >( profile.get()->profile );
+        if( ! vsp )
+            return geometry;
+
+        try
+        {
+            geometry = vsp->get_intrinsics();
+        }
+        catch( const std::exception & )
+        {
+            geometry = {};
+        }
+        geometry.width = vsp->get_width();
+        geometry.height = vsp->get_height();
+        return geometry;
     }
 
 
@@ -199,11 +233,15 @@ namespace librealsense
     void temporal_filter::reset_history()
     {
         for( auto & state : _states )
-        {
-            std::fill( state.second.last_frame.begin(), state.second.last_frame.end(), 0 );
-            std::fill( state.second.history.begin(), state.second.history.end(), 0 );
-            state.second.cur_frame_index = 0;
-        }
+            clear_state( state.second );
+    }
+
+
+    void temporal_filter::clear_state( stream_state & state )
+    {
+        std::fill( state.last_frame.begin(), state.last_frame.end(), 0 );
+        std::fill( state.history.begin(), state.history.end(), 0 );
+        state.cur_frame_index = 0;
     }
 
     rs2::frame temporal_filter::prepare_target_frame(const rs2::frame& f, const rs2::frame_source& source)
