@@ -80,9 +80,10 @@ namespace librealsense
 
     double d500_motion::get_accel_default_scale() const
     {
-        // GMSL FW that sends the int32 record also changed the accel unit from 1 mg to 10 ug per count.
-        // USB keeps the base scale until its FW threshold is defined.
-        return ( _is_mipi_device && supports_physical_units() ) ? 0.00001 : 0.001;
+        // FW changed the accel unit from 1 mg to 10 ug per count (USB and GMSL) in the same release that sends the
+        // true int32 record on GMSL. The range option never changes this scale.
+        static const firmware_version min_fw_accel_10ug( "7.59.46486.16342" );
+        return ( supports_physical_units() && _fw_version >= min_fw_accel_10ug ) ? 0.00001 : 0.001;
     }
 
     std::shared_ptr<synthetic_sensor> d500_motion::create_hid_device( std::shared_ptr<context> ctx,
@@ -135,6 +136,9 @@ namespace librealsense
                     register_gyro_sensitivity();
                 if( supports_physical_units() && ! _is_mipi_device )  // HID only, MIPI scales in the processing block
                     get_raw_motion_sensor()->set_gyro_scale_factor( RAW_TO_DPS_SCALE );
+                // Windows MF rebuilds FW counts from g; derive the factor from the scale the transform uses (1000 or 100000)
+                if( ! _is_mipi_device )
+                    get_raw_motion_sensor()->set_accel_scale_factor( 1.0 / get_accel_default_scale() );
             }
 #endif
         }
