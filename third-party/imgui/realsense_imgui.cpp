@@ -6,6 +6,49 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
+bool RsImGui::SliderArrowNudge(float* v, float v_min, float v_max, float v_step)
+{
+    if (!ImGui::IsItemFocused() || ImGui::IsItemActive())
+        return false;
+    // Own repeat timing rather than ImGui's typematic one: the viewer renders lazily, so a single
+    // frame can be long enough for ImGui to count several repeats at once. Here a held key yields at
+    // most one step per frame, and never more often than repeat_rate.
+    static double next_repeat_time = 0.0;
+    static ImGuiID repeat_owner = 0;
+    const double now = ImGui::GetTime(), repeat_delay = 0.4, repeat_rate = 0.1;
+    if (ImGui::GetItemID() != repeat_owner)   // focus moved to another slider: restart the initial delay
+    {
+        repeat_owner = ImGui::GetItemID();
+        next_repeat_time = now + repeat_delay;
+    }
+    float dir = 0.f;
+    const ImGuiKey keys[2] = { ImGuiKey_RightArrow, ImGuiKey_LeftArrow };
+    for (int i = 0; i < 2 && dir == 0.f; i++)
+    {
+        if (ImGui::IsKeyPressed(keys[i], false))
+        {
+            dir = i == 0 ? 1.f : -1.f;
+            next_repeat_time = now + repeat_delay;
+        }
+        else if (ImGui::IsKeyDown(keys[i]) && now >= next_repeat_time)
+        {
+            dir = i == 0 ? 1.f : -1.f;
+            next_repeat_time = now + repeat_rate;
+        }
+    }
+    float nudged = ImClamp(*v + dir * v_step, v_min, v_max);
+    if (nudged == *v)
+        return false;
+    *v = nudged;
+    return true;
+}
+
+void RsImGui::ClearItemFocus()
+{
+    GImGui->NavId = 0;
+    GImGui->NavDisableHighlight = true;
+}
+
 bool RsImGui::SliderIntWithSteps(const char* label, int* v, int v_min, int v_max, int v_step)
 {
     float originalValue = static_cast<float>(*v);

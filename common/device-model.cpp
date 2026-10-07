@@ -3315,14 +3315,6 @@ namespace rs2
                         int font_size = window.get_font_size();
                         const ImVec2 button_size = { font_size * 2.f, font_size * 1.5f };
 
-                        // While this filter's composite editor has a debounced commit pending,
-                        // tint the toggle with the same gold->blue ramp the editor's own
-                        // framed box fades through, so the row header echoes "about to send".
-                        float dirty_progress = 0.0f;
-                        const bool composite_dirty = pb->has_pending_composite_commit(dirty_progress);
-                        ImVec4 dirty_tint = composite_control_dirty_blend(dirty_progress);
-                        dirty_tint.w = 1.0f;   // full opacity for text - the fill's own alpha ramp doesn't apply here
-
                         if (!pb->is_enabled())
                         {
                             std::string label = rsutils::string::from()
@@ -3330,9 +3322,8 @@ namespace rs2
                                 << sub->s->get_info(RS2_CAMERA_INFO_NAME) << ","
                                 << pb->get_name();
 
-                            const ImVec4 text_color = composite_dirty ? dirty_tint : redish;
-                            ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-                            ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, text_color + 0.1f);
+                            ImGui::PushStyleColor(ImGuiCol_Text, redish);
+                            ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, redish + 0.1f);
 
                             if (ImGui::Button(label.c_str(), button_size))
                             {
@@ -3351,9 +3342,8 @@ namespace rs2
                                 << " " << textual_icons::toggle_on << "##" << id << ","
                                 << sub->s->get_info(RS2_CAMERA_INFO_NAME) << ","
                                 << pb->get_name();
-                            const ImVec4 text_color = composite_dirty ? dirty_tint : light_blue;
-                            ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-                            ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, text_color + 0.1f);
+                            ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
+                            ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue + 0.1f);
 
                             if (ImGui::Button(label.c_str(), button_size))
                             {
