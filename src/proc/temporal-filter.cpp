@@ -20,6 +20,7 @@
 namespace librealsense
 {
     const size_t PERSISTENCE_MAP_NUM = 9;
+    const double ms_in_second = 1000.;
 
     // The persistence parameter/holes filling mode
     const uint8_t persistence_min = 0;
@@ -193,6 +194,12 @@ namespace librealsense
         bool const geometry_changed = std::memcmp( &geometry, &state.geometry, sizeof( geometry ) ) != 0;
         state.geometry = geometry;
 
+        // The filter isn't told of a stream restart; time going back, or a gap longer than the history spans, means one
+        auto const timestamp = f.get_timestamp();
+        double const max_gap_ms = profile.fps() > 0 ? HISTORY_SIZE * ms_in_second / profile.fps() : ms_in_second;
+        bool const restarted = timestamp < state.last_timestamp || timestamp - state.last_timestamp > max_gap_ms;
+        state.last_timestamp = timestamp;
+
         auto const size_bytes = _current_frm_size_pixels * _bpp;
         if( state.last_frame.size() != size_bytes )
         {
@@ -200,7 +207,7 @@ namespace librealsense
             state.history.assign( size_bytes, 0 );
             state.cur_frame_index = 0;
         }
-        else if( geometry_changed )
+        else if( geometry_changed || restarted )
             clear_state( state );
 
         return state;
