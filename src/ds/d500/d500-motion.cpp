@@ -78,6 +78,13 @@ namespace librealsense
         return 125. / 32768.;
     }
 
+    double d500_motion::get_accel_default_scale() const
+    {
+        // GMSL FW that sends the int32 record also changed the accel unit from 1 mg to 10 ug per count.
+        // USB keeps the base scale until its FW threshold is defined.
+        return ( _is_mipi_device && supports_physical_units() ) ? 0.00001 : 0.001;
+    }
+
     std::shared_ptr<synthetic_sensor> d500_motion::create_hid_device( std::shared_ptr<context> ctx,
                                                                       const std::vector<platform::hid_device_info>& all_hid_infos )
     {
