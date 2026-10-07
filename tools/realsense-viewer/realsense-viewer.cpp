@@ -559,8 +559,10 @@ int run_viewer( int argc, const char ** argv,
         // *********************
         // Creating window menus
         // *********************
-        // Scrollbar only on overflow, so the device panels reach the same right edge as the top bar
-        ImGui::Begin("Control Panel", nullptr, flags);
+        // A thin, always-shown scrollbar closes the pane on the top bar's edge and leaves more width to the device panels
+        ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 8.f);
+        ImGui::Begin("Control Panel", nullptr, flags | ImGuiWindowFlags_AlwaysVerticalScrollbar);
+        ImGui::PopStyleVar();
 
         if (device_models->size() > 0)
         {

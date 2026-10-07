@@ -2484,7 +2484,7 @@ namespace rs2
         if (_allow_remove)
         {
             ImGui::Columns(1);
-            // From the content edge, so it stays aligned with the sensor toggles whether or not the scrollbar is shown
+            // From the content edge, so it stays aligned with the sensor toggles
             float horizontal_distance_from_right_side_of_panel = 33;
             ImGui::SetCursorPos({ windows_width - horizontal_distance_from_right_side_of_panel, pos.y + 9 + (header_h - panel_height) / 2 });
             std::string remove_source_button_label = rsutils::string::from() << textual_icons::times << "##" << id;
