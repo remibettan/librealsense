@@ -213,7 +213,8 @@ namespace librealsense
             return nullptr;
         };
         auto gyro_sensitivity_option = register_mipi_sensitivity( RS2_OPTION_GYRO_SENSITIVITY, RS2_GYRO_SENSITIVITY_COUNT - 1.f );
-        register_mipi_sensitivity( RS2_OPTION_ACCEL_SENSITIVITY, RS2_ACCEL_SENSITIVITY_COUNT - 1.f );
+        if( get_pid() != ds::D585S_PID )  // no accel range control on the safety SKU
+            register_mipi_sensitivity( RS2_OPTION_ACCEL_SENSITIVITY, RS2_ACCEL_SENSITIVITY_COUNT - 1.f );
 
         // register pre-processing
         std::shared_ptr<enable_motion_correction> mm_correct_opt = nullptr;
