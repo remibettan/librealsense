@@ -100,12 +100,6 @@ target_link_libraries( ${PROJECT_NAME}
 
 # Keep the EasyLogging++ storage private to this library, as done for the core library
 hide_sources_symbols( log-gl.cpp ../../third-party/easyloggingpp/src/easylogging++.cc )
-if(BUILD_SHARED_LIBS AND UNIX AND NOT APPLE AND TARGET rsutils)
-    get_target_property( _rsutils_type rsutils TYPE )
-    if(_rsutils_type STREQUAL "STATIC_LIBRARY")
-        target_link_libraries( ${PROJECT_NAME} PRIVATE "-Wl,--exclude-libs,$<TARGET_FILE_NAME:rsutils>" )
-    endif()
-endif()
 
 # CMake prior to 3.13 cannot install targets located in sub-directories.
 #https://gitlab.kitware.com/cmake/cmake/merge_requests/2152
