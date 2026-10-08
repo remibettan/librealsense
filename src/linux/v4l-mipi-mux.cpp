@@ -196,7 +196,7 @@ namespace librealsense
                         {
                             clear_stale_requests();
                             set_enable( m, true );
-                            // The camera starts the capture here, and refuses it unless the streams' inputs are running
+                            // The camera starts the capture here, and refuses it when a stream's inputs are not running
                             try
                             {
                                 _carrier->stream_on( error_handler );
@@ -204,8 +204,8 @@ namespace librealsense
                             catch( const std::exception & e )
                             {
                                 throw backend_exception( rsutils::string::from()
-                                                         << "The camera refused to start Perception streams; Depth and Color must "
-                                                            "already be streaming at a supported resolution (" << e.what() << ")" );
+                                                         << "The camera refused to start Perception streams; Occupancy needs Depth "
+                                                            "streaming at 1280x720 or 640x360 (" << e.what() << ")" );
                             }
                             _streaming = true;
                         }
@@ -319,11 +319,12 @@ namespace librealsense
                         if( ! command( MUX_SET_ENABLE, MUX_MEMBERS[m].stream_id, on, state, error ) )
                             throw backend_exception( rsutils::string::from() << "Perception stream " << MUX_MEMBERS[m].stream_id
                                                                              << " enable(" << on << ") rejected, error " << error );
-                        if( state.requested != uint32_t( on ) || ( state.capture_active && state.applied != uint32_t( on ) ) )
-                            throw backend_exception( rsutils::string::from()
-                                                     << "Perception stream " << MUX_MEMBERS[m].stream_id << " enable(" << on
-                                                     << ") returned requested " << state.requested << ", applied " << state.applied );
-                        _slots[m].enabled = on;
+                        // The camera applies the request asynchronously; routing by metadata makes waiting for it unnecessary
+                        _slots[m].enabled = ( state.requested != 0 );
+                        if( state.requested != uint32_t( on ) )
+                            throw backend_exception( rsutils::string::from() << "Perception stream " << MUX_MEMBERS[m].stream_id
+                                                                             << " enable(" << on << ") returned requested "
+                                                                             << state.requested );
                     }
 
                     // The camera keeps requests across sessions. Owning the capture, any stream not opened here is a leftover.

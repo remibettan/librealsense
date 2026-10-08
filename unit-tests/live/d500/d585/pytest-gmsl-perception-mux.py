@@ -3,7 +3,8 @@
 
 # GMSL Perception MUX: Object Detection (PD) and Occupancy (OCC) time-share the GMSL IR channel and are told apart
 # by their metadata. Each stream is still its own sensor and opens and closes independently; the camera starts the
-# shared capture with the first and stops it with the last, and needs Depth and Color streaming as their inputs.
+# shared capture with the first and stops it with the last. PD runs alone; OCC needs Depth at 1280x720 or 640x360.
+# Standalone PD on every transport is covered by pytest-pd-standalone.py.
 #
 # Tests follow the camera's current mode: Occupancy exists on 3C only, so its tests skip on 2C.
 
@@ -79,8 +80,18 @@ def mux_state(dev, stream_id):
     return struct.unpack_from( '<III', reply, 4 ) if opcode == MUX_CONTROL and len( reply ) >= 16 else None
 
 
+def wait_state(dev, stream_id, expected, timeout=2.):
+    """The camera applies enables asynchronously; poll GET_STATE until it reports `expected` or the timeout passes."""
+    deadline = time.monotonic() + timeout
+    while True:
+        state = mux_state( dev, stream_id )
+        if state == expected or time.monotonic() > deadline:
+            return state
+        time.sleep( 0.1 )
+
+
 def start_inputs(dev, extra=()):
-    """Depth and Color, the Perception inputs, plus any extra Stereo Module profiles; returns the started sensors."""
+    """Depth and Color, as an application runs them, plus any extra Stereo Module profiles; returns the started sensors."""
     stereo = dev.first_depth_sensor()
     stereo_profiles = [profile( stereo, rs.stream.depth, rs.format.z16 )] + list( extra )
     started = [stereo]
@@ -149,7 +160,7 @@ def test_pd_open_close_twice(device):
         assert all( i['size'] == 2347 and i['magic'] == b'ODET' for i in got )
         assert all( b['ts'] > a['ts'] for a, b in zip( got, got[1:] ) )
         assert state == ( 1, 1, 1 )
-        assert mux_state( device, PD_ID ) == ( 0, 0, 0 )
+        assert wait_state( device, PD_ID, ( 0, 0, 0 ) ) == ( 0, 0, 0 )
     stop( inputs )
 
 
@@ -211,7 +222,8 @@ def test_pd_and_occ_independent(device):
     step( lambda: stop( [pd] ), False, True )
     step( lambda: stop( [mapping] ), False, False )
     stop( inputs )
-    assert mux_state( device, PD_ID ) == ( 0, 0, 0 ) and mux_state( device, OCC_ID ) == ( 0, 0, 0 )
+    assert wait_state( device, PD_ID, ( 0, 0, 0 ) ) == ( 0, 0, 0 )
+    assert wait_state( device, OCC_ID, ( 0, 0, 0 ) ) == ( 0, 0, 0 )
 
     occ = frames.frames[rs.stream.occupancy]
     assert all( i['size'] == 320 * 256 for i in occ )
@@ -279,20 +291,22 @@ def test_ir_and_perception_exclude_each_other(device):
     pd.close()
 
 
-def test_refused_start_recovers(device):
-    """Without its inputs the camera refuses Perception; the SDK must report it and leave nothing behind."""
-    if is_3c( device ):
-        pytest.skip( "A refused start can leave 3C streaming broken until a power cycle (FW)" )
-    pd = sensor( device, 'Perception' )
+def test_occ_refused_without_depth(device):
+    """OCC is built from Depth: with only Color running the camera refuses it, and the SDK must leave nothing behind."""
+    if not is_3c( device ):
+        pytest.skip( "Occupancy is 3C only" )
+    rgb, mapping = sensor( device, 'RGB Camera' ), sensor( device, 'Depth Mapping Camera' )
+    rgb.open( profile( rgb, rs.stream.color, rs.format.rgb8 ) )
+    rgb.start( lambda f: None )
     with pytest.raises( RuntimeError, match="refused" ):
-        pd.open( pd_profile( device ) )
-    assert mux_state( device, PD_ID ) == ( 0, 0, 0 )
+        mapping.open( occ_profile( device ) )
+    stop( [rgb] )
+    assert wait_state( device, OCC_ID, ( 0, 0, 0 ) ) == ( 0, 0, 0 )
     inputs = start_inputs( device )
     frames = Collector()
-    pd.open( pd_profile( device ) )
-    pd.start( frames )
+    mapping.open( occ_profile( device ) )
+    mapping.start( frames )
     time.sleep( DURATION_S )
-    pd.stop()
-    pd.close()
+    stop( [mapping] )
     stop( inputs )
-    assert frames.count( rs.stream.object_detection ) >= MIN_PD_FRAMES
+    assert frames.count( rs.stream.occupancy ) >= MIN_OCC_FRAMES

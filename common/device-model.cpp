@@ -396,16 +396,16 @@ namespace rs2
         return false;
     }
 
-    bool device_model::are_color_and_depth_streaming() const
+    bool device_model::subdevice_has_perception( const subdevice_model & sub ) const
     {
-        return is_stream_active( RS2_STREAM_COLOR ) && is_stream_active( RS2_STREAM_DEPTH );
+        return subdevice_has_stream_enabled( sub, RS2_STREAM_OBJECT_DETECTION )
+            || subdevice_has_stream_enabled( sub, RS2_STREAM_OCCUPANCY );
     }
 
-    bool device_model::subdevice_needs_color_and_depth( const subdevice_model & sub ) const
+    bool device_model::subdevice_needs_depth( const subdevice_model & sub ) const
     {
-        // Over GMSL the camera also builds occupancy from the running color and depth streams
-        return subdevice_has_stream_enabled( sub, RS2_STREAM_OBJECT_DETECTION )
-            || ( fw_update::is_mipi_device( dev ) && subdevice_has_stream_enabled( sub, RS2_STREAM_OCCUPANCY ) );
+        // Over GMSL the camera builds occupancy from the running depth stream
+        return fw_update::is_mipi_device( dev ) && subdevice_has_stream_enabled( sub, RS2_STREAM_OCCUPANCY );
     }
 
     bool device_model::is_depth_resolution_valid_for_occupancy() const
@@ -422,12 +422,12 @@ namespace rs2
 
     void device_model::stop_perception_if_video_stopped( viewer_model & viewer )
     {
-        // If color or depth are no longer both streaming, stop any perception subdevice that is still running.
-        if( are_color_and_depth_streaming() )
+        // If depth is no longer streaming, stop a perception stream that depends on it (GMSL occupancy)
+        if( is_stream_active( RS2_STREAM_DEPTH ) )
             return;
         for( auto & sub : subdevices )
         {
-            if( sub->streaming && subdevice_needs_color_and_depth( *sub ) )
+            if( sub->streaming && subdevice_needs_depth( *sub ) )
                 sub->stop( viewer.not_model );
         }
     }
@@ -2695,20 +2695,15 @@ namespace rs2
                         }
                         if (can_stream)
                         {
-                            // Disable the start button for perception streams unless color and depth are already
-                            // streaming, and while a decimation/temporal embedded filter is enabled (mutually exclusive).
-                            // Over GMSL perception and infrared share the IR channel, so they exclude each other too.
-                            bool sub_has_perception = subdevice_needs_color_and_depth( *sub );
+                            // Disable the start button for GMSL occupancy unless depth already streams at a supported
+                            // resolution, and for object detection while a decimation/temporal embedded filter is enabled.
+                            // Over GMSL perception and infrared share the IR channel, so they exclude each other.
                             bool blocking_filter_enabled = subdevice_has_stream_enabled( *sub, RS2_STREAM_OBJECT_DETECTION )
                                                         && is_perception_blocking_filter_enabled();
-                            bool blocking_ir_active = sub_has_perception && fw_update::is_mipi_device( dev )
+                            bool blocking_ir_active = subdevice_has_perception( *sub ) && fw_update::is_mipi_device( dev )
                                                    && is_stream_active( RS2_STREAM_INFRARED );
-                            bool missing_color_or_depth = sub_has_perception && ! are_color_and_depth_streaming();
-                            bool invalid_depth_resolution = ! missing_color_or_depth && sub_has_perception
-                                                         && subdevice_has_stream_enabled( *sub, RS2_STREAM_OCCUPANCY )
-                                                         && ! is_depth_resolution_valid_for_occupancy();
-                            bool disable_perception = missing_color_or_depth || invalid_depth_resolution
-                                                   || blocking_filter_enabled || blocking_ir_active;
+                            bool missing_depth = subdevice_needs_depth( *sub ) && ! is_depth_resolution_valid_for_occupancy();
+                            bool disable_perception = missing_depth || blocking_filter_enabled || blocking_ir_active;
                             if( disable_perception )
                                 ImGui::BeginDisabled();
 
@@ -2753,9 +2748,7 @@ namespace rs2
                                         ? "Disable the decimation/temporal embedded filter before starting perception (cannot run together)"
                                         : blocking_ir_active
                                         ? "Stop the Infrared streams before starting perception (they share the GMSL IR channel)"
-                                        : invalid_depth_resolution
-                                        ? "Occupancy needs Depth streaming at 1280x720 or 640x360"
-                                        : "Color and Depth streams must be streaming before starting perception" );
+                                        : "Occupancy needs Depth streaming at 1280x720 or 640x360" );
                             }
                             else if (ImGui::IsItemHovered())
                             {
