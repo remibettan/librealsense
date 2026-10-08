@@ -35,7 +35,16 @@ namespace librealsense
 {
     namespace
     {
+        // Raw counts per dps on the HID path (set_gyro_scale_factor), and its reciprocal as the default scale.
         constexpr double RAW_TO_DPS_SCALE = 10000.0;
+
+        // First FW that sends the true int32 IMU record on GMSL, with accel at 10 ug per count on USB and GMSL.
+        // Placeholder until the released FW version is recorded.
+        const firmware_version & min_fw_int32_imu()
+        {
+            static const firmware_version v( "7.59.46486.16342" );
+            return v;
+        }
     }
 
     const std::map<fourcc::value_type, rs2_format> d500_motion_fourcc_to_rs2_format = {
@@ -55,8 +64,9 @@ namespace librealsense
     bool d500_motion::supports_physical_units() const
     {
         static const firmware_version min_fw_supporting_physical_units( "7.58.40672.12546" );
-        return get_pid() != ds::D585S_PID && ! _is_mipi_device
-            && _fw_version >= min_fw_supporting_physical_units;
+        return get_pid() != ds::D585S_PID
+            && _fw_version >= ( _is_mipi_device ? min_fw_int32_imu()
+                                                : min_fw_supporting_physical_units );
     }
 
     bool d500_motion::is_imu_high_accuracy() const
@@ -66,11 +76,19 @@ namespace librealsense
 
     double d500_motion::get_gyro_default_scale() const
     {
-        if( supports_physical_units() )
+        // GMSL FW still sends the gyro as the raw BMI08x register value, so only the HID path has a physical scale.
+        if( supports_physical_units() && ! _is_mipi_device )
             return 1. / RAW_TO_DPS_SCALE;
 
         // Legacy D500 reports signed 16-bit raw samples at a fixed 125 dps assumption.
         return 125. / 32768.;
+    }
+
+    double d500_motion::get_accel_default_scale() const
+    {
+        // FW changed the accel unit from 1 mg to 10 ug per count (USB and GMSL) in the same release that sends the
+        // true int32 record on GMSL. The range option never changes this scale.
+        return ( supports_physical_units() && _fw_version >= min_fw_int32_imu() ) ? 0.00001 : 0.001;
     }
 
     std::shared_ptr<synthetic_sensor> d500_motion::create_hid_device( std::shared_ptr<context> ctx,
@@ -119,9 +137,14 @@ namespace librealsense
             {
                 _motion_module_device_idx = static_cast<uint8_t>(add_sensor(sensor_ep));
                 sensor_ep->get_raw_sensor()->register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_hid_header_parser(&hid_header::timestamp));
-                register_gyro_sensitivity();
-                if( supports_physical_units() )
+                if( ! _is_mipi_device )
+                    register_gyro_sensitivity();
+                if( supports_physical_units() && ! _is_mipi_device )  // HID only, MIPI scales in the processing block
                     get_raw_motion_sensor()->set_gyro_scale_factor( RAW_TO_DPS_SCALE );
+                // Windows MF rebuilds FW counts from g; derive the factor from the scale the transform uses (1000 or 100000).
+                // Unconditional on purpose: the legacy value, 1000, equals the backend default.
+                if( ! _is_mipi_device )
+                    get_raw_motion_sensor()->set_accel_scale_factor( 1.0 / get_accel_default_scale() );
             }
 #endif
         }
@@ -212,6 +235,7 @@ namespace librealsense
             [mm_calib, high_accuracy, mm_correct_opt, gyro_scale_factor, accel_scale_factor, gyro_sensitivity_option]()
             {
                 double scale = gyro_scale_factor;
+                // MIPI gyro is a raw register value, its scale follows the selected range.
                 if( gyro_sensitivity_option )
                 {
                     try
@@ -250,7 +274,7 @@ namespace librealsense
 
     void d500_motion::register_gyro_sensitivity()
     {
-        if( supports_physical_units() && ! _has_motion_module_failed )
+        if( supports_physical_units() && ! _is_mipi_device && ! _has_motion_module_failed )
         {
             auto raw_motion_sensor = get_raw_motion_sensor();
             raw_motion_sensor->enable_gyro_sensitivity_range_index();
