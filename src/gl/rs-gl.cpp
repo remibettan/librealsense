@@ -295,9 +295,3 @@ rs2_processing_block* rs2_gl_create_pointcloud_renderer(int api_version, rs2_err
     return new rs2_processing_block { block };
 }
 HANDLE_EXCEPTIONS_AND_RETURN(nullptr, api_version)
-
-#ifdef BUILD_EASYLOGGINGPP
-char log_gl_name[] = LIBREALSENSE_ELPP_ID;
-static logger_type<log_gl_name> logger_gl;
-#endif
-
