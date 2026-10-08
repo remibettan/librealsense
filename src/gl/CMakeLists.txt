@@ -101,7 +101,10 @@ target_link_libraries( ${PROJECT_NAME}
 # Keep the EasyLogging++ storage private to this library, as done for the core library
 hide_sources_symbols( elpp-init-gl.cpp )
 if(BUILD_SHARED_LIBS AND UNIX AND NOT APPLE AND TARGET rsutils)
-    target_link_libraries( ${PROJECT_NAME} PRIVATE "-Wl,--exclude-libs,$<TARGET_FILE_NAME:rsutils>" )
+    get_target_property( _rsutils_type rsutils TYPE )
+    if(_rsutils_type STREQUAL "STATIC_LIBRARY")
+        target_link_libraries( ${PROJECT_NAME} PRIVATE "-Wl,--exclude-libs,$<TARGET_FILE_NAME:rsutils>" )
+    endif()
 endif()
 
 # CMake prior to 3.13 cannot install targets located in sub-directories.
