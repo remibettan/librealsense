@@ -19,6 +19,7 @@ set(REALSENSE_GL_CPP
     pointcloud-gl.h
     pointcloud-gl.cpp
     rs-gl.cpp
+    elpp-init-gl.cpp
     realsense-gl.def
     ../../include/librealsense2-gl/rs_processing_gl.h
     ../../include/librealsense2-gl/rs_processing_gl.hpp
@@ -97,7 +98,8 @@ target_link_libraries( ${PROJECT_NAME}
         rs_lz4
     )
 
-# Keep the bundled rsutils (EasyLogging++ storage) private to this library, as done for the core library
+# Keep the EasyLogging++ storage private to this library, as done for the core library
+hide_sources_symbols( elpp-init-gl.cpp )
 if(BUILD_SHARED_LIBS AND UNIX AND NOT APPLE AND TARGET rsutils)
     target_link_libraries( ${PROJECT_NAME} PRIVATE "-Wl,--exclude-libs,$<TARGET_FILE_NAME:rsutils>" )
 endif()
