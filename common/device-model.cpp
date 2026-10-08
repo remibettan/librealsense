@@ -2484,8 +2484,9 @@ namespace rs2
         if (_allow_remove)
         {
             ImGui::Columns(1);
-            float horizontal_distance_from_right_side_of_panel = 47;
-            ImGui::SetCursorPos({ panel_width - horizontal_distance_from_right_side_of_panel, pos.y + 9 + (header_h - panel_height) / 2 });
+            // From the content edge, so it stays aligned with the sensor toggles
+            float horizontal_distance_from_right_side_of_panel = 33;
+            ImGui::SetCursorPos({ windows_width - horizontal_distance_from_right_side_of_panel, pos.y + 9 + (header_h - panel_height) / 2 });
             std::string remove_source_button_label = rsutils::string::from() << textual_icons::times << "##" << id;
             if (ImGui::Button(remove_source_button_label.c_str(), { 33,35 }))
             {
@@ -3062,8 +3063,7 @@ namespace rs2
             //Left line
             ImGui::GetWindowDrawList()->AddLine({ initial_screen_pos.x + left_space,initial_screen_pos.y + upper_space }, { end_screen_pos.x + left_space, end_screen_pos.y }, ImColor(header_color));
             //Right line
-            const float compenstaion_right = 17.f;;
-            ImGui::GetWindowDrawList()->AddLine({ initial_screen_pos.x + panel_width - compenstaion_right, initial_screen_pos.y + upper_space }, { end_screen_pos.x + panel_width - compenstaion_right, end_screen_pos.y }, ImColor(header_color));
+            ImGui::GetWindowDrawList()->AddLine({ initial_screen_pos.x + windows_width - 1, initial_screen_pos.y + upper_space }, { end_screen_pos.x + windows_width - 1, end_screen_pos.y }, ImColor(header_color));
             //Button line
             const float compenstaion_button = 1.0f;
             ImGui::GetWindowDrawList()->AddLine({ end_screen_pos.x + left_space, end_screen_pos.y - compenstaion_button }, { end_screen_pos.x + left_space + panel_width, end_screen_pos.y - compenstaion_button }, ImColor(header_color));
