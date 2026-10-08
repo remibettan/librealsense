@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.device_each( "D585" ),
+    pytest.mark.device_exclude( "D585S" ),   # the safety SKU has no perception sensor
 ]
 
 DURATION_S = 4

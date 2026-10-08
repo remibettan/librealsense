@@ -402,6 +402,12 @@ namespace rs2
             || subdevice_has_stream_enabled( sub, RS2_STREAM_OCCUPANCY );
     }
 
+    bool device_model::subdevice_needs_color( const subdevice_model & sub ) const
+    {
+        // Object detection results are drawn on the color stream
+        return subdevice_has_stream_enabled( sub, RS2_STREAM_OBJECT_DETECTION );
+    }
+
     bool device_model::subdevice_needs_depth( const subdevice_model & sub ) const
     {
         // Over GMSL the camera builds occupancy from the running depth stream
@@ -422,12 +428,13 @@ namespace rs2
 
     void device_model::stop_perception_if_video_stopped( viewer_model & viewer )
     {
-        // If depth is no longer streaming, stop a perception stream that depends on it (GMSL occupancy)
-        if( is_stream_active( RS2_STREAM_DEPTH ) )
-            return;
+        // Stop a perception stream whose input stopped: color for object detection, depth for GMSL occupancy
+        bool const color_active = is_stream_active( RS2_STREAM_COLOR );
+        bool const depth_active = is_stream_active( RS2_STREAM_DEPTH );
         for( auto & sub : subdevices )
         {
-            if( sub->streaming && subdevice_needs_depth( *sub ) )
+            if( sub->streaming && ( ( ! color_active && subdevice_needs_color( *sub ) )
+                                    || ( ! depth_active && subdevice_needs_depth( *sub ) ) ) )
                 sub->stop( viewer.not_model );
         }
     }
@@ -2695,15 +2702,16 @@ namespace rs2
                         }
                         if (can_stream)
                         {
-                            // Disable the start button for GMSL occupancy unless depth already streams at a supported
-                            // resolution, and for object detection while a decimation/temporal embedded filter is enabled.
-                            // Over GMSL perception and infrared share the IR channel, so they exclude each other.
+                            // Disable the start button for object detection unless color streams, for GMSL occupancy unless
+                            // depth streams at a supported resolution, and for object detection while a decimation/temporal
+                            // embedded filter is enabled. Over GMSL perception and infrared share the IR channel.
                             bool blocking_filter_enabled = subdevice_has_stream_enabled( *sub, RS2_STREAM_OBJECT_DETECTION )
                                                         && is_perception_blocking_filter_enabled();
                             bool blocking_ir_active = subdevice_has_perception( *sub ) && fw_update::is_mipi_device( dev )
                                                    && is_stream_active( RS2_STREAM_INFRARED );
+                            bool missing_color = subdevice_needs_color( *sub ) && ! is_stream_active( RS2_STREAM_COLOR );
                             bool missing_depth = subdevice_needs_depth( *sub ) && ! is_depth_resolution_valid_for_occupancy();
-                            bool disable_perception = missing_depth || blocking_filter_enabled || blocking_ir_active;
+                            bool disable_perception = missing_color || missing_depth || blocking_filter_enabled || blocking_ir_active;
                             if( disable_perception )
                                 ImGui::BeginDisabled();
 
@@ -2748,6 +2756,8 @@ namespace rs2
                                         ? "Disable the decimation/temporal embedded filter before starting perception (cannot run together)"
                                         : blocking_ir_active
                                         ? "Stop the Infrared streams before starting perception (they share the GMSL IR channel)"
+                                        : missing_color
+                                        ? "Object detection needs a Color stream running; detections are drawn on it"
                                         : "Occupancy needs Depth streaming at 1280x720 or 640x360" );
                             }
                             else if (ImGui::IsItemHovered())
