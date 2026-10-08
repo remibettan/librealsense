@@ -37,6 +37,14 @@ namespace librealsense
     {
         // Raw counts per dps on the HID path (set_gyro_scale_factor), and its reciprocal as the default scale.
         constexpr double RAW_TO_DPS_SCALE = 10000.0;
+
+        // First FW that sends the true int32 IMU record on GMSL, with accel at 10 ug per count on USB and GMSL.
+        // Placeholder until the released FW version is recorded.
+        const firmware_version & min_fw_int32_imu()
+        {
+            static const firmware_version v( "7.59.46486.16342" );
+            return v;
+        }
     }
 
     const std::map<fourcc::value_type, rs2_format> d500_motion_fourcc_to_rs2_format = {
@@ -56,10 +64,8 @@ namespace librealsense
     bool d500_motion::supports_physical_units() const
     {
         static const firmware_version min_fw_supporting_physical_units( "7.58.40672.12546" );
-        // GMSL streams the true 38-byte int32 record only from this FW; older FW sends the interim int16 payload
-        static const firmware_version min_fw_supporting_physical_units_mipi( "7.59.46486.16342" );
         return get_pid() != ds::D585S_PID
-            && _fw_version >= ( _is_mipi_device ? min_fw_supporting_physical_units_mipi
+            && _fw_version >= ( _is_mipi_device ? min_fw_int32_imu()
                                                 : min_fw_supporting_physical_units );
     }
 
@@ -82,8 +88,7 @@ namespace librealsense
     {
         // FW changed the accel unit from 1 mg to 10 ug per count (USB and GMSL) in the same release that sends the
         // true int32 record on GMSL. The range option never changes this scale.
-        static const firmware_version min_fw_accel_10ug( "7.59.46486.16342" );
-        return ( supports_physical_units() && _fw_version >= min_fw_accel_10ug ) ? 0.00001 : 0.001;
+        return ( supports_physical_units() && _fw_version >= min_fw_int32_imu() ) ? 0.00001 : 0.001;
     }
 
     std::shared_ptr<synthetic_sensor> d500_motion::create_hid_device( std::shared_ptr<context> ctx,
@@ -136,7 +141,8 @@ namespace librealsense
                     register_gyro_sensitivity();
                 if( supports_physical_units() && ! _is_mipi_device )  // HID only, MIPI scales in the processing block
                     get_raw_motion_sensor()->set_gyro_scale_factor( RAW_TO_DPS_SCALE );
-                // Windows MF rebuilds FW counts from g; derive the factor from the scale the transform uses (1000 or 100000)
+                // Windows MF rebuilds FW counts from g; derive the factor from the scale the transform uses (1000 or 100000).
+                // Unconditional on purpose: the legacy value, 1000, equals the backend default.
                 if( ! _is_mipi_device )
                     get_raw_motion_sensor()->set_accel_scale_factor( 1.0 / get_accel_default_scale() );
             }
