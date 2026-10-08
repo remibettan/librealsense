@@ -59,8 +59,8 @@ namespace librealsense
         if( ! is_valid( value ) )
             throw invalid_value_exception( "set(accel_sensitivity) failed! Invalid accel sensitivity request " + std::to_string( value ) );
 
-        _value = value;
         sensor->set_imu_sensitivity( RS2_STREAM_ACCEL, value );
+        _value = value;
         _record_action( *this );
     }
 

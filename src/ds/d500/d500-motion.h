@@ -44,6 +44,7 @@ namespace librealsense
         ds_motion_sensor & get_motion_sensor();
         std::shared_ptr< hid_sensor > get_raw_motion_sensor();
         bool supports_physical_units() const;
+        bool supports_accel_range() const;
         void register_gyro_sensitivity();
 
     private:

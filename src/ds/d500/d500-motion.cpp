@@ -69,6 +69,12 @@ namespace librealsense
                                                 : min_fw_supporting_physical_units );
     }
 
+    bool d500_motion::supports_accel_range() const
+    {
+        // The FW acts on the accel level from the same release that reports accel at 10 ug per count. Not on D585S.
+        return supports_physical_units() && _fw_version >= min_fw_int32_imu();
+    }
+
     bool d500_motion::is_imu_high_accuracy() const
     {
         return supports_physical_units();
@@ -88,7 +94,7 @@ namespace librealsense
     {
         // FW changed the accel unit from 1 mg to 10 ug per count (USB and GMSL) in the same release that sends the
         // true int32 record on GMSL. The range option never changes this scale.
-        return ( supports_physical_units() && _fw_version >= min_fw_int32_imu() ) ? 0.00001 : 0.001;
+        return supports_accel_range() ? 0.00001 : 0.001;
     }
 
     std::shared_ptr<synthetic_sensor> d500_motion::create_hid_device( std::shared_ptr<context> ctx,
@@ -213,7 +219,7 @@ namespace librealsense
             return nullptr;
         };
         auto gyro_sensitivity_option = register_mipi_sensitivity( RS2_OPTION_GYRO_SENSITIVITY, RS2_GYRO_SENSITIVITY_COUNT - 1.f );
-        if( get_pid() != ds::D585S_PID )  // no accel range control on the safety SKU
+        if( supports_accel_range() )
             register_mipi_sensitivity( RS2_OPTION_ACCEL_SENSITIVITY, RS2_ACCEL_SENSITIVITY_COUNT - 1.f );
 
         // register pre-processing
@@ -287,8 +293,9 @@ namespace librealsense
             register_feature(
                 std::make_shared< gyro_sensitivity_feature >(
                     raw_motion_sensor, get_motion_sensor(), 4.f ) );
-            get_motion_sensor().register_option( RS2_OPTION_ACCEL_SENSITIVITY,
-                                                 std::make_shared< d500_hid_accel_sensitivity_option >( raw_motion_sensor ) );
+            if( supports_accel_range() )
+                get_motion_sensor().register_option( RS2_OPTION_ACCEL_SENSITIVITY,
+                                                     std::make_shared< d500_hid_accel_sensitivity_option >( raw_motion_sensor ) );
         }
     }
 
