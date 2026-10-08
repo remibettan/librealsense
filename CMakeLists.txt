@@ -78,7 +78,7 @@ else()
     endif()
 endif()
 
-hide_bundled_archive_symbols( fastcdr fastrtps foonathan_memory realdds realsense-file rs_lz4 sqlite3_lib )
+hide_bundled_archive_symbols( fastcdr fastrtps foonathan_memory realdds realsense-file rs_lz4 sqlite3_lib rsutils )
 
 # configure the project according to OS specific requirments
 # macro definition located at "CMake/<OS>_config.cmake"

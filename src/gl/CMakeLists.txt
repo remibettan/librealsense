@@ -97,6 +97,11 @@ target_link_libraries( ${PROJECT_NAME}
         rs_lz4
     )
 
+# Keep the bundled rsutils (EasyLogging++ storage) private to this library, as done for the core library
+if(BUILD_SHARED_LIBS AND UNIX AND NOT APPLE AND TARGET rsutils)
+    target_link_libraries( ${PROJECT_NAME} PRIVATE "-Wl,--exclude-libs,$<TARGET_FILE_NAME:rsutils>" )
+endif()
+
 # CMake prior to 3.13 cannot install targets located in sub-directories.
 #https://gitlab.kitware.com/cmake/cmake/merge_requests/2152
 # Hence these targets will be invoked from the project and not the root directory
