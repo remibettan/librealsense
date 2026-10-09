@@ -41,7 +41,7 @@ namespace librealsense
         // First FW that sends the true int32 IMU record on GMSL, with accel at 10 ug per count on USB and GMSL.
         const firmware_version & min_fw_int32_imu()
         {
-            static const firmware_version v( "7.59.46539.16416" );
+            static const firmware_version v( "7.59.46582.16434" );
             return v;
         }
     }
