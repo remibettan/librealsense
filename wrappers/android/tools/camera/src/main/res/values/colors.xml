@@ -1,10 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#008577</color>
-    <color name="colorPrimaryDark">#00574B</color>
-    <color name="colorAccent">#D81B60</color>
-    <color name="intel_blue">#0071c5</color>
-    <color name="black">#000000</color>
-    <color name="black_overlay">#66000000</color>
-    <color name="white">#FFFFFF</color>
+    <color name="rs_primary">#0B57D0</color>
+    <color name="rs_on_primary">#FFFFFF</color>
+    <color name="rs_primary_container">#D3E3FD</color>
+    <color name="rs_on_primary_container">#041E49</color>
+    <color name="rs_secondary">#00695C</color>
+    <color name="rs_on_secondary">#FFFFFF</color>
+    <color name="rs_secondary_container">#B2DFDB</color>
+    <color name="rs_on_secondary_container">#00251F</color>
+
+    <color name="viewer_background">#000000</color>
+    <color name="viewer_overlay">#99101418</color>
+    <color name="viewer_overlay_strong">#CC101418</color>
+    <color name="viewer_on_overlay">#FFFFFF</color>
+    <color name="viewer_accent">#8AB4F8</color>
+    <color name="record_red">#E53935</color>
+    <color name="launcher_background">#0B1B2B</color>
 </resources>

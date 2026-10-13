@@ -1,139 +1,119 @@
 package com.intel.realsense.camera;
 
-import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Dialog;
-import android.app.DialogFragment;
 import android.content.Context;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
+import android.content.DialogInterface;
 import android.os.Bundle;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.widget.Button;
 import android.widget.CheckBox;
-import android.widget.CompoundButton;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.fragment.app.DialogFragment;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.intel.realsense.librealsense.CameraInfo;
 import com.intel.realsense.librealsense.Device;
 import com.intel.realsense.librealsense.DeviceList;
-import com.intel.realsense.librealsense.Extension;
-import com.intel.realsense.librealsense.ProductLine;
 import com.intel.realsense.librealsense.RsContext;
-import com.intel.realsense.librealsense.Updatable;
 
+/** Offers (or demands) a signed firmware update; the host activity picks the image and starts the flow. */
 public class FirmwareUpdateDialog extends DialogFragment {
+    private static final String ARG_REQUEST = "request";
+    private static final String ARG_REQUIRED = "required";
 
-    private Button mFwUpdateButton;
-    private Button mSkipFwUpdateButton;
-    private CheckBox mDontAskAgainCheckBox;
-    private TextView mMessage;
-    private TextView mTitle;
+    interface Host {
+        /** The user accepted: pick a firmware file and switch the camera to recovery mode. */
+        void onFirmwareUpdateRequested();
 
-    private boolean mDontShowAgain = false;
-    private boolean mAlreadyLatestInstalled = false;
+        /** The user postponed an optional update. */
+        void onFirmwareUpdateSkipped();
+    }
 
-    private String getFirmwareUpdateMessage(Device device){
-        final String recFw = device.supportsInfo(CameraInfo.RECOMMENDED_FIRMWARE_VERSION) ?
-                device.getInfo(CameraInfo.RECOMMENDED_FIRMWARE_VERSION) : "unknown";
-        final String fw = device.getInfo(CameraInfo.FIRMWARE_VERSION);
-        if (recFw.equals(fw)){
-            mAlreadyLatestInstalled = true;
-            return "The recommended firmware is already installed";
+    private boolean mLatestInstalled = false;
+    private boolean mSkipped = false;
+
+    /**
+     * @param request  opened from Settings by the user rather than as a prompt
+     * @param required the camera firmware is below the supported minimum
+     */
+    static FirmwareUpdateDialog newInstance(boolean request, boolean required) {
+        FirmwareUpdateDialog dialog = new FirmwareUpdateDialog();
+        Bundle args = new Bundle();
+        args.putBoolean(ARG_REQUEST, request);
+        args.putBoolean(ARG_REQUIRED, required);
+        dialog.setArguments(args);
+        dialog.setCancelable(!required);
+        return dialog;
+    }
+
+    private Host host() {
+        return (Host) requireActivity();
+    }
+
+    @NonNull
+    @Override
+    public Dialog onCreateDialog(Bundle savedInstanceState) {
+        Bundle args = requireArguments();
+        final boolean request = args.getBoolean(ARG_REQUEST);
+        final boolean required = args.getBoolean(ARG_REQUIRED);
+
+        View view = View.inflate(requireContext(), R.layout.dialog_firmware_update, null);
+        TextView message = view.findViewById(R.id.firmware_update_message);
+        CheckBox dontAsk = view.findViewById(R.id.dont_ask_checkbox);
+        dontAsk.setVisibility(request || required ? View.GONE : View.VISIBLE);
+        dontAsk.setOnCheckedChangeListener((button, checked) ->
+                requireContext().getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE).edit()
+                        .putBoolean(getString(R.string.show_update_firmware), !checked).apply());
+
+        message.setText(required ? getString(R.string.fw_update_required_message) : describeDevice());
+
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(required ? R.string.fw_update_required_title : request ? R.string.firmware_update : R.string.fw_update_title)
+                .setView(view)
+                .setPositiveButton(R.string.update, (d, w) -> host().onFirmwareUpdateRequested());
+        if (!required)
+            builder.setNegativeButton(request ? R.string.cancel : R.string.later, (d, w) -> skip(request));
+        return builder.create();
+    }
+
+    private String describeDevice() {
+        try (RsContext ctx = new RsContext(); DeviceList dl = ctx.queryDevices()) {
+            if (dl.getDeviceCount() == 0)
+                return getString(R.string.no_device);
+            try (Device device = dl.createDevice(0)) {
+                if (device == null)
+                    return getString(R.string.no_device);
+                final String fw = device.getInfo(CameraInfo.FIRMWARE_VERSION);
+                final String recFw = device.supportsInfo(CameraInfo.RECOMMENDED_FIRMWARE_VERSION) ?
+                        device.getInfo(CameraInfo.RECOMMENDED_FIRMWARE_VERSION) : getString(R.string.unknown);
+                if (recFw.equals(fw)) {
+                    mLatestInstalled = true;
+                    return getString(R.string.fw_latest_installed);
+                }
+                return getString(R.string.fw_update_message, fw, recFw);
+            }
         }
-        return "The firmware of the connected device is: " + fw +
-                "\n\nThe recommended firmware for this device is: " + recFw;
     }
 
     @Override
-    public Dialog onCreateDialog(Bundle savedInstanceState) {
-        final Activity activity = getActivity();
-        Bundle bundle = getArguments();
+    public void onStart() {
+        super.onStart();
+        if (mLatestInstalled)
+            ((AlertDialog) requireDialog()).getButton(DialogInterface.BUTTON_POSITIVE).setEnabled(false);
+    }
 
-        final boolean fwUpdateRequest = bundle == null ? false : bundle.getBoolean(getString(R.string.firmware_update_request), false);
-        final boolean fwUpdateRequired = bundle == null ? false : bundle.getBoolean(getString(R.string.firmware_update_required), false);
+    private void skip(boolean request) {
+        if (mSkipped || request)
+            return;
+        mSkipped = true;
+        host().onFirmwareUpdateSkipped();
+    }
 
-        LayoutInflater inflater = activity.getLayoutInflater();
-        View fragmentView = inflater.inflate(R.layout.firmware_update_notification, null);
-
-        mDontAskAgainCheckBox = fragmentView.findViewById(R.id.dontAskFwUpdateCheckBox);
-        mFwUpdateButton = fragmentView.findViewById(R.id.startFwUpdateButton);
-        mSkipFwUpdateButton = fragmentView.findViewById(R.id.skipFwUpdateButton);
-        mMessage = fragmentView.findViewById(R.id.firmwareUpdateMessage);
-        mTitle = fragmentView.findViewById(R.id.firmwareUpdateTitle);
-
-        if(fwUpdateRequest){
-            mTitle.setText("Firmware update");
-            mSkipFwUpdateButton.setText("Cancel");
-        }
-
-        final RsContext rsContext = new RsContext();
-        try(DeviceList dl = rsContext.queryDevices()){
-            if(dl.getDeviceCount() > 0){
-                try(Device device = dl.createDevice(0)){
-                    if(fwUpdateRequired)
-                        mMessage.setText("The current firmware version of the connected device is not supported by this librealsense version, update is required");
-                    else
-                        mMessage.setText(getFirmwareUpdateMessage(device));
-                }
-            }
-        }
-
-        mFwUpdateButton = fragmentView.findViewById(R.id.startFwUpdateButton);
-        mFwUpdateButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                dismissAllowingStateLoss();
-                try(DeviceList dl = rsContext.queryDevices(ProductLine.DEPTH)){
-                    try(Device d = dl.createDevice(0)){
-                        if(d != null && d.is(Extension.UPDATABLE))
-                            d.<Updatable>as(Extension.UPDATABLE).enterUpdateState();
-                        else
-                            dismissAllowingStateLoss();
-                    }
-                }
-            }
-        });
-
-        if (mAlreadyLatestInstalled)
-            mFwUpdateButton.setEnabled(false);
-
-        mSkipFwUpdateButton = fragmentView.findViewById(R.id.skipFwUpdateButton);
-        mSkipFwUpdateButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                dismissAllowingStateLoss();
-                if(!fwUpdateRequest){
-                    Intent intent = new Intent(activity, PreviewActivity.class);
-                    startActivity(intent);
-                }
-            }
-        });
-
-        if(fwUpdateRequired)
-            mSkipFwUpdateButton.setVisibility(View.GONE);
-
-        mDontAskAgainCheckBox = fragmentView.findViewById(R.id.dontAskFwUpdateCheckBox);
-        mDontAskAgainCheckBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
-                SharedPreferences sharedPref = activity.getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
-                SharedPreferences.Editor editor = sharedPref.edit();
-                mDontShowAgain = !mDontShowAgain;
-                editor.putBoolean(getString(R.string.show_update_firmware), !mDontShowAgain);
-                editor.commit();
-            }
-        });
-        if(fwUpdateRequest || fwUpdateRequired)
-            mDontAskAgainCheckBox.setVisibility(View.GONE);
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
-        builder.setView(fragmentView);
-        AlertDialog rv = builder.create();
-        rv.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        return rv;
+    @Override
+    public void onCancel(@NonNull DialogInterface dialog) {
+        super.onCancel(dialog);
+        skip(requireArguments().getBoolean(ARG_REQUEST));
     }
 }

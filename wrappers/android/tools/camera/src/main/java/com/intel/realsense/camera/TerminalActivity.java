@@ -4,18 +4,19 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
-import android.view.KeyEvent;
-import android.view.View;
+import android.view.inputmethod.EditorInfo;
 import android.widget.ArrayAdapter;
-import android.widget.AutoCompleteTextView;
-import android.widget.Button;
-import android.widget.CompoundButton;
-import android.widget.EditText;
-import android.widget.Switch;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.intel.realsense.librealsense.DebugProtocol;
 import com.intel.realsense.librealsense.Device;
 import com.intel.realsense.librealsense.DeviceList;
@@ -26,190 +27,139 @@ import com.intel.realsense.librealsense.RsContext;
 
 import java.io.File;
 
+/** Raw command terminal over the debug protocol, driven by a commands XML file from the hw folder. */
 public class TerminalActivity extends AppCompatActivity {
-
     private static final String TAG = "librs camera terminal";
-    private static final int OPEN_FILE_REQUEST_CODE = 0;
 
-    private Switch mAutoComplete;
-    private Switch mStreaming;
-
-    private Button mSendButton;
-    private Button mClearButton;
-    private AutoCompleteTextView mInputText;
-    private EditText mOutputText;
+    private MaterialSwitch mAutoComplete;
+    private MaterialSwitch mStreaming;
+    private MaterialAutoCompleteTextView mInputText;
+    private TextView mOutputText;
     private String mFilePath;
-
     private Thread mStreamingThread;
+
+    private final ActivityResultLauncher<Intent> mPickCommandsFile = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() != RESULT_OK || result.getData() == null) {
+                    finish();
+                    return;
+                }
+                mFilePath = result.getData().getStringExtra(FileBrowserActivity.EXTRA_FILE_PATH);
+                prefs().edit().putString(getString(R.string.terminal_commands_file), mFilePath).apply();
+                setupAutoComplete();
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_terminal);
+        Ui.edgeToEdgeWithAppBar(this, findViewById(R.id.root));
+        MaterialToolbar toolbar = findViewById(R.id.toolbar);
+        Ui.setupToolbar(this, toolbar);
 
-        mSendButton = findViewById(R.id.terminal_send_button);
-        mSendButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                send();
-            }
-        });
-
-        mClearButton = findViewById(R.id.terminal_clear_button);
-        mClearButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                mInputText.setText("");
-            }
-        });
         mInputText = findViewById(R.id.terminal_input_edit_text);
-        mInputText.setOnKeyListener(new View.OnKeyListener() {
-            public boolean onKey(View v, int keyCode, KeyEvent event) {
-                if ((event.getAction() == KeyEvent.ACTION_DOWN) &&
-                        (keyCode == KeyEvent.KEYCODE_ENTER)) {
-                    send();
-                    return true;
-                }
-                return false;
-            }
-        });
-        mOutputText = findViewById(R.id.terminal_output_edit_text);
+        mOutputText = findViewById(R.id.terminal_output_text);
         mAutoComplete = findViewById(R.id.terminal_input_auto_complete);
-        mAutoComplete.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                SharedPreferences sharedPref = getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
-                SharedPreferences.Editor editor = sharedPref.edit();
-                editor.putBoolean(getString(R.string.terminal_auto_complete), isChecked);
-                editor.commit();
-                setupAutoCompleteTextView();
+        mStreaming = findViewById(R.id.terminal_stream);
+
+        findViewById(R.id.terminal_send_button).setOnClickListener(v -> send());
+        findViewById(R.id.terminal_clear_button).setOnClickListener(v -> {
+            mInputText.setText("");
+            mOutputText.setText("");
+        });
+        mInputText.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEND) {
+                send();
+                return true;
             }
+            return false;
+        });
+        mAutoComplete.setOnCheckedChangeListener((button, checked) -> {
+            prefs().edit().putBoolean(getString(R.string.terminal_auto_complete), checked).apply();
+            setupAutoComplete();
+        });
+        mStreaming.setOnCheckedChangeListener((button, checked) -> {
+            if (checked)
+                startStreaming();
+            else
+                stopStreaming();
         });
 
-        mStreaming = findViewById(R.id.terminal_stream);
-        mStreaming.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                if(isChecked)
-                    startStreaming();
-                else
-                    stopStreaming();
-            }
-        });
-        init();
+        mFilePath = prefs().getString(getString(R.string.terminal_commands_file), "");
+        mAutoComplete.setChecked(prefs().getBoolean(getString(R.string.terminal_auto_complete), false));
+        if (mFilePath.isEmpty() || !new File(mFilePath).exists())
+            mPickCommandsFile.launch(FileBrowserActivity.newIntent(this, FileUtilities.getRealSenseDir(this, "hw"), R.string.commands_file_title));
+        else
+            setupAutoComplete();
     }
 
-    private void stopStreaming() {
-        mStreamingThread.interrupt();
-        try {
-            mStreamingThread.join(1000);
-        } catch (InterruptedException e) {
-            Log.e(TAG, "stopStreaming, error: " + e.getMessage());
-        }
+    private SharedPreferences prefs() {
+        return getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-
-        if(mStreaming.isChecked()){
-            stopStreaming();
-        }
+        if (mStreaming.isChecked())
+            mStreaming.setChecked(false);
     }
 
     private void startStreaming() {
-        mStreamingThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try(Pipeline pipe = new Pipeline()){
-                    pipe.start();
-                    while(!mStreamingThread.isInterrupted()){
-                        try(FrameSet frames = pipe.waitForFrames()){}
+        mStreamingThread = new Thread(() -> {
+            try (Pipeline pipe = new Pipeline()) {
+                pipe.start();
+                while (!Thread.currentThread().isInterrupted()) {
+                    try (FrameSet frames = pipe.waitForFrames()) {
                     }
-                    pipe.stop();
-                } catch (Exception e) {
-                    mOutputText.setText("streaming error: " + e.getMessage());
                 }
+                pipe.stop();
+            } catch (Exception e) {
+                runOnUiThread(() -> mOutputText.setText(getString(R.string.streaming_error, e.getMessage())));
             }
-        });
+        }, "librs terminal streaming");
         mStreamingThread.start();
     }
 
+    private void stopStreaming() {
+        if (mStreamingThread == null)
+            return;
+        mStreamingThread.interrupt();
+        try {
+            mStreamingThread.join(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        mStreamingThread = null;
+    }
+
     private void send() {
-        RsContext mRsContext = new RsContext();
-        try(DeviceList devices = mRsContext.queryDevices()){
-            if(devices.getDeviceCount() == 0)
-            {
-                Log.e(TAG, "getDeviceCount returned zero");
-                Toast.makeText(this, "Connect a camera", Toast.LENGTH_LONG).show();
+        String content = mInputText.getText().toString().trim();
+        if (content.isEmpty())
+            return;
+        try (RsContext ctx = new RsContext(); DeviceList devices = ctx.queryDevices()) {
+            if (devices.getDeviceCount() == 0) {
+                Toast.makeText(this, R.string.no_device, Toast.LENGTH_LONG).show();
                 return;
             }
-            try(Device device = devices.createDevice(0)){
-                try(DebugProtocol dp = device.as(Extension.DEBUG)){
-                    String content = mInputText.getText().toString();
-                    String res = dp.SendAndReceiveRawData(mFilePath, content);
-                    mOutputText.setText("command: " + mInputText.getText() + "\n\n" + res);
-                    mInputText.setText("");
-                }
-            }
-            catch(Exception e){
-                mOutputText.setText("Error: " + e.getMessage());
+            try (Device device = devices.createDevice(0); DebugProtocol dp = device.as(Extension.DEBUG)) {
+                String res = dp.SendAndReceiveRawData(mFilePath, content);
+                mOutputText.setText(getString(R.string.command_prefix, content, res));
+                mInputText.setText("");
+            } catch (Exception e) {
+                mOutputText.setText(getString(R.string.error_prefix, e.getMessage()));
             }
         }
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-    }
-
-    private void setupAutoCompleteTextView(){
-        try{
-            if(mAutoComplete.isChecked()) {
-                String[] spArray = DebugProtocol.getCommands(mFilePath);
-                ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
-                        android.R.layout.simple_dropdown_item_1line, spArray);
-                mInputText.setAdapter(adapter);
-            }else{
+    private void setupAutoComplete() {
+        try {
+            if (mAutoComplete.isChecked() && mFilePath != null && !mFilePath.isEmpty())
+                mInputText.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, DebugProtocol.getCommands(mFilePath)));
+            else
                 mInputText.setAdapter(null);
-            }
-        }catch(Exception e){
-            Log.e(TAG, e.getMessage());
-            mOutputText.setText("Error: " + e.getMessage());
-        }
-    }
-
-    private void init(){
-        SharedPreferences sharedPref = getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
-        mFilePath = sharedPref.getString(getString(R.string.terminal_commands_file), "");
-        mAutoComplete.setChecked(sharedPref.getBoolean(getString(R.string.terminal_auto_complete), false));
-
-        if(mFilePath == null || !(new File(mFilePath).exists())){
-            Intent intent = new Intent(this, FileBrowserActivity.class);
-            intent.putExtra(getString(R.string.browse_folder), getString(R.string.realsense_folder) + File.separator + "hw");
-            startActivityForResult(intent, OPEN_FILE_REQUEST_CODE);
-        }
-        else
-            setupAutoCompleteTextView();
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == OPEN_FILE_REQUEST_CODE && resultCode == RESULT_OK) {
-            if (data != null) {
-                mFilePath = data.getStringExtra(getString(R.string.intent_extra_file_path));
-                SharedPreferences sharedPref = getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
-                SharedPreferences.Editor editor = sharedPref.edit();
-                editor.putString(getString(R.string.terminal_commands_file), mFilePath);
-                editor.commit();
-                setupAutoCompleteTextView();
-            }
-        }
-        else{
-            Intent intent = new Intent();
-            setResult(RESULT_OK, intent);
-            finish();
+        } catch (Exception e) {
+            Log.e(TAG, "auto complete: " + e.getMessage());
+            mOutputText.setText(getString(R.string.error_prefix, e.getMessage()));
         }
     }
 }

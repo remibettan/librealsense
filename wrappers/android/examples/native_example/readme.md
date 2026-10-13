@@ -1,78 +1,51 @@
-#  Native RealSense Application for Android 
-This sample demonstrates how to configure an Android application to add a RealSense dependency.  
+#  Native RealSense Application for Android
+This sample demonstrates how to configure an Android application to add a RealSense dependency.
 The sample also demonstrates basic streaming using the Pipeline class and how to respond to connection events of a RealSense device.
 
 > Read about Android support [here](../../readme.md).
 
 ## Project Configuration
 Before jumping to the code, let's review the required modifications both for the module [build.gradle file](app/build.gradle) and to the app's manifest.
->
+
 ### Module Build Gradle
-The app should add RealSense dependency in the module build.gradle which is currently available in a private repo.
->```java
->repositories {
->    maven{
->        url "https://egiintel.jfrog.io/artifactory/librealsense"
->    }
->}
->
->configurations {
->    downloadHeader
->    downloadSo
->}
->
+Build `librealsense.aar` as described [here](../../readme.md) and copy it into the module's `libs` folder (`app/libs`).
+The module `build.gradle` picks up every AAR in that folder and extracts `librealsense2.so` for the native build:
+>```groovy
 >dependencies {
->    def version = '2.+'
->    downloadSo 'com.intel.realsense:librealsense:' + version + '@aar'
->    implementation 'com.intel.realsense:librealsense:' + version + '@aar'
->    downloadHeader 'com.intel.realsense:librealsense:' + version + '@zip'
+>    implementation fileTree(dir: 'libs', include: ['*.aar', '*.jar'])
 >}
 >
->task extractHeaders(type: Sync) {
->    dependsOn configurations.downloadHeader
->    from { configurations.downloadHeader.collect { zipTree(it) } }
->    into "$projectDir/src/main/cpp/include"
->}
-
->task extractSo(type: Sync) {
->    dependsOn configurations.downloadSo
->    from { configurations.downloadSo.collect { zipTree(it) } }
+>tasks.register('extractSo', Sync) {
+>    from { fileTree(dir: 'libs', include: ['*.aar']).collect { zipTree(it) } }
 >    include("jni/**")
->    into "$buildDir/"
+>    into layout.buildDirectory.dir("librealsense")
 >}
 >
->preBuild.dependsOn(extractHeaders)
 >preBuild.dependsOn(extractSo)
->```
-
-The example shows how to use any librealsense version which is greater than 2.0.0, it is recommended to specify a specific version for example:
->```java
->    def version = '2.18.0'
->    downloadSo 'com.intel.realsense:librealsense:' + version + '@aar'
->    implementation 'com.intel.realsense:librealsense:' + version + '@aar'
->    downloadHeader 'com.intel.realsense:librealsense:' + version + '@zip'
 >```
 
 Once the gradle changes are done and the gradle sync was executed, you should be able to import librealsense classes.
 It might be required to invalidate caches in case your app is failing to import librealsense (File->Invalidate Caches->Invalidate and restart)
 
 ### CMakeLists
-Your native app need to link with 'librealsense.so' in order to do that you will need to edit the app's [CMakeLists.txt](app/CMakeLists.txt)
+Your native app needs to link with `librealsense2.so`; this is done in the app's [CMakeLists.txt](app/CMakeLists.txt).
+The public headers are taken from the librealsense source tree (`LRS_INCLUDE_DIR`, defaults to `<librealsense_root_dir>/include`).
 
 #### Add RealSense Library
->```java
->    include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/include")
+>```cmake
+>    set(LRS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../include" CACHE PATH "librealsense public headers")
+>    include_directories("${LRS_INCLUDE_DIR}")
 >    add_library(realsense2 SHARED IMPORTED)
 >    set_target_properties(
 >        realsense2
 >        PROPERTIES
 >        IMPORTED_LOCATION
->        ${CMAKE_CURRENT_SOURCE_DIR}/build/jni/${ANDROID_ABI}/librealsense2.so
+>        ${CMAKE_CURRENT_SOURCE_DIR}/build/librealsense/jni/${ANDROID_ABI}/librealsense2.so
 >    )
 >```
 
 #### Link RealSense Library
->```java
+>```cmake
 >    target_link_libraries(
 >        native-lib
 >        ${log-lib}
@@ -81,10 +54,10 @@ Your native app need to link with 'librealsense.so' in order to do that you will
 >```
 
 ### Application Manifest
-A modifications is required in the [application manifest file](app/src/main/AndroidManifest.xml).
+A modification is required in the [application manifest file](app/src/main/AndroidManifest.xml).
 
 #### Camera Permissions
-This permission is required by Androis >= 9, for apps that target lower Android version this is not required.
+This permission is required by Android >= 9 to open USB video class devices.
 >```xml
 >    <uses-permission android:name="android.permission.CAMERA"/>
 >```

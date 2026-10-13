@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.hardware.usb.UsbManager;
-import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -67,17 +66,13 @@ class Enumerator {
         mListener = listener;
         mContext = context;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(mBroadcastReceiver, new IntentFilter(UsbUtilities.ACTION_USB_PERMISSION), Context.RECEIVER_NOT_EXPORTED);
-            context.registerReceiver(mBroadcastReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED), Context.RECEIVER_NOT_EXPORTED);
-            context.registerReceiver(mBroadcastReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED), Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            ContextCompat.registerReceiver(context, mBroadcastReceiver, new IntentFilter(UsbUtilities.ACTION_USB_PERMISSION), ContextCompat.RECEIVER_NOT_EXPORTED);
-            context.registerReceiver(mBroadcastReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED));
-            context.registerReceiver(mBroadcastReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED));
-        }
-
-
+        // System USB broadcasts are still delivered to a non-exported receiver; our own
+        // permission-result broadcast is sent explicitly to this package.
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(UsbUtilities.ACTION_USB_PERMISSION);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        ContextCompat.registerReceiver(context, mBroadcastReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
 
         onDeviceAttach(context);
     }

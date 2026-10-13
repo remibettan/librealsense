@@ -4,6 +4,7 @@ public class DebugProtocol extends Device {
 
     DebugProtocol(long handle) {
         super(handle);
+        mOwner = false;
     }
 
     static public String[] getCommands(String commands_file_path){

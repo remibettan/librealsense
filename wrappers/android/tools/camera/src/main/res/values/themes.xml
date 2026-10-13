@@ -1,0 +1,43 @@
+<resources>
+
+    <!-- Material 3 app theme, follows the system light/dark setting -->
+    <style name="Theme.RsCamera" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/rs_primary</item>
+        <item name="colorOnPrimary">@color/rs_on_primary</item>
+        <item name="colorPrimaryContainer">@color/rs_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/rs_on_primary_container</item>
+        <item name="colorSecondary">@color/rs_secondary</item>
+        <item name="colorOnSecondary">@color/rs_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/rs_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/rs_on_secondary_container</item>
+    </style>
+
+    <!-- Always-dark theme for the streaming screens -->
+    <style name="Theme.RsCamera.Viewer" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/viewer_accent</item>
+        <item name="android:windowBackground">@color/viewer_background</item>
+    </style>
+
+    <!-- Bottom toolbar buttons on the streaming screens -->
+    <style name="Widget.RsCamera.ViewerButton" parent="Widget.Material3.Button.TextButton.Icon">
+        <item name="iconGravity">top</item>
+        <item name="iconPadding">2dp</item>
+        <item name="iconSize">22dp</item>
+        <item name="iconTint">@color/viewer_button_tint</item>
+        <item name="android:textColor">@color/viewer_button_tint</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minWidth">56dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:paddingStart">6dp</item>
+        <item name="android:paddingEnd">6dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+    </style>
+
+    <style name="TextAppearance.RsCamera.Mono" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+</resources>

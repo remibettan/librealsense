@@ -3,106 +3,111 @@ package com.intel.realsense.camera;
 import androidx.annotation.NonNull;
 
 import com.intel.realsense.librealsense.Extension;
-import com.intel.realsense.librealsense.MotionStreamProfile;
-import com.intel.realsense.librealsense.StreamFormat;
 import com.intel.realsense.librealsense.StreamProfile;
 import com.intel.realsense.librealsense.StreamType;
 import com.intel.realsense.librealsense.VideoStreamProfile;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
+/** One stream (type + index) of the camera, its selectable profiles and the currently chosen one. */
 public class StreamProfileSelector implements Comparable<StreamProfileSelector> {
-    private StreamFormat mFormat = StreamFormat.ANY;
-    private int mWidth = 0;
-    private int mHeight = 0;
-    private int mFps = 0;
+    private final List<StreamProfile> mProfiles;
     private boolean mEnabled;
     private int mIndex;
-    private List<StreamProfile> mProfiles;
 
-    public StreamProfileSelector(boolean enable, int index, List<StreamProfile> profiles)
-    {
-        mIndex = index < profiles.size() ? index : 0;
-        mEnabled = enable;
+    public StreamProfileSelector(boolean enable, int index, List<StreamProfile> profiles) {
         mProfiles = profiles;
+        mEnabled = enable;
+        mIndex = index >= 0 && index < profiles.size() ? index : 0;
     }
 
     public boolean isEnabled() { return mEnabled; }
-
-    public List<StreamProfile> getProfiles() { return mProfiles; }
-
+    public void setEnabled(boolean enabled) { mEnabled = enabled; }
     public int getIndex() { return mIndex; }
+    public List<StreamProfile> getProfiles() { return mProfiles; }
+    public StreamProfile getProfile() { return mProfiles.get(mIndex); }
 
-    public String getName(){
+    public String getName() {
         StreamProfile p = getProfile();
-        if(p.getType() == StreamType.INFRARED)
+        if (p.getType() == StreamType.INFRARED)
             return p.getType().name() + "-" + p.getIndex();
         return p.getType().name();
     }
 
-    public StreamProfile getProfile() {
-        if(mIndex < 0 || mIndex >= mProfiles.size())
-            return mProfiles.get(0);
-        return mProfiles.get(mIndex);
+    public boolean isVideo() {
+        return getProfile().is(Extension.VIDEO_PROFILE);
     }
 
-    public String getResolutionString() {
-        if(!getProfile().is(Extension.VIDEO_PROFILE))
+    public String getFormat() { return getProfile().getFormat().name(); }
+    public String getFrameRate() { return String.valueOf(getProfile().getFrameRate()); }
+    public String getResolution() { return resolutionOf(getProfile()); }
+
+    private static String resolutionOf(StreamProfile p) {
+        if (!p.is(Extension.VIDEO_PROFILE))
             return "";
-        try (VideoStreamProfile vsp = getProfile().as(Extension.VIDEO_PROFILE)) {
-            return String.valueOf(vsp.getWidth()) + "x" + String.valueOf(vsp.getHeight());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        VideoStreamProfile vsp = p.as(Extension.VIDEO_PROFILE);
+        return vsp.getWidth() + "x" + vsp.getHeight();
     }
 
-    private int findIndex(StreamFormat format, int fps, int width, int height){
-        int currIndex = 0;
-        for(StreamProfile sp : mProfiles){
-            if(sp.is(Extension.VIDEO_PROFILE)) {
-                VideoStreamProfile vsp = sp.as(Extension.VIDEO_PROFILE);
-                if (vsp.getFormat() == format &&
-                        vsp.getWidth() == width &&
-                        vsp.getHeight() == height &&
-                        vsp.getFrameRate() == fps) {
-                    return currIndex;
-                }
+    public List<String> getFormats() {
+        Set<String> set = new LinkedHashSet<>();
+        for (StreamProfile p : mProfiles)
+            set.add(p.getFormat().name());
+        List<String> list = new ArrayList<>(set);
+        Collections.sort(list);
+        return list;
+    }
+
+    public List<String> getFrameRates() {
+        Set<Integer> set = new LinkedHashSet<>();
+        for (StreamProfile p : mProfiles)
+            set.add(p.getFrameRate());
+        List<Integer> sorted = new ArrayList<>(set);
+        Collections.sort(sorted, Collections.reverseOrder());
+        List<String> list = new ArrayList<>();
+        for (Integer fps : sorted)
+            list.add(String.valueOf(fps));
+        return list;
+    }
+
+    public List<String> getResolutions() {
+        List<VideoStreamProfile> videos = new ArrayList<>();
+        for (StreamProfile p : mProfiles)
+            if (p.is(Extension.VIDEO_PROFILE))
+                videos.add(p.as(Extension.VIDEO_PROFILE));
+        Collections.sort(videos, (a, b) -> a.getWidth() != b.getWidth() ? b.getWidth() - a.getWidth() : b.getHeight() - a.getHeight());
+        Set<String> set = new LinkedHashSet<>();
+        for (VideoStreamProfile v : videos)
+            set.add(v.getWidth() + "x" + v.getHeight());
+        return new ArrayList<>(set);
+    }
+
+    public void selectFormat(String format) { select(format, getResolution(), getFrameRate()); }
+    public void selectResolution(String resolution) { select(getFormat(), resolution, getFrameRate()); }
+    public void selectFrameRate(String fps) { select(getFormat(), getResolution(), fps); }
+
+    /** Picks the profile matching the request, falling back to the closest one so a choice never leaves the stream unresolved. */
+    private void select(String format, String resolution, String fps) {
+        int best = -1, bestScore = -1;
+        for (int i = 0; i < mProfiles.size(); i++) {
+            StreamProfile p = mProfiles.get(i);
+            int score = (p.getFormat().name().equals(format) ? 4 : 0)
+                    + (resolutionOf(p).equals(resolution) ? 2 : 0)
+                    + (String.valueOf(p.getFrameRate()).equals(fps) ? 1 : 0);
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
             }
-            if(sp.is(Extension.MOTION_PROFILE)) {
-                MotionStreamProfile msp = sp.as(Extension.MOTION_PROFILE);
-                if (msp.getFormat() == format &&
-                        msp.getFrameRate() == fps) {
-                    return currIndex;
-                }
-            }
-            currIndex++;
         }
-        return -1;
-    }
-
-    public void updateFormat(String str) {
-        mFormat = StreamFormat.valueOf(str);
-        mIndex = findIndex(mFormat, mFps, mWidth, mHeight);
-    }
-
-    public void updateResolution(String str) {
-        mWidth = Integer.parseInt(str.split("x")[0]);
-        mHeight = Integer.parseInt(str.split("x")[1]);
-        mIndex = findIndex(mFormat, mFps, mWidth, mHeight);
-    }
-
-    public void updateFrameRate(String str) {
-        mFps = Integer.parseInt(str);
-        mIndex = findIndex(mFormat, mFps, mWidth, mHeight);
-    }
-
-    public void updateEnabled(boolean state) {
-        mEnabled = state;
-        mIndex = findIndex(mFormat, mFps, mWidth, mHeight);
+        mIndex = best;
     }
 
     @Override
-    public int compareTo(@NonNull StreamProfileSelector streamProfileSelector) {
-        return getName().compareTo(streamProfileSelector.getName());
+    public int compareTo(@NonNull StreamProfileSelector other) {
+        return getName().compareTo(other.getName());
     }
 }
