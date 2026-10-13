@@ -20,7 +20,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-/** Records the configured streams to a .bag file in the app's video folder. */
+/** Records the configured streams to a rosbag2 (.db3) file in the app's video folder. */
 public class RecordingActivity extends AppCompatActivity {
     private static final String TAG = "librs camera rec";
 
@@ -99,7 +99,7 @@ public class RecordingActivity extends AppCompatActivity {
 
     private String newFilePath() {
         File folder = FileUtilities.getRealSenseDir(this, "video");
-        String name = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".bag";
+        String name = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".db3";
         return new File(folder, name).getAbsolutePath();
     }
 }

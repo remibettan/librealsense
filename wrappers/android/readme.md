@@ -31,6 +31,6 @@ If the build succeeded, the generated AAR will be located in `<librealsense_root
 You can also build and run any of the example apps or the camera app from this project by selecting it in the run configuration box and running it while your target phone is connected.
 
 ### RealSense Camera app
-`tools/camera` is the reference viewer for Android: it streams any connected camera, lets you pick the stream profiles, shows live statistics, a point cloud, records to and plays back `.bag` files, exposes the sensor controls and handles firmware updates. It targets Android 16 (API 36), runs on Android 7.0 and newer, and follows the system light/dark theme.
+`tools/camera` is the reference viewer for Android: it streams any connected camera, lets you pick the stream profiles, shows live statistics, a point cloud, records to and plays back rosbag2 (`.db3`) files, exposes the sensor controls and handles firmware updates. It targets Android 16 (API 36), runs on Android 7.0 and newer, and follows the system light/dark theme.
 
 Plugging a camera in launches the app automatically (or asks which app should handle the camera the first time).

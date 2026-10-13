@@ -20,7 +20,7 @@ import com.intel.realsense.librealsense.GLRsSurfaceView;
 
 import java.io.File;
 
-/** Plays a .bag recording from the app's video folder. */
+/** Plays a recording (.db3, or a legacy .bag) from the app's video folder. */
 public class PlaybackActivity extends AppCompatActivity {
     private static final String TAG = "librs camera pb";
     private static final String FILE_PATH_KEY = "FILE_PATH_KEY";
