@@ -10,7 +10,12 @@ public enum StreamType {
     ACCEL(6),
     GPIO(7),
     POSE(8),
-    CONFIDENCE(9);
+    CONFIDENCE(9),
+    MOTION(10),
+    SAFETY(11),
+    OCCUPANCY(12),
+    LABELED_POINT_CLOUD(13),
+    OBJECT_DETECTION(14);
 
     private final int mValue;
 
