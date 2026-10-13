@@ -35,6 +35,8 @@ android {
         cmake {
             path "CMakeLists.txt"
             version defaultCmakeVersion
+            // Keep the native build path short: Windows limits object paths to 260 characters
+            buildStagingDirectory "${rootProject.projectDir}/.cxx"
         }
     }
 }
