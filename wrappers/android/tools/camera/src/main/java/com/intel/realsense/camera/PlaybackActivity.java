@@ -3,223 +3,131 @@ package com.intel.realsense.camera;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.Configuration;
-import android.graphics.Color;
-import android.graphics.Rect;
 import android.os.Bundle;
+import android.util.Log;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.util.Log;
-import android.util.Pair;
-import android.view.View;
-import android.view.ViewGroup;
-import android.view.WindowManager;
-import android.widget.RelativeLayout;
-import android.widget.TextView;
-
+import com.google.android.material.button.MaterialButton;
 import com.intel.realsense.librealsense.Config;
 import com.intel.realsense.librealsense.FrameSet;
 import com.intel.realsense.librealsense.GLRsSurfaceView;
 
 import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
 
+/** Plays a recording (.db3, or a legacy .bag) from the app's video folder. */
 public class PlaybackActivity extends AppCompatActivity {
     private static final String TAG = "librs camera pb";
-
-    private static final int OPEN_FILE_REQUEST_CODE = 0;
     private static final String FILE_PATH_KEY = "FILE_PATH_KEY";
 
     private String mFilePath;
     private Streamer mStreamer;
     private GLRsSurfaceView mGLSurfaceView;
+    private StreamLabels mLabels;
+    private TextView mFileChip;
+    private volatile boolean mShow3D = false;
 
-    private Map<Integer, TextView> mLabels;
-
-    private boolean mShow3D = false;
-    private TextView m3dButton;
+    private final ActivityResultLauncher<Intent> mPickFile = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    mFilePath = result.getData().getStringExtra(FileBrowserActivity.EXTRA_FILE_PATH);
+                    mFileChip.setText(new File(mFilePath).getName());
+                } else if (mFilePath == null) {
+                    finish();
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_playback);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        Ui.edgeToEdge(this, findViewById(R.id.overlay));
+        Ui.immersive(this);
 
-        setupControls();
-    }
-
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-
-        // handling device orientation changes to avoid interruption during playback
-        // cleanup previous surface
-        if(mGLSurfaceView != null) {
-            mGLSurfaceView.clear();
-            mGLSurfaceView.close();
-        }
-
-        // setup playback layout landscape or portrait automatically depends on orientation
-        setContentView(R.layout.activity_playback);
-
-        // setup layout controls
-        setupControls();
-    }
-
-    private void setupControls() {
         mGLSurfaceView = findViewById(R.id.playbackGlSurfaceView);
-        m3dButton = findViewById(R.id.playback_3d_button);
-        m3dButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                mGLSurfaceView.setVisibility(View.GONE);
-                mGLSurfaceView.clear();
-                clearLables();
-                mShow3D = !mShow3D;
-                mGLSurfaceView.showPointcloud(mShow3D);
-                m3dButton.setTextColor(mShow3D ? Color.YELLOW : Color.WHITE);
-                mGLSurfaceView.setVisibility(View.VISIBLE);
-                SharedPreferences sharedPref = getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
-                SharedPreferences.Editor editor = sharedPref.edit();
-                editor.putBoolean(getString(R.string.show_3d), mShow3D);
-                editor.commit();
-            }
-        });
+        mLabels = new StreamLabels(findViewById(R.id.labels_layout));
+        mFileChip = findViewById(R.id.file_chip);
+        findViewById(R.id.playback_open_button).setOnClickListener(v -> pickFile());
+
+        MaterialButton button3d = findViewById(R.id.playback_3d_button);
         SharedPreferences sharedPref = getSharedPreferences(getString(R.string.app_settings), Context.MODE_PRIVATE);
         mShow3D = sharedPref.getBoolean(getString(R.string.show_3d), false);
-        m3dButton.setTextColor(mShow3D ? Color.YELLOW : Color.WHITE);
+        button3d.setChecked(mShow3D);
+        button3d.addOnCheckedChangeListener((button, checked) -> {
+            mLabels.clear();
+            mGLSurfaceView.clear();
+            mShow3D = checked;
+            mGLSurfaceView.showPointcloud(checked);
+            sharedPref.edit().putBoolean(getString(R.string.show_3d), checked).apply();
+        });
+
+        if (savedInstanceState != null)
+            mFilePath = savedInstanceState.getString(FILE_PATH_KEY);
+        if (mFilePath != null)
+            mFileChip.setText(new File(mFilePath).getName());
+    }
+
+    private void pickFile() {
+        mPickFile.launch(FileBrowserActivity.newIntent(this, FileUtilities.getRealSenseDir(this, "video"), R.string.select_recording));
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-
-     if(mFilePath == null){
-            Log.d(TAG, "onResume: mFilePath is null");
-            Intent intent = new Intent(this, FileBrowserActivity.class);
-            String correct_path= getExternalFilesDir(null).getAbsolutePath() +
-                    File.separator + getString(R.string.realsense_folder) + File.separator + "video";
-            intent.putExtra(getString(R.string.browse_folder),correct_path);
-            Log.d(TAG, "onResume: path: "+ correct_path);
-            startActivityForResult(intent, OPEN_FILE_REQUEST_CODE);
+        if (isFinishing())
+            return;
+        Ui.immersive(this);
+        if (mFilePath == null) {
+            pickFile();
+            return;
         }
-        else{
-            mStreamer = new Streamer(this,false, new Streamer.Listener() {
-                @Override
-                public void config(Config config) {
-                    config.enableAllStreams();
-                    config.enableDeviceFromFile(mFilePath);
-                }
-
-                @Override
-                public void onFrameset(FrameSet frameSet) {
-                    mGLSurfaceView.showPointcloud(mShow3D);
-                    mGLSurfaceView.upload(frameSet);
-                    Map<Integer, Pair<String, Rect>> rects = mGLSurfaceView.getRectangles();
-                    printLables(rects);
-                }
-            });
-            try {
-                mGLSurfaceView.clear();
-                mStreamer.start();
-            } catch (Exception e) {
-                finish();
+        mStreamer = new Streamer(this, false, new Streamer.Listener() {
+            @Override
+            public void config(Config config) {
+                config.enableAllStreams();
+                config.enableDeviceFromFile(mFilePath);
             }
+
+            @Override
+            public void onFrameset(FrameSet frameSet) {
+                mGLSurfaceView.showPointcloud(mShow3D);
+                mGLSurfaceView.upload(frameSet);
+                mLabels.update(mGLSurfaceView.getRectangles());
+            }
+        });
+        try {
+            mGLSurfaceView.clear();
+            mStreamer.start();
+        } catch (Exception e) {
+            Log.e(TAG, "failed to play " + mFilePath + ": " + e.getMessage());
+            Toast.makeText(this, R.string.stream_config_failed, Toast.LENGTH_LONG).show();
+            finish();
         }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-
-        clearLables();
-
-        if(mStreamer != null)
+        mLabels.clear();
+        if (mStreamer != null)
             mStreamer.stop();
-        if(mGLSurfaceView != null)
-            mGLSurfaceView.clear();
+        mGLSurfaceView.clear();
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == OPEN_FILE_REQUEST_CODE && resultCode == RESULT_OK) {
-            if (data != null) {
-                mFilePath = data.getStringExtra(getString(R.string.intent_extra_file_path));
-            }
-        }
-        else{
-            Intent intent = new Intent();
-            setResult(RESULT_OK, intent);
-            finish();
-        }
+    protected void onDestroy() {
+        super.onDestroy();
+        mGLSurfaceView.close();
     }
 
     @Override
-    protected void onSaveInstanceState(final Bundle outState) {
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putString(FILE_PATH_KEY, mFilePath);
-    }
-
-    @Override
-    protected void onRestoreInstanceState(final Bundle savedInstanceState) {
-        super.onRestoreInstanceState(savedInstanceState);
-        mFilePath = savedInstanceState.getString(FILE_PATH_KEY);
-    }
-
-    private synchronized Map<Integer, TextView> createLabels(Map<Integer, Pair<String, Rect>> rects){
-        if(rects == null)
-            return null;
-        mLabels = new HashMap<>();
-
-        final RelativeLayout rl = findViewById(R.id.labels_layout);
-        for(Map.Entry<Integer, Pair<String, Rect>> e : rects.entrySet()){
-            TextView tv = new TextView(getApplicationContext());
-            ViewGroup.LayoutParams lp = new RelativeLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-            tv.setLayoutParams(lp);
-            tv.setTextColor(Color.parseColor("#ffffff"));
-            tv.setTextSize(14);
-            rl.addView(tv);
-            mLabels.put(e.getKey(), tv);
-        }
-        return mLabels;
-    }
-
-    private void printLables(final Map<Integer, Pair<String, Rect>> rects){
-        if(rects == null)
-            return;
-        final Map<Integer, String> lables = new HashMap<>();
-        if(mLabels == null)
-            mLabels = createLabels(rects);
-        for(Map.Entry<Integer, Pair<String, Rect>> e : rects.entrySet()){
-            lables.put(e.getKey(), e.getValue().first);
-        }
-
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                for(Map.Entry<Integer,TextView> e : mLabels.entrySet()){
-                    Integer uid = e.getKey();
-                    if(rects.get(uid) == null)
-                        continue;
-                    Rect r = rects.get(uid).second;
-                    TextView tv = e.getValue();
-                    tv.setX(r.left);
-                    tv.setY(r.top);
-                    tv.setText(lables.get(uid));
-                }
-            }
-        });
-    }
-
-    private void clearLables(){
-        if(mLabels != null){
-            for(Map.Entry<Integer, TextView> label : mLabels.entrySet())
-                label.getValue().setVisibility(View.GONE);
-            mLabels = null;
-        }
     }
 }

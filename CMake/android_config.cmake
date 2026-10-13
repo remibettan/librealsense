@@ -16,6 +16,8 @@ macro(os_set_flags)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -pedantic -g -Wno-missing-field-initializers")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-switch -Wno-multichar")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fPIE -pie")
+    # 16 KB page alignment is mandatory on Android 15+ devices; NDK r28+ does this by default, older NDKs need the flag
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
     set(HWM_OVER_XU ON)
 	
     if(FORCE_RSUSB_BACKEND)

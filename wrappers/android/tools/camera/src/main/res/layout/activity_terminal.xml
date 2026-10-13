@@ -1,87 +1,118 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/black"
-    tools:context=".TerminalActivity">
+    android:background="?attr/colorSurface">
 
-    <Switch
-        android:id="@+id/terminal_input_auto_complete"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:checked="false"
-        android:paddingTop="20dp"
-        android:textColor="#ffffff"
-        android:text="Auto Complete" />
-
-    <Switch
-        android:id="@+id/terminal_stream"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:checked="false"
-        android:paddingTop="20dp"
-        android:textColor="#ffffff"
-        android:text="Streaming"
-        android:layout_below="@+id/terminal_input_auto_complete"/>
-
-    <TextView
-        android:id="@+id/terminal_input_text_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:paddingTop="20dp"
-        android:textColor="#ffffff"
-        android:text="Input:"
-        android:layout_below="@+id/terminal_stream"/>
-
-    <AutoCompleteTextView
-        android:id="@+id/terminal_input_edit_text"
+    <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ems="10"
-        android:inputType="textAutoComplete"
-        android:background="#999999"
-        android:textColor="@color/black"
-        android:layout_below="@+id/terminal_input_text_view"/>
+        android:fitsSystemWindows="true">
 
-    <RelativeLayout
-        android:id="@+id/terminal_buttons"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/terminal_input_edit_text">
-        <Button
-            android:id="@+id/terminal_send_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingTop="20dp"
-            android:text="Send"/>
-        <Button
-            android:id="@+id/terminal_clear_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingTop="20dp"
-            android:text="Clear"
-            android:layout_toRightOf="@+id/terminal_send_button"/>
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:navigationIcon="?attr/homeAsUpIndicator"
+            app:title="@string/terminal" />
+    </com.google.android.material.appbar.AppBarLayout>
 
-    </RelativeLayout>
-
-    <TextView
-        android:id="@+id/terminal_output_text_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:paddingTop="20dp"
-        android:textColor="#ffffff"
-        android:text="Output:"
-        android:layout_below="@+id/terminal_buttons"/>
-
-    <EditText
-        android:id="@+id/terminal_output_edit_text"
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:ems="10"
-        android:inputType="textMultiLine"
-        android:background="#999999"
-        android:textColor="@color/black"
-        android:layout_below="@+id/terminal_output_text_view"/>
-</RelativeLayout>
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/terminal_input_auto_complete"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/auto_complete" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/terminal_stream"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/streaming" />
+            </LinearLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="@string/command">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/terminal_input_edit_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:imeOptions="actionSend"
+                    android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/terminal_clear_button"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/clear" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/terminal_send_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/send" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/output"
+                android:textAppearance="?attr/textAppearanceTitleSmall"
+                android:textColor="?attr/colorPrimary" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.Material3.CardView.Filled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <TextView
+                    android:id="@+id/terminal_output_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="160dp"
+                    android:padding="16dp"
+                    android:textAppearance="@style/TextAppearance.RsCamera.Mono"
+                    android:textIsSelectable="true" />
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

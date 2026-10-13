@@ -1,17 +1,130 @@
 <resources>
-    <string name="app_name">RS Camera</string>
-    <string name="title_activity_file_browser">FileBrowserActivity</string>
-    <string name="intent_extra_file_path">filePath</string>
-    <string name="app_settings">settings</string>
-    <string name="show_update_firmware">show_update_firmware</string>
-    <string name="firmware_update_request">firmware_update_request</string>
-    <string name="firmware_update_required">firmware_update_required</string>
-    <string name="firmware_update_file_path">firmware_update_file_path</string>
-    <string name="browse_folder">browse_folder</string>
-    <string name="realsense_folder">realsense</string>
-    <string name="show_3d">show_3d</string>
-    <string name="terminal_commands_file">terminal_commands_file</string>
-    <string name="terminal_auto_complete">terminal_auto_complete</string>
-    <string name="fw_logging">fw_logging</string>
-    <string name="fw_logging_file_path">fw_logging_file_path</string>
+    <string name="app_name">RealSense Camera</string>
+
+    <!-- Preference keys (not shown to the user) -->
+    <string name="app_settings" translatable="false">settings</string>
+    <string name="show_update_firmware" translatable="false">show_update_firmware</string>
+    <string name="show_3d" translatable="false">show_3d</string>
+    <string name="terminal_commands_file" translatable="false">terminal_commands_file</string>
+    <string name="terminal_auto_complete" translatable="false">terminal_auto_complete</string>
+    <string name="fw_logging" translatable="false">fw_logging</string>
+    <string name="fw_logging_file_path" translatable="false">fw_logging_file_path</string>
+    <string name="realsense_folder" translatable="false">realsense</string>
+
+    <!-- Detached (home) screen -->
+    <string name="connect_title">Connect a RealSense camera</string>
+    <string name="connect_subtitle">Plug the camera into the USB port using a USB 3 OTG cable. Streaming starts automatically.</string>
+    <string name="play_from_file">Play a recording</string>
+    <string name="versions_format">librealsense %1$s • app %2$s</string>
+    <string name="camera_permission_needed">The camera permission is required to access USB cameras</string>
+    <string name="open_app_settings">App settings</string>
+    <string name="sdk_init_failed">Failed to initialize the SDK: %1$s</string>
+    <string name="fw_update_done">Firmware update completed</string>
+    <string name="fw_update_failed">Firmware update failed</string>
+
+    <!-- Viewer -->
+    <string name="settings">Settings</string>
+    <string name="statistics">Statistics</string>
+    <string name="preview">Preview</string>
+    <string name="playback">Playback</string>
+    <string name="three_d">3D</string>
+    <string name="controls">Controls</string>
+    <string name="record">Record</string>
+    <string name="stop_recording">Stop recording</string>
+    <string name="recording_label">REC %1$s</string>
+    <string name="stream_config_failed">Failed to apply the streaming configuration</string>
+    <string name="open_file">Open</string>
+    <string name="no_device">Connect a camera first</string>
+
+    <!-- Settings -->
+    <string name="device">Device</string>
+    <string name="device_info">Device info</string>
+    <string name="device_info_subtitle">Serial number, firmware, USB type and more</string>
+    <string name="advanced_mode">Advanced mode</string>
+    <string name="advanced_mode_subtitle">Enables depth presets and advanced controls</string>
+    <string name="presets">Presets</string>
+    <string name="presets_subtitle">Apply a depth tuning preset</string>
+    <string name="firmware_update">Firmware update</string>
+    <string name="firmware_update_subtitle">Flash a signed firmware image</string>
+    <string name="firmware_update_unsigned">Firmware update (unsigned)</string>
+    <string name="firmware_update_unsigned_subtitle">Flash an unsigned image on an unlocked camera</string>
+    <string name="choose_firmware_file">Choose a firmware file</string>
+    <string name="create_fw_backup">Create firmware backup</string>
+    <string name="create_fw_backup_subtitle">Dump the camera flash to a file</string>
+    <string name="terminal">Terminal</string>
+    <string name="terminal_subtitle">Send raw commands to the camera</string>
+    <string name="fw_logging_title">Firmware logging</string>
+    <string name="fw_logging_subtitle">Pull firmware logs while streaming (logcat)</string>
+    <string name="streams">Streams</string>
+    <string name="streams_subtitle">Turn every stream off to use the camera defaults</string>
+    <string name="format">Format</string>
+    <string name="resolution">Resolution</string>
+    <string name="frame_rate">Frame rate</string>
+    <string name="settings_load_failed">Failed to load settings</string>
+    <string name="saving_backup">Saving firmware backup</string>
+    <string name="please_wait_minutes">This can take a few minutes</string>
+    <string name="backup_saved_title">Firmware backup saved</string>
+    <string name="backup_saved_message">Saved to %1$s</string>
+    <string name="backup_failed">Failed to create the firmware backup: %1$s</string>
+    <string name="app_version">App version</string>
+    <string name="sdk_version">librealsense version</string>
+    <string name="firmware_version">Firmware</string>
+    <string name="serial_number">Serial</string>
+    <string name="unknown">Unknown</string>
+
+    <!-- Info -->
+    <string name="copied">Copied %1$s</string>
+
+    <!-- Files -->
+    <string name="select_recording">Select a recording</string>
+    <string name="select_file">Select a file</string>
+    <string name="no_files">No files found</string>
+    <string name="no_files_hint">Recordings are saved to the app folder on this device</string>
+    <string name="file_read_error">Could not read the folder</string>
+    <string name="delete_file_title">Delete %1$s?</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="file_deleted">Deleted %1$s</string>
+
+    <!-- Dialogs -->
+    <string name="fw_update_title">Firmware update available</string>
+    <string name="fw_update_required_title">Firmware update required</string>
+    <string name="fw_update_required_message">The firmware on the connected camera is not supported by this librealsense version. Update it to continue.</string>
+    <string name="fw_update_message">Connected camera firmware: %1$s\nRecommended firmware: %2$s</string>
+    <string name="fw_latest_installed">The recommended firmware is already installed</string>
+    <string name="dont_show_again">Don\'t show again</string>
+    <string name="update">Update</string>
+    <string name="later">Later</string>
+    <string name="fw_update_in_progress">Firmware update in progress</string>
+    <string name="fw_update_keep_connected">Keep the camera connected</string>
+    <string name="fw_file_required">Firmware update requires a .bin file. Download one from https://dev.realsenseai.com/docs/firmware-updates</string>
+    <string name="fw_file_copy_failed">Failed to read the firmware file: %1$s</string>
+    <string name="fw_update_error">Firmware update failed: %1$s</string>
+    <string name="apply">Apply</string>
+    <string name="fw_recovery_title">Camera in recovery mode</string>
+    <string name="fw_recovery_message">Choose a firmware (.bin) file to flash. Keep the camera connected.</string>
+    <string name="choose_file">Choose file</string>
+    <string name="camera_restarting">The camera is restarting</string>
+    <string name="no_presets">No presets found</string>
+    <string name="preset_applied">Preset applied: %1$s</string>
+    <string name="preset_failed">Failed to apply the preset: %1$s</string>
+    <string name="preset_requires_advanced">Presets require advanced mode</string>
+    <string name="no_controls">No adjustable controls on this camera</string>
+    <string name="sensor_n">Sensor %1$d</string>
+    <string name="depth_sensor">Depth sensor</string>
+    <string name="color_sensor">Color sensor</string>
+    <string name="motion_sensor">Motion sensor</string>
+    <string name="control_set_failed">Failed to set %1$s: %2$s</string>
+
+    <!-- Terminal -->
+    <string name="auto_complete">Auto complete</string>
+    <string name="streaming">Streaming</string>
+    <string name="command">Command</string>
+    <string name="send">Send</string>
+    <string name="clear">Clear</string>
+    <string name="output">Output</string>
+    <string name="command_prefix">command: %1$s\n\n%2$s</string>
+    <string name="error_prefix">Error: %1$s</string>
+    <string name="streaming_error">Streaming error: %1$s</string>
+    <string name="commands_file_title">Select a commands file</string>
 </resources>

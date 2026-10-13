@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="rs_primary">#A8C7FA</color>
+    <color name="rs_on_primary">#062E6F</color>
+    <color name="rs_primary_container">#0842A0</color>
+    <color name="rs_on_primary_container">#D3E3FD</color>
+    <color name="rs_secondary">#80CBC4</color>
+    <color name="rs_on_secondary">#00382F</color>
+    <color name="rs_secondary_container">#00504A</color>
+    <color name="rs_on_secondary_container">#B2DFDB</color>
+</resources>

@@ -7,7 +7,6 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.util.Log;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -68,7 +67,10 @@ public class UsbUtilities {
 
         if(!permission) {
             Log.i(TAG, "grantUsbPermissions:\ndevice: " + usbDevice.toString());
-            PendingIntent pi = PendingIntent.getBroadcast(context, 0, new Intent(UsbUtilities.ACTION_USB_PERMISSION), PendingIntent.FLAG_IMMUTABLE);
+            // The intent must be explicit (package-targeted) for the result broadcast to reach our
+            // non-exported receiver on Android 14 and newer.
+            Intent intent = new Intent(UsbUtilities.ACTION_USB_PERMISSION).setPackage(context.getPackageName());
+            PendingIntent pi = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE);
             usbManager.requestPermission(usbDevice, pi);
         }
     }

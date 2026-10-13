@@ -1,138 +1,116 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/black"
-    android:orientation="horizontal">
+    android:background="@color/viewer_background">
 
     <com.intel.realsense.librealsense.GLRsSurfaceView
+        android:id="@+id/glSurfaceView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:id="@+id/glSurfaceView"/>
+        android:layout_height="match_parent" />
 
-    <RelativeLayout
+    <FrameLayout
         android:id="@+id/labels_layout"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
+        android:layout_height="match_parent" />
 
-    <ScrollView
-        android:layout_height="wrap_content"
-        android:layout_width="wrap_content"
-        android:layout_centerInParent="true">
-
-        <TextView
-            android:id="@+id/streaming_stats_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:layout_centerHorizontal="true"
-            android:background="@color/black"
-            android:textSize="20dp"
-            android:text="Show stats"
-            android:textColor="@color/white"
-            android:visibility="gone"/>
-
-    </ScrollView>
-
-    <LinearLayout
+    <!-- Everything below is inset by the system bars so it never sits under the cutout or gesture area -->
+    <FrameLayout
+        android:id="@+id/overlay"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_marginBottom="100dp">
+        android:layout_height="match_parent">
 
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
-
-        <TextView
-            android:id="@+id/preview_settings_button"
+        <ScrollView
+            android:id="@+id/stats_card"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:clickable="true"
-            android:textSize="14dp"
-            android:textColor="#ffffff"
-            android:backgroundTint="#000000"
-            android:text="Settings"/>
+            android:layout_gravity="center"
+            android:layout_margin="24dp"
+            android:background="@drawable/bg_label_chip"
+            android:padding="16dp"
+            android:visibility="gone">
 
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
+            <TextView
+                android:id="@+id/streaming_stats_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/TextAppearance.RsCamera.Mono"
+                android:textColor="@color/viewer_on_overlay" />
+        </ScrollView>
 
-        <TextView
-            android:id="@+id/preview_stats_button"
+        <HorizontalScrollView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:clickable="true"
-            android:textSize="14dp"
-            android:textColor="#ffffff"
-            android:backgroundTint="#000000"
-            android:text="Statistics"/>
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginBottom="16dp"
+            android:scrollbars="none">
 
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
-
-        <TextView
-            android:id="@+id/preview_playback_button"
+        <LinearLayout
+            android:id="@+id/bottom_bar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:clickable="true"
-            android:textSize="14dp"
-            android:textColor="#ffffff"
-            android:backgroundTint="#000000"
-            android:text="Playback"/>
+            android:background="@drawable/bg_overlay_pill"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp">
 
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/preview_settings_button"
+                style="@style/Widget.RsCamera.ViewerButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings"
+                app:icon="@drawable/ic_settings" />
 
-        <TextView
-            android:id="@+id/preview_3d_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:textSize="14dp"
-            android:textColor="#ffffff"
-            android:backgroundTint="#000000"
-            android:text="3D"/>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/preview_stats_button"
+                style="@style/Widget.RsCamera.ViewerButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checkable="true"
+                android:text="@string/statistics"
+                app:icon="@drawable/ic_chart" />
 
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/start_record_fab"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="8dp"
+                android:contentDescription="@string/record"
+                app:backgroundTint="@color/record_red"
+                app:fabSize="normal"
+                app:srcCompat="@drawable/ic_record"
+                app:tint="@color/viewer_on_overlay" />
 
-        <TextView
-            android:id="@+id/controls_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:textSize="14dp"
-            android:textColor="#ffffff"
-            android:backgroundTint="#000000"
-            android:text="Controls"/>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/preview_3d_button"
+                style="@style/Widget.RsCamera.ViewerButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checkable="true"
+                android:text="@string/three_d"
+                app:icon="@drawable/ic_cube" />
 
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/controls_button"
+                style="@style/Widget.RsCamera.ViewerButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/controls"
+                app:icon="@drawable/ic_tune" />
 
-    </LinearLayout>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/preview_playback_button"
+                style="@style/Widget.RsCamera.ViewerButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/playback"
+                app:icon="@drawable/ic_folder" />
+        </LinearLayout>
+        </HorizontalScrollView>
+    </FrameLayout>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/start_record_fab"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_centerHorizontal="true"
-        android:layout_marginBottom="20dp"
-        android:clickable="true"
-        android:backgroundTint="#ffffff"
-        app:srcCompat="@android:drawable/ic_notification_overlay" />
-
-</RelativeLayout>
+</FrameLayout>

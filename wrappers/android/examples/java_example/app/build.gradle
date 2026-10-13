@@ -1,11 +1,18 @@
-apply plugin: 'com.android.application'
+plugins {
+    id 'com.android.application'
+}
 
 android {
-    compileSdkVersion 30
+    namespace 'com.example.realsense_java_example'
+    compileSdk 36
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     defaultConfig {
         applicationId "com.example.realsense_java_example"
-        minSdkVersion 19
-        targetSdkVersion 30
+        minSdk 24
+        targetSdk 36
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -19,21 +26,11 @@ android {
 }
 
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
-    testImplementation 'junit:junit:4.12'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.2'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
-}
-
-//The lines below add librealsense to the application's dependencies
-repositories {
-    maven{
-        url "https://egiintel.jfrog.io/artifactory/librealsense"
-    }
-}
-
-dependencies {
-    implementation 'com.intel.realsense:librealsense:2.+@aar'
+    // librealsense dependency: copy the AAR built from <librealsense>/wrappers/android into app/libs
+    implementation fileTree(dir: 'libs', include: ['*.aar', '*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 }

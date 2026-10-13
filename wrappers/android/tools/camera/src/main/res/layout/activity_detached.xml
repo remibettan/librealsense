@@ -1,48 +1,87 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/black"
-    android:orientation="horizontal">
+    android:background="?attr/colorSurface">
+
+    <ImageView
+        android:id="@+id/camera_icon"
+        android:layout_width="112dp"
+        android:layout_height="112dp"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_camera"
+        app:layout_constraintBottom_toTopOf="@id/connect_title"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_chainStyle="packed" />
 
     <TextView
-        android:id="@+id/versionsText"
+        android:id="@+id/connect_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="32dp"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
+        android:text="@string/connect_title"
+        android:textAppearance="?attr/textAppearanceHeadlineSmall"
+        app:layout_constraintBottom_toTopOf="@id/connect_subtitle"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/camera_icon" />
+
+    <TextView
+        android:id="@+id/connect_subtitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="40dp"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="@string/connect_subtitle"
+        android:textAppearance="?attr/textAppearanceBodyMedium"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        app:layout_constraintBottom_toTopOf="@id/playback_button"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/connect_title"
+        app:layout_constraintWidth_max="480dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/playback_button"
+        style="@style/Widget.Material3.Button.TonalButton.Icon"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="@color/black"
-        android:textSize="10dp"
-        android:text=""
-        android:textColor="#ffffff"/>
+        android:layout_marginTop="32dp"
+        android:text="@string/play_from_file"
+        app:icon="@drawable/ic_folder"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/connect_subtitle" />
 
-    <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/buttonPanel"
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/permission_button"
+        style="@style/Widget.Material3.Button.TextButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_centerVertical="true"
-        android:layout_centerHorizontal="true">
+        android:layout_marginTop="8dp"
+        android:text="@string/open_app_settings"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/playback_button" />
 
-        <TextView
-            android:id="@+id/connectCameraText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical|center_horizontal"
-            android:background="@color/black"
-            android:textSize="20dp"
-            android:text="Connect a RealSense camera"
-            android:textColor="#ffffff"/>
-    </androidx.appcompat.widget.LinearLayoutCompat>
-
-    <Button
-        android:id="@+id/playbackButton"
+    <TextView
+        android:id="@+id/versions_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_centerHorizontal="true"
-        android:layout_marginBottom="34dp"
-        android:textColor="#ffffff"
-        android:background="@color/black"
-        android:text="Play From File" />
+        android:layout_marginBottom="16dp"
+        android:textAppearance="?attr/textAppearanceLabelSmall"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
-
-</RelativeLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

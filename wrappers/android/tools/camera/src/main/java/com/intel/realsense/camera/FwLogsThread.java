@@ -10,131 +10,55 @@ import com.intel.realsense.librealsense.FwLogParsedMsg;
 import com.intel.realsense.librealsense.FwLogger;
 import com.intel.realsense.librealsense.RsContext;
 
-public class FwLogsThread extends Thread{
+/** Pulls firmware logs from the first camera and writes them to logcat until stopped. */
+public class FwLogsThread extends Thread {
     private static final String TAG = "librs_fwLogsThread";
-    private FwLogger mFwLoggerDevice;
     private volatile boolean mAreFwLogsRequested;
     private String mFwLogsParsingFilePath = "";
-    private boolean mIsParsingFileInitialized = false;
-    private boolean mAllFlashLogsAlreadyPulled = false;
+
+    public FwLogsThread(String fwLogsParsingFilePath) {
+        super("librs fw logs");
+        mFwLogsParsingFilePath = fwLogsParsingFilePath == null ? "" : fwLogsParsingFilePath;
+    }
 
     @Override
     public void run() {
         mAreFwLogsRequested = true;
-        try(RsContext ctx = new RsContext()) {
-            try (DeviceList devices = ctx.queryDevices()) {
-                if (devices.getDeviceCount() > 0) {
-                    // only device 0 is taken care of, as the camera app is supposed to work only with one device
-                    try (Device device = devices.createDevice(0)) {
-                        if (device != null) {
-                            try (final FwLogger fwLoggerDevice = device.as(Extension.FW_LOGGER)) {
-                                mFwLoggerDevice = fwLoggerDevice;
-                                if (mFwLogsParsingFilePath != "")
-                                    mIsParsingFileInitialized = mFwLoggerDevice.initParser(mFwLogsParsingFilePath);
-                                while (mAreFwLogsRequested) {
-                                    String logReceived = "";
-                                    try (FwLogMsg logMsg = mFwLoggerDevice.getFwLog()) {
-                                        if (mFwLoggerDevice.getFwLogPullingStatus()) {
-                                            if (mIsParsingFileInitialized) {
-                                                try (FwLogParsedMsg parsedMsg = mFwLoggerDevice.parseFwLog(logMsg)) {
-                                                    logReceived = parsedMsg.getTimestamp() + " - " +
-                                                            parsedMsg.getSeverity() + " " +
-                                                            parsedMsg.getFileName() + " " +
-                                                            parsedMsg.getLine() + " " +
-                                                            parsedMsg.getThreadName() + " " +
-                                                            parsedMsg.getMessage();
-                                                    Log.d(TAG, logReceived);
-                                                }
-                                            } else {
-                                                logReceived = logMsg.getTimestamp() + " " +
-                                                        logMsg.getSeverityStr() + " ";
-                                                int logMsgSize = logMsg.getSize();
-                                                byte[] buffer = new byte[logMsgSize];
-                                                buffer = logMsg.getData(buffer);
-                                                for (byte b : buffer) {
-                                                    logReceived += String.format("%02X", b) + " ";
-                                                }
-                                                Log.d(TAG, logReceived);
-                                            }
-                                        }
-                                    }
+        try (RsContext ctx = new RsContext(); DeviceList devices = ctx.queryDevices()) {
+            if (devices.getDeviceCount() == 0)
+                return;
+            // Only device 0 is handled, the camera app works with a single device
+            try (Device device = devices.createDevice(0)) {
+                if (device == null)
+                    return;
+                try (FwLogger fwLogger = device.as(Extension.FW_LOGGER)) {
+                    boolean parserReady = !mFwLogsParsingFilePath.isEmpty() && fwLogger.initParser(mFwLogsParsingFilePath);
+                    while (mAreFwLogsRequested) {
+                        try (FwLogMsg logMsg = fwLogger.getFwLog()) {
+                            if (!fwLogger.getFwLogPullingStatus())
+                                continue;
+                            if (parserReady) {
+                                try (FwLogParsedMsg parsed = fwLogger.parseFwLog(logMsg)) {
+                                    Log.d(TAG, parsed.getTimestamp() + " - " + parsed.getSeverity() + " " + parsed.getFileName() + " " +
+                                            parsed.getLine() + " " + parsed.getThreadName() + " " + parsed.getMessage());
                                 }
+                            } else {
+                                StringBuilder sb = new StringBuilder(logMsg.getTimestamp() + " " + logMsg.getSeverityStr() + " ");
+                                byte[] buffer = logMsg.getData(new byte[logMsg.getSize()]);
+                                for (byte b : buffer)
+                                    sb.append(String.format("%02X ", b));
+                                Log.d(TAG, sb.toString());
                             }
                         }
                     }
                 }
             }
+        } catch (Exception e) {
+            Log.e(TAG, "fw logs stopped: " + e.getMessage());
         }
     }
 
-    public void init(String fw_logging_file_path)
-    {
-        mFwLogsParsingFilePath = fw_logging_file_path;
-    }
-
-
-    public void stopLogging()
-    {
+    public void stopLogging() {
         mAreFwLogsRequested = false;
-    }
-
-    public void getFwLogsFromFlash()
-    {
-        if(!mAllFlashLogsAlreadyPulled){
-            try(RsContext ctx = new RsContext()){
-                try(DeviceList devices = ctx.queryDevices()) {
-                    if (devices.getDeviceCount() > 0) {
-                        // only device 0 is taken care of, as the camera app is supposed to work only with one device
-                        try (Device device = devices.createDevice(0)) {
-                            if(device != null) {
-                                try(final FwLogger fwLoggerDevice = device.as(Extension.FW_LOGGER)){
-                                    mFwLoggerDevice = fwLoggerDevice;
-                                    if (mFwLogsParsingFilePath != "")
-                                        mIsParsingFileInitialized = mFwLoggerDevice.initParser(mFwLogsParsingFilePath);
-                                    Log.d(TAG, "-------------------flash logs retrieval--------------------");
-                                    while (true) {
-                                        String logReceived = "";
-                                        try (FwLogMsg logMsg = mFwLoggerDevice.getFwLogsFromFlash()) {
-                                            if (mFwLoggerDevice.getFwLogPullingStatus()) {
-                                                if (mIsParsingFileInitialized) {
-                                                    try (FwLogParsedMsg parsedMsg = mFwLoggerDevice.parseFwLog(logMsg)) {
-                                                        logReceived = parsedMsg.getTimestamp() + " - " +
-                                                                parsedMsg.getSeverity() + " " +
-                                                                parsedMsg.getFileName() + " " +
-                                                                parsedMsg.getLine() + " " +
-                                                                parsedMsg.getThreadName() + " " +
-                                                                parsedMsg.getMessage();
-                                                        Log.d(TAG, logReceived);
-                                                    }
-                                                } else {
-                                                    logReceived = logMsg.getTimestamp() + " " +
-                                                            logMsg.getSeverityStr() + " ";
-                                                    int logMsgSize = logMsg.getSize();
-                                                    byte[] buffer = new byte[logMsgSize];
-                                                    buffer = logMsg.getData(buffer);
-                                                    for (byte b : buffer) {
-                                                        logReceived += String.format("%02X", b) + " ";
-                                                    }
-                                                    Log.d(TAG, logReceived);
-                                                }
-                                            }
-                                            else {
-                                                Log.d(TAG, "No more fw logs in flash");
-                                                mAllFlashLogsAlreadyPulled = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    Log.d(TAG, "-------------------flash logs finished--------------------");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else {
-            Log.d(TAG, "Flash logs already pulled");
-        }
     }
 }
