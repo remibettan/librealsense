@@ -6,8 +6,8 @@ Copyright(c) 2017 RealSense, Inc. All Rights Reserved. */
 #include <librealsense2/hpp/rs_export.hpp>
 #include <src/types.h>
 
-#if defined( BUILD_EASYLOGGINGPP ) && defined( BUILD_SHARED_LIBS )
-// A shared realsense2 doesn't export ELPP's storage, so rsutils objects linked into this
+#if defined( BUILD_EASYLOGGINGPP ) && defined( BUILD_SHARED_LIBS ) && ! defined( __linux__ )
+// On Linux realsense2 exports ELPP's storage and we share it. Elsewhere a shared realsense2 doesn't export it, so rsutils objects linked into this
 // module (e.g. dispatcher) need our own -- see rsutils/easylogging/easyloggingpp.h
 INITIALIZE_EASYLOGGINGPP
 #endif
